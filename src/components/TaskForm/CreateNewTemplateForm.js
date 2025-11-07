@@ -1,5 +1,7 @@
 // src/components/TaskForm/CreateNewTemplateForm.js
 import React, { useState } from 'react';
+import MasterLibraryPicker from '../library/MasterLibraryPicker';
+import ResourceCreateModal from '../library/ResourceCreateModal';
 
 const CreateNewTemplateForm = ({ 
   onSubmit, 
@@ -15,8 +17,10 @@ const CreateNewTemplateForm = ({
     resources: [''],
     duration_days: 1
   });
-  
+
   const [errors, setErrors] = useState({});
+  const [isLibraryOpen, setIsLibraryOpen] = useState(false);
+  const [showResourceModal, setShowResourceModal] = useState(false);
 
   // Handle basic input changes
   const handleChange = (e) => {
@@ -66,6 +70,58 @@ const CreateNewTemplateForm = ({
         [type]: newArray.length === 0 ? [''] : newArray
       };
     });
+  };
+
+  const handleLibraryPick = (templateTask) => {
+    const parseArrayField = (field) => {
+      if (Array.isArray(field)) return field.length > 0 ? field : [''];
+      if (!field) return [''];
+      if (typeof field === 'string') {
+        try {
+          const parsed = JSON.parse(field);
+          return Array.isArray(parsed) ? (parsed.length > 0 ? parsed : ['']) : [field];
+        } catch (e) {
+          return [field];
+        }
+      }
+      return [''];
+    };
+
+    setFormData(prev => {
+      const next = { ...prev };
+
+      if (!prev.title?.trim() && templateTask.title) {
+        next.title = templateTask.title;
+      }
+
+      if (!prev.purpose?.trim() && templateTask.purpose) {
+        next.purpose = templateTask.purpose;
+      }
+
+      if (!prev.description?.trim() && templateTask.description) {
+        next.description = templateTask.description;
+      }
+
+      const hasActionContent = prev.actions.some(item => item && item.toString().trim());
+      if (!hasActionContent) {
+        next.actions = parseArrayField(templateTask.actions);
+      }
+
+      const hasResourceContent = prev.resources.some(item => item && item.toString().trim());
+      if (!hasResourceContent) {
+        next.resources = parseArrayField(templateTask.resources);
+      }
+
+      const templateDuration = templateTask.default_duration || templateTask.duration_days;
+      const hasExistingDuration = prev.duration_days !== undefined && prev.duration_days !== null && prev.duration_days !== '';
+      if (templateDuration && (!hasExistingDuration || Number(prev.duration_days) === 1)) {
+        next.duration_days = templateDuration;
+      }
+
+      return next;
+    });
+
+    setIsLibraryOpen(false);
   };
 
   // Form validation
@@ -148,14 +204,36 @@ const CreateNewTemplateForm = ({
           ✕
         </button>
       </div>
-      
+
       {/* Form */}
       <form onSubmit={handleSubmit} style={{ padding: '16px' }}>
+        <div className="mb-4 rounded-lg border border-blue-200 bg-blue-50 p-4">
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-medium text-blue-900">Search &amp; pick from Master Library</p>
+            <button
+              type="button"
+              onClick={() => setIsLibraryOpen(prev => !prev)}
+              className="text-sm font-medium text-blue-700 hover:text-blue-800"
+            >
+              {isLibraryOpen ? 'Hide' : 'Show'}
+            </button>
+          </div>
+          {isLibraryOpen && (
+            <div className="mt-3">
+              <MasterLibraryPicker
+                onPick={handleLibraryPick}
+                onCreateNew={() => setShowResourceModal(true)}
+                autoFocus={isLibraryOpen}
+              />
+            </div>
+          )}
+        </div>
+
         {/* Title Field */}
         <div style={{ marginBottom: '16px' }}>
-          <label 
+          <label
             htmlFor="title"
-            style={{ 
+            style={{
               display: 'block', 
               fontWeight: 'bold', 
               marginBottom: '4px' 
@@ -439,6 +517,11 @@ const CreateNewTemplateForm = ({
           </button>
         </div>
       </form>
+
+      <ResourceCreateModal
+        isOpen={showResourceModal}
+        onClose={() => setShowResourceModal(false)}
+      />
     </div>
   );
 };

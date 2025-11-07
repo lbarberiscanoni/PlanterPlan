@@ -1,9 +1,10 @@
 // src/components/TaskForm/TaskForm.js - Updated with Tailwind CSS styling
-import React, { useState, useRef } from 'react';
+import React, { useState } from 'react';
 import { useTaskForm } from './useTaskForm';
 import { formatDisplayDate } from '../../utils/taskUtils';
 import URLTextComponent from '../URLTextComponent';
-import MasterLibraryPopup from './MasterLibraryPopup';
+import MasterLibraryPicker from '../library/MasterLibraryPicker';
+import ResourceCreateModal from '../library/ResourceCreateModal';
 
 const TaskForm = ({ 
   parentTaskId,
@@ -19,8 +20,8 @@ const TaskForm = ({
   // STATE MANAGEMENT
   // ============================================================================
   
-  const [showMasterLibraryPopup, setShowMasterLibraryPopup] = useState(false);
-  const formRef = useRef(null);
+  const [isLibraryOpen, setIsLibraryOpen] = useState(false);
+  const [showResourceModal, setShowResourceModal] = useState(false);
 
   const {
     formData,
@@ -53,24 +54,11 @@ const TaskForm = ({
     }
   };
 
-  const getFormPosition = () => {
-    if (formRef.current) {
-      const rect = formRef.current.getBoundingClientRect();
-      return {
-        top: rect.top,
-        left: rect.left
-      };
-    }
-    return { top: 100, left: 500 };
-  };
+// ============================================================================
+// EVENT HANDLERS
+// ============================================================================
 
-  // ============================================================================
-  // EVENT HANDLERS
-  // ============================================================================
-  
   const handleCopyMasterLibraryTask = (templateTask) => {
-    console.log('Copying master library task to form:', templateTask);
-    
     const parseArrayField = (field) => {
       if (Array.isArray(field)) return field.length > 0 ? field : [''];
       if (!field) return [''];
@@ -85,22 +73,49 @@ const TaskForm = ({
       return [''];
     };
 
-    setFormData(prev => ({
-      ...prev,
-      title: templateTask.title || prev.title,
-      purpose: templateTask.purpose || prev.purpose,
-      description: templateTask.description || prev.description,
-      actions: parseArrayField(templateTask.actions),
-      resources: parseArrayField(templateTask.resources),
-      duration_days: templateTask.default_duration || templateTask.duration_days || prev.duration_days,
-      parent_task_id: prev.parent_task_id,
-      start_date: prev.start_date,
-      due_date: prev.due_date,
-      days_from_start_until_due: prev.days_from_start_until_due
-    }));
+    setFormData(prev => {
+      const next = { ...prev };
 
-    setShowMasterLibraryPopup(false);
-    console.log('✅ Master library task copied successfully');
+      if (!prev.title?.trim() && templateTask.title) {
+        next.title = templateTask.title;
+      }
+
+      if (!prev.purpose?.trim() && templateTask.purpose) {
+        next.purpose = templateTask.purpose;
+      }
+
+      if (!prev.description?.trim() && templateTask.description) {
+        next.description = templateTask.description;
+      }
+
+      const currentActions = Array.isArray(prev.actions) ? prev.actions : [''];
+      const hasActionContent = currentActions.some(item => item && item.toString().trim());
+      if (!hasActionContent) {
+        next.actions = parseArrayField(templateTask.actions);
+      }
+
+      const currentResources = Array.isArray(prev.resources) ? prev.resources : [''];
+      const hasResourceContent = currentResources.some(item => item && item.toString().trim());
+      if (!hasResourceContent) {
+        next.resources = parseArrayField(templateTask.resources);
+      }
+
+      const templateDuration = templateTask.default_duration || templateTask.duration_days;
+      const hasExistingDuration = prev.duration_days !== undefined && prev.duration_days !== null && prev.duration_days !== '';
+      const shouldReplaceDuration = !hasExistingDuration || (!isEditing && !initialData?.duration_days && Number(prev.duration_days) === 1);
+      if (templateDuration && shouldReplaceDuration) {
+        next.duration_days = templateDuration;
+      }
+
+      const existingDaysOffset = prev.days_from_start_until_due;
+      const hasExistingOffset = existingDaysOffset !== undefined && existingDaysOffset !== null && existingDaysOffset !== '';
+      if (!hasExistingOffset && templateTask.days_from_start_until_due !== undefined) {
+        next.days_from_start_until_due = templateTask.days_from_start_until_due;
+      }
+
+      return next;
+    });
+    setIsLibraryOpen(false);
   };
 
   const handleSubmit = (e) => {
@@ -130,26 +145,26 @@ const TaskForm = ({
   // ============================================================================
   
   const renderHeader = () => (
-    <div 
+    <div
       className="text-white p-4 rounded-t flex justify-between items-center"
       style={{ backgroundColor: backgroundColor }}
     >
       <h3 className="m-0 font-bold text-lg">
         {getHeaderText()}
       </h3>
-      
+
       <div className="flex items-center gap-2">
         <button
           type="button"
-          onClick={() => setShowMasterLibraryPopup(true)}
+          onClick={() => setIsLibraryOpen(prev => !prev)}
           className="bg-white bg-opacity-20 border border-white border-opacity-30 rounded text-white px-3 py-1.5 text-xs font-medium flex items-center gap-1 transition-colors hover:bg-white hover:bg-opacity-30"
           title="Search Master Library templates to copy"
         >
           <span>🔍</span>
-          <span>Copy from Library</span>
+          <span>{isLibraryOpen ? 'Hide Library Picker' : 'Copy from Library'}</span>
         </button>
-        
-        <button 
+
+        <button
           onClick={onCancel}
           className="bg-white bg-opacity-20 border-none rounded-full text-white w-6 h-6 flex items-center justify-center text-xs cursor-pointer hover:bg-white hover:bg-opacity-30 transition-colors"
         >
@@ -296,15 +311,37 @@ const TaskForm = ({
   // MAIN RENDER
   // ============================================================================
   
+  const renderLibrarySection = () => (
+    <div className="mb-4 rounded-lg border border-blue-200 bg-blue-50 p-4">
+      <div className="flex items-center justify-between">
+        <p className="text-sm font-medium text-blue-900">Search &amp; pick from Master Library</p>
+        <button
+          type="button"
+          onClick={() => setIsLibraryOpen(prev => !prev)}
+          className="text-sm font-medium text-blue-700 hover:text-blue-800"
+        >
+          {isLibraryOpen ? 'Hide' : 'Show'}
+        </button>
+      </div>
+      {isLibraryOpen && (
+        <div className="mt-3">
+          <MasterLibraryPicker
+            onPick={handleCopyMasterLibraryTask}
+            onCreateNew={() => setShowResourceModal(true)}
+            autoFocus={isLibraryOpen}
+          />
+        </div>
+      )}
+    </div>
+  );
+
   return (
     <>
-      <div 
-        ref={formRef}
-        className="bg-gray-50 rounded border border-gray-200 h-full overflow-auto"
-      >
+      <div className="bg-gray-50 rounded border border-gray-200 h-full overflow-auto">
         {renderHeader()}
-        
+
         <form onSubmit={handleSubmit} className="p-4">
+          {renderLibrarySection()}
           {renderTitleField()}
           {renderScheduleSection()}
           {renderTextAreaField('purpose', 'Purpose', 2, 'What is the purpose of this task?')}
@@ -315,12 +352,7 @@ const TaskForm = ({
         </form>
       </div>
 
-      <MasterLibraryPopup
-        isOpen={showMasterLibraryPopup}
-        onClose={() => setShowMasterLibraryPopup(false)}
-        onCopyTask={handleCopyMasterLibraryTask}
-        position={getFormPosition()}
-      />
+      <ResourceCreateModal isOpen={showResourceModal} onClose={() => setShowResourceModal(false)} />
     </>
   );
 };

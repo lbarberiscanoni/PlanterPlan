@@ -921,10 +921,11 @@ export const getMasterLibraryTasks = async (organizationId = null, options = {})
 export const searchMasterLibraryTasks = async (searchTerm, organizationId = null, options = {}) => {
   try {
     console.log('🔍 Searching master library with view:', { searchTerm, organizationId, options });
-    
-    const { 
-      limit = 50, 
-      offset = 0
+
+    const {
+      limit = 50,
+      offset = 0,
+      signal = undefined,
     } = options;
     
     // If no search term, return empty results
@@ -953,6 +954,10 @@ export const searchMasterLibraryTasks = async (searchTerm, organizationId = null
     query = query
       .range(offset, offset + limit - 1)
       .order('added_at', { ascending: false });
+
+    if (signal) {
+      query = query.abortSignal(signal);
+    }
     
     const { data, error, count } = await query;
     
