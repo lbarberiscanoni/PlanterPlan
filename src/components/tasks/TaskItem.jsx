@@ -1,6 +1,16 @@
 import React, { useState } from 'react';
+import PropTypes from 'prop-types';
+import { TaskShape } from '../../utils/shapes';
 
-const TaskItem = ({ task, level = 0, onTaskClick, selectedTaskId, onAddChildTask }) => {
+const TaskItem = ({
+  task,
+  level = 0,
+  onTaskClick,
+  selectedTaskId,
+  onAddChildTask,
+  canEdit = false,
+  canDelete = false,
+}) => {
   const [isExpanded, setIsExpanded] = useState(true);
 
   const hasChildren = task.children && task.children.length > 0;
@@ -54,16 +64,18 @@ const TaskItem = ({ task, level = 0, onTaskClick, selectedTaskId, onAddChildTask
       >
         <div className="task-card-content">
           <div className="task-card-left">
-            <div className="drag-handle">
-              <svg width="8" height="14" viewBox="0 0 8 14" fill="none">
-                <circle cx="2" cy="2" r="1" fill="currentColor" />
-                <circle cx="6" cy="2" r="1" fill="currentColor" />
-                <circle cx="2" cy="7" r="1" fill="currentColor" />
-                <circle cx="6" cy="7" r="1" fill="currentColor" />
-                <circle cx="2" cy="12" r="1" fill="currentColor" />
-                <circle cx="6" cy="12" r="1" fill="currentColor" />
-              </svg>
-            </div>
+            {canEdit && (
+              <div className="drag-handle">
+                <svg width="8" height="14" viewBox="0 0 8 14" fill="none">
+                  <circle cx="2" cy="2" r="1" fill="currentColor" />
+                  <circle cx="6" cy="2" r="1" fill="currentColor" />
+                  <circle cx="2" cy="7" r="1" fill="currentColor" />
+                  <circle cx="6" cy="7" r="1" fill="currentColor" />
+                  <circle cx="2" cy="12" r="1" fill="currentColor" />
+                  <circle cx="6" cy="12" r="1" fill="currentColor" />
+                </svg>
+              </div>
+            )}
 
             {hasChildren ? (
               <button onClick={() => setIsExpanded(!isExpanded)} className="expand-button">
@@ -102,7 +114,7 @@ const TaskItem = ({ task, level = 0, onTaskClick, selectedTaskId, onAddChildTask
                 </svg>
               </button>
             )}
-            {level === 0 && (
+            {canEdit && level === 0 && (
               <button className="dropdown-button">
                 <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor">
                   <path d="M6 8L3 5h6l-3 3z" />
@@ -123,12 +135,24 @@ const TaskItem = ({ task, level = 0, onTaskClick, selectedTaskId, onAddChildTask
               onTaskClick={onTaskClick}
               selectedTaskId={selectedTaskId}
               onAddChildTask={onAddChildTask}
+              canEdit={canEdit}
+              canDelete={canDelete}
             />
           ))}
         </div>
       )}
     </>
   );
+};
+
+TaskItem.propTypes = {
+  task: TaskShape.isRequired,
+  level: PropTypes.number,
+  onTaskClick: PropTypes.func,
+  selectedTaskId: PropTypes.string,
+  onAddChildTask: PropTypes.func,
+  canEdit: PropTypes.bool,
+  canDelete: PropTypes.bool,
 };
 
 export default TaskItem;

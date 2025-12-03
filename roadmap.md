@@ -2,6 +2,8 @@
 
 Project roadmap for PlanterPlan, optimized for high parallelism via **component isolation**, **layer separation**, and **interface-first design**.
 
+**Granularity Goal:** Each item should be reviewable/verifiable within **1 hour**.
+
 ---
 
 ## Phase 0: Foundation & Standards (High Priority)
@@ -14,7 +16,6 @@ _Goal: Establish standards to prevent "ugly" merges later. No functionality chan
 
 - **Description**: Lock in eslint/prettier config and apply a one-time formatting pass.
 - **Depends on**: None
-- **Parallel with**: All (but recommended first)
 - **Touches**: `package.json`, `.eslintrc.json`, `src/**/*.js`
 - **DoD**:
   - `npm run lint` passes without warnings.
@@ -28,8 +29,8 @@ _Goal: Establish standards to prevent "ugly" merges later. No functionality chan
 - **Depends on**: `P0-LINT-BASE`
 - **Touches**: `src/utils/shapes.js` (New File)
 - **DoD**:
-  - Export `TaskShape`, `ProjectShape`, `UserShape` using `prop-types`.
-  - Imported and used in at least one component (`TaskItem.jsx`) to prove concept.
+  - `TaskShape`, `ProjectShape`, `UserShape` exported.
+  - Used in `TaskItem.jsx` to verify.
 
 ---
 

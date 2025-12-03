@@ -247,6 +247,7 @@ const TaskList = () => {
       setShowForm(false);
       setSelectedTask(null);
       setTaskFormState(null);
+
     } catch (error) {
       console.error('Error creating project:', error);
       throw error;
@@ -271,8 +272,8 @@ const TaskList = () => {
       const parentId = taskFormState.parentId ?? null;
       const parsedDays =
         formData.days_from_start === '' ||
-        formData.days_from_start === null ||
-        formData.days_from_start === undefined
+          formData.days_from_start === null ||
+          formData.days_from_start === undefined
           ? null
           : Number(formData.days_from_start);
 
@@ -553,6 +554,8 @@ const TaskList = () => {
                   onTaskClick={handleTaskClick}
                   selectedTaskId={selectedTask?.id}
                   onAddChildTask={handleAddChildTask}
+                  canEdit={true}
+                  canDelete={true}
                 />
               ))}
             </div>
@@ -586,6 +589,8 @@ const TaskList = () => {
                   onTaskClick={handleTaskClick}
                   selectedTaskId={selectedTask?.id}
                   onAddChildTask={handleAddChildTask}
+                  canEdit={true}
+                  canDelete={true}
                 />
               ))}
             </div>
