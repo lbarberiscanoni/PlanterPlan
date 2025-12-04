@@ -1,4 +1,8 @@
-import { fetchMasterLibraryTasks, searchMasterLibraryTasks } from './taskService';
+import { fetchMasterLibraryTasks, searchMasterLibraryTasks, fetchTaskById } from './taskService';
+
+jest.mock('../supabaseClient', () => ({
+  supabase: {},
+}));
 
 const createMockClient = (response) => {
   const builder = {
@@ -7,6 +11,8 @@ const createMockClient = (response) => {
     order: jest.fn().mockReturnThis(),
     limit: jest.fn().mockReturnThis(),
     range: jest.fn().mockReturnThis(),
+    eq: jest.fn().mockReturnThis(),
+    single: jest.fn().mockReturnThis(),
     abortSignal: jest.fn().mockReturnThis(),
     then(resolve, reject) {
       return Promise.resolve(response).then(resolve, reject);
@@ -76,12 +82,61 @@ describe('fetchMasterLibraryTasks', () => {
   });
 
   it('returns empty array when payload shape invalid', async () => {
-    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => { });
     const { client } = createMockClient({ data: [{ bad: 'record' }], error: null });
 
     const results = await fetchMasterLibraryTasks({}, client);
 
     expect(results).toEqual([]);
+    warnSpy.mockRestore();
+  });
+});
+
+describe('fetchTaskById', () => {
+  it('returns task when ID exists', async () => {
+    const sampleTask = { id: '123', title: 'My Task', origin: 'library' };
+    const { client, builder } = createMockClient({ data: sampleTask, error: null });
+
+    const result = await fetchTaskById('123', client);
+
+    expect(client.from).toHaveBeenCalledWith('view_master_library');
+    expect(builder.select).toHaveBeenCalledWith('*');
+    expect(builder.eq).toHaveBeenCalledWith('id', '123');
+    expect(builder.single).toHaveBeenCalled();
+    expect(result).toEqual(sampleTask);
+  });
+
+  it('returns null when ID does not exist (PGRST116)', async () => {
+    const { client } = createMockClient({ data: null, error: { code: 'PGRST116' } });
+
+    const result = await fetchTaskById('999', client);
+
+    expect(result).toBeNull();
+  });
+
+  it('returns null when ID is missing', async () => {
+    const { client } = createMockClient({});
+    const result = await fetchTaskById(null, client);
+    expect(result).toBeNull();
+    expect(client.from).not.toHaveBeenCalled();
+  });
+
+  it('throws error on network failure', async () => {
+    const mockError = new Error('Network error');
+    const { client } = createMockClient({ data: null, error: mockError });
+
+    await expect(fetchTaskById('123', client)).rejects.toThrow('Network error');
+  });
+
+  it('returns null and warns when task shape is invalid', async () => {
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => { });
+    const invalidTask = { id: '123', title: '' }; // Missing origin, empty title
+    const { client } = createMockClient({ data: invalidTask, error: null });
+
+    const result = await fetchTaskById('123', client);
+
+    expect(result).toBeNull();
+    expect(warnSpy).toHaveBeenCalled();
     warnSpy.mockRestore();
   });
 });

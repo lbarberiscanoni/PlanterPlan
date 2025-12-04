@@ -11,6 +11,7 @@
 # production
 /build
 .env
+
 # misc
 .DS_Store
 .env
@@ -18,6 +19,9 @@
 .env.development.local
 .env.test.local
 .env.production.local
+
+# docs
+/docs/git_documentation
 
 npm-debug.log*
 yarn-debug.log*
