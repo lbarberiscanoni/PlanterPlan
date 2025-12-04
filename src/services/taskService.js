@@ -1,6 +1,6 @@
 import { supabase } from '../supabaseClient';
 
-const MASTER_LIBRARY_VIEW = 'view_master_library';
+const MASTER_LIBRARY_TABLE = 'tasks';
 const DEFAULT_PAGE_SIZE = 25;
 const REQUIRED_FIELDS = ['id', 'title', 'origin'];
 const DEFAULT_SEARCH_LIMIT = 20;
@@ -35,8 +35,9 @@ export const fetchMasterLibraryTasks = async (
   const end = Math.max(start, start + size - 1);
 
   let query = client
-    .from(MASTER_LIBRARY_VIEW)
+    .from(MASTER_LIBRARY_TABLE)
     .select('*')
+    .eq('origin', 'template')
     .order('created_at', { ascending: false })
     .range(start, end);
 
@@ -99,8 +100,9 @@ export const searchMasterLibraryTasks = async (
   const likePattern = `%${escapedTerm}%`;
 
   let queryBuilder = client
-    .from(MASTER_LIBRARY_VIEW)
+    .from(MASTER_LIBRARY_TABLE)
     .select('*')
+    .eq('origin', 'template')
     .or(`title.ilike.${likePattern},description.ilike.${likePattern}`)
     .order('updated_at', { ascending: false })
     .limit(size);
@@ -152,8 +154,9 @@ export const fetchTaskById = async (id, client = supabase) => {
 
   try {
     const { data, error } = await client
-      .from(MASTER_LIBRARY_VIEW)
+      .from(MASTER_LIBRARY_TABLE)
       .select('*')
+      .eq('origin', 'template')
       .eq('id', id)
       .single();
 
