@@ -1,4 +1,5 @@
 import { supabase } from '../supabaseClient';
+import { deepCloneTaskTree, flattenTaskTree } from '../utils/treeHelpers';
 
 const MASTER_LIBRARY_TABLE = 'tasks';
 const DEFAULT_PAGE_SIZE = 25;
@@ -178,4 +179,46 @@ export const fetchTaskById = async (id, client = supabase) => {
     console.error('[taskService.fetchTaskById] Error fetching task:', error);
     throw error;
   }
+};
+
+export const fetchTaskChildren = async (parentId, client = supabase) => {
+  if (!parentId) return [];
+
+  try {
+    const { data, error } = await client
+      .from(MASTER_LIBRARY_TABLE)
+      .select('*')
+      .eq('origin', 'template')
+      .eq('parent_id', parentId)
+      .order('created_at', { ascending: true }); // Or position if available
+
+    if (error) throw error;
+
+    return data || [];
+  } catch (error) {
+    console.error('[taskService.fetchTaskChildren] Error fetching children:', error);
+    throw error;
+  }
+};
+
+
+
+export const deepCloneTask = async (taskId, client = supabase) => {
+  const rootTask = await fetchTaskById(taskId, client);
+  if (!rootTask) {
+    throw new Error(`Task not found: ${taskId}`);
+  }
+
+  const fetchChildren = (pid) => fetchTaskChildren(pid, client);
+  const idGenerator = () => {
+    // Support both browser (window.crypto) and Node/Jest (global.crypto)
+    if (globalThis.crypto?.randomUUID) {
+      return globalThis.crypto.randomUUID();
+    }
+    // Fallback for older environments or if mock fails.
+    throw new Error('crypto.randomUUID is not available');
+  };
+
+  const clonedTree = await deepCloneTaskTree(rootTask, fetchChildren, idGenerator);
+  return flattenTaskTree(clonedTree);
 };
