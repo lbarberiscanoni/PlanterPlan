@@ -61,12 +61,22 @@ describe('Task.clone — spawnedFromTemplate stamping (Wave 22)', () => {
     // First from() call: Task.get(new_root_id) — returns existing row with empty settings.
     const existingRow = makeTask({ id: 'cloned-root-uuid', settings: null });
     const getChain = createChain({ data: existingRow, error: null });
-    // Second from() call: Task.update(...) — echoes back the updated row.
+    // Second from() call: Task.get(templateId) for the Wave 36 template_version
+    // lookup. Return a template without the column so the stamp is omitted —
+    // keeps this test focused on spawnedFromTemplate.
+    const templateLookupChain = createChain({
+      data: makeTask({ id: 'tmpl-xyz', origin: 'template' }),
+      error: null,
+    });
+    // Third from() call: Task.update(...) — echoes back the updated row.
     const updateChain = createChain({
       data: [{ ...existingRow, settings: { spawnedFromTemplate: 'tmpl-xyz' } }],
       error: null,
     });
-    mockFrom.mockReturnValueOnce(getChain).mockReturnValueOnce(updateChain);
+    mockFrom
+      .mockReturnValueOnce(getChain)
+      .mockReturnValueOnce(templateLookupChain)
+      .mockReturnValueOnce(updateChain);
 
     const result = await planter.entities.Task.clone('tmpl-xyz', null, 'instance', 'user-1');
 
@@ -89,8 +99,15 @@ describe('Task.clone — spawnedFromTemplate stamping (Wave 22)', () => {
       settings: { published: true, due_soon_threshold: 5 },
     });
     const getChain = createChain({ data: existingRow, error: null });
+    const templateLookupChain = createChain({
+      data: makeTask({ id: 'tmpl-xyz', origin: 'template' }),
+      error: null,
+    });
     const updateChain = createChain({ data: [existingRow], error: null });
-    mockFrom.mockReturnValueOnce(getChain).mockReturnValueOnce(updateChain);
+    mockFrom
+      .mockReturnValueOnce(getChain)
+      .mockReturnValueOnce(templateLookupChain)
+      .mockReturnValueOnce(updateChain);
 
     await planter.entities.Task.clone('tmpl-xyz', null, 'instance', 'user-1');
 
@@ -111,11 +128,18 @@ describe('Task.clone — spawnedFromTemplate stamping (Wave 22)', () => {
     // get() resolves normally, but the update() call rejects — stamp is best-effort.
     const existingRow = makeTask({ id: 'cloned-root-uuid', settings: null });
     const getChain = createChain({ data: existingRow, error: null });
+    const templateLookupChain = createChain({
+      data: makeTask({ id: 'tmpl-xyz', origin: 'template' }),
+      error: null,
+    });
     const failingUpdateChain = createChain({
       data: null,
       error: { message: 'rls violation', code: '42501' },
     });
-    mockFrom.mockReturnValueOnce(getChain).mockReturnValueOnce(failingUpdateChain);
+    mockFrom
+      .mockReturnValueOnce(getChain)
+      .mockReturnValueOnce(templateLookupChain)
+      .mockReturnValueOnce(failingUpdateChain);
 
     // Suppress the expected console.error so test output stays clean.
     const errSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
@@ -165,8 +189,15 @@ describe('Task.clone — spawnedFromTemplate stamping (Wave 22)', () => {
     const existingRow = makeTask({ id: 'cloned-root-uuid', settings: null });
     const updatedRow = { ...existingRow, settings: { spawnedFromTemplate: 'tmpl-xyz' } };
     const getChain = createChain({ data: existingRow, error: null });
+    const templateLookupChain = createChain({
+      data: makeTask({ id: 'tmpl-xyz', origin: 'template' }),
+      error: null,
+    });
     const updateChain = createChain({ data: [updatedRow], error: null });
-    mockFrom.mockReturnValueOnce(getChain).mockReturnValueOnce(updateChain);
+    mockFrom
+      .mockReturnValueOnce(getChain)
+      .mockReturnValueOnce(templateLookupChain)
+      .mockReturnValueOnce(updateChain);
 
     const result = await planter.entities.Task.clone('tmpl-xyz', null, 'instance', 'user-1');
 

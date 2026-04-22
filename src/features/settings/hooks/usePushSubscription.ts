@@ -32,7 +32,7 @@ function readPermission(): NotificationPermission | 'unsupported' {
  *
  * `isSupported` is true only when the browser exposes both `navigator.serviceWorker`
  * and `window.PushManager`. Falsy on the server (SSR / test) and on Safari
- * without an installed PWA (Wave 32 gates the PWA shell).
+ * without an installed PWA (PWA shell is not currently on the roadmap).
  */
 export function usePushSubscription() {
     const { user } = useAuth();

@@ -6,7 +6,7 @@ import type { TaskRow, Project, TaskInsert, CreateProjectFormData } from '@/shar
 import type { Database } from '@/shared/db/database.types';
 import type { CreateProjectPayload } from '@/features/projects/hooks/useProjectMutations';
 import { Button } from '@/shared/ui/button';
-import { Plus, FolderKanban, Loader2 } from 'lucide-react';
+import { Plus, FolderKanban, Loader2, BookTemplate } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 // Hooks
@@ -124,6 +124,14 @@ export default function Dashboard() {
                 </div>
 
                 <div className="flex items-center gap-3">
+                    <Button
+                        variant="secondary"
+                        onClick={() => actions.setShowTemplateModal(true)}
+                        data-testid="dashboard-new-template-btn"
+                    >
+                        <BookTemplate className="w-5 h-5 mr-2" />
+                        {t('dashboard.new_template')}
+                    </Button>
                     <Button
                         onClick={() => actions.setShowCreateModal(true)}
                         className="bg-orange-500 hover:bg-orange-600 shadow-lg shadow-orange-500/20 "

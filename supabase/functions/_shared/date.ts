@@ -51,3 +51,17 @@ export function isCheckpointProject(rootTask: CheckpointRootLike | null | undefi
     if (!settings || typeof settings !== 'object' || Array.isArray(settings)) return false
     return (settings as Record<string, unknown>).project_kind === 'checkpoint'
 }
+
+// ---------------------------------------------------------------------------
+// Wave 35 — ICS feed. Advance a YYYY-MM-DD calendar-day string by N days and
+// return the new YYYY-MM-DD. Uses Date.UTC (pure constructor, no mutation).
+// ---------------------------------------------------------------------------
+
+export function addDaysToIsoDate(isoDate: string, days: number): string | null {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(isoDate)) return null
+    const [y, m, d] = isoDate.split('-').map(Number)
+    if (!y || !m || !d) return null
+    const ms = Date.UTC(y, m - 1, d + days)
+    if (Number.isNaN(ms)) return null
+    return toUtcIsoDate(new Date(ms))
+}

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
-import { useParams, useLocation } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import { useAuth } from '@/shared/contexts/AuthContext';
 import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/shared/db/client';
@@ -36,9 +36,11 @@ import { useProjectPresence } from '@/features/projects/hooks/useProjectPresence
 import { PresenceBar } from '@/features/projects/components/PresenceBar';
 
 export default function Project() {
-    const { projectId: paramId } = useParams<{ projectId: string }>();
-    const location = useLocation();
-    const projectId = paramId || new URLSearchParams(location.search).get('id') || undefined;
+    // Canonical URL form is /Project/:projectId. The legacy /Project?id=X
+    // form was dropped post-megabatch — every in-app caller now uses the
+    // param form. Bookmarks on the old URL land on the "pick a project"
+    // empty state, which is acceptable for a handful of cases.
+    const { projectId } = useParams<{ projectId: string }>();
     const { user } = useAuth();
 
     const {

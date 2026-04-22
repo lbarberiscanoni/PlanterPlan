@@ -201,6 +201,39 @@ export type Database = {
  }
  Relationships: []
  }
+ ics_feed_tokens: {
+ Row: {
+ id: string
+ user_id: string
+ token: string
+ label: string | null
+ project_filter: string[] | null
+ created_at: string
+ revoked_at: string | null
+ last_accessed_at: string | null
+ }
+ Insert: {
+ id?: string
+ user_id: string
+ token: string
+ label?: string | null
+ project_filter?: string[] | null
+ created_at?: string
+ revoked_at?: string | null
+ last_accessed_at?: string | null
+ }
+ Update: {
+ id?: string
+ user_id?: string
+ token?: string
+ label?: string | null
+ project_filter?: string[] | null
+ created_at?: string
+ revoked_at?: string | null
+ last_accessed_at?: string | null
+ }
+ Relationships: []
+ }
  people: {
  Row: {
  created_at: string | null
@@ -702,6 +735,8 @@ export type Database = {
  status: string | null
  supervisor_email: string | null
  task_type: string | null
+ template_version: number | null
+ cloned_from_task_id: string | null
  title: string
  updated_at: string | null
  }
@@ -734,6 +769,8 @@ export type Database = {
  status?: string | null
  supervisor_email?: string | null
  task_type?: string | null
+ template_version?: number | null
+ cloned_from_task_id?: string | null
  title: string
  updated_at?: string | null
  }
@@ -766,6 +803,8 @@ export type Database = {
  status?: string | null
  supervisor_email?: string | null
  task_type?: string | null
+ template_version?: number | null
+ cloned_from_task_id?: string | null
  title?: string
  updated_at?: string | null
  }
@@ -901,6 +940,8 @@ export type Database = {
  storage_path: string | null
  supervisor_email: string | null
  task_type: string | null
+ template_version: number | null
+ cloned_from_task_id: string | null
  title: string | null
  updated_at: string | null
  }

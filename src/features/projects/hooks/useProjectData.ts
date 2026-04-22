@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useMemo } from 'react';
 import { planter } from '@/shared/api/planterClient';
+import { STALE_TIMES } from '@/shared/lib/react-query-config';
 
 /** Minimal task shape returned by the project hierarchy query. */
 interface HierarchyTask {
@@ -47,7 +48,7 @@ export function useProjectData(projectId: string | null | undefined): UseProject
         queryKey: ['project', projectId],
         queryFn: () => planter.entities.Project.getWithStats(projectId!),
         enabled: !!projectId,
-        staleTime: 1000 * 60 * 5, // 5 minutes cache
+        staleTime: STALE_TIMES.long, // 5 minutes cache
     });
 
     const project = (data as { data?: Project } | undefined)?.data;
@@ -57,7 +58,7 @@ export function useProjectData(projectId: string | null | undefined): UseProject
         queryKey: ['projectHierarchy', projectId],
         queryFn: () => planter.entities.Task.filter({ root_id: projectId }) as Promise<HierarchyTask[]>,
         enabled: !!projectId,
-        staleTime: 1000 * 60 * 5,
+        staleTime: STALE_TIMES.long,
     });
 
     // Derived State

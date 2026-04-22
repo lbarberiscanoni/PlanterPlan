@@ -54,7 +54,8 @@ describe('ProjectGantt (Wave 28)', () => {
         expect(screen.getByText(/3 tasks excluded/i)).toBeInTheDocument();
     });
 
-    it('renders the Export PDF button disabled with the deferral tooltip', () => {
+    it('renders the Export PDF button wired to window.print()', () => {
+        const printSpy = vi.spyOn(window, 'print').mockImplementation(() => {});
         render(
             <ProjectGantt
                 rows={[]}
@@ -65,8 +66,11 @@ describe('ProjectGantt (Wave 28)', () => {
                 onIncludeLeafTasksChange={() => {}}
             />,
         );
-        const pdfBtn = screen.getByRole('button', { name: /pdf export coming soon/i });
-        expect(pdfBtn).toBeDisabled();
+        const pdfBtn = screen.getByRole('button', { name: /export gantt via browser print dialog/i });
+        expect(pdfBtn).toBeEnabled();
+        pdfBtn.click();
+        expect(printSpy).toHaveBeenCalledTimes(1);
+        printSpy.mockRestore();
     });
 
     it('fires onIncludeLeafTasksChange when the switch is toggled', () => {

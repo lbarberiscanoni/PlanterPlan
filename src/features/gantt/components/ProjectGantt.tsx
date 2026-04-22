@@ -97,9 +97,8 @@ export function ProjectGantt({
                     <Button
                         variant="outline"
                         size="sm"
-                        disabled
-                        title="PDF export coming soon"
-                        aria-label="PDF export coming soon"
+                        onClick={() => window.print()}
+                        aria-label="Export gantt via browser print dialog (choose 'Save as PDF' as the destination)"
                     >
                         <FileDown aria-hidden="true" />
                         Export PDF

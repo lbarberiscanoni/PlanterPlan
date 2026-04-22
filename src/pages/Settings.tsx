@@ -9,13 +9,15 @@ import {
  Lock,
  Bell,
  Loader2,
+ Calendar,
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useSettings } from '@/features/settings/hooks/useSettings';
 import SettingsNotificationsTab from '@/pages/components/SettingsNotificationsTab';
 import { LocaleSwitcher } from '@/features/settings/components/LocaleSwitcher';
+import IcsFeedsCard from '@/features/settings/components/IcsFeedsCard';
 
-type SettingsTab = 'profile' | 'security' | 'notifications';
+type SettingsTab = 'profile' | 'security' | 'notifications' | 'integrations';
 
 export default function Settings() {
  const { t } = useTranslation();
@@ -38,6 +40,7 @@ export default function Settings() {
  {([
  { label: t('settings.tab_profile'), icon: User, tab: 'profile' as SettingsTab },
  { label: t('settings.tab_notifications'), icon: Bell, tab: 'notifications' as SettingsTab },
+ { label: t('settings.tab_integrations'), icon: Calendar, tab: 'integrations' as SettingsTab },
  { label: t('settings.tab_security'), icon: Lock, tab: 'security' as SettingsTab },
  ] as Array<{ label: string; icon: React.ElementType; tab?: SettingsTab; comingSoon?: boolean }>).map((item) => (
  <Button
@@ -183,6 +186,11 @@ export default function Settings() {
  {/* Notifications Tab (Wave 30) */}
  {activeTab === 'notifications' && (
  <SettingsNotificationsTab />
+ )}
+
+ {/* Integrations Tab (Wave 35) */}
+ {activeTab === 'integrations' && (
+ <IcsFeedsCard />
  )}
 
  {/* Security Tab */}

@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { planter } from '@/shared/api/planterClient';
 import { useAuth } from '@/shared/contexts/AuthContext';
+import { STALE_TIMES } from '@/shared/lib/react-query-config';
 
 interface UseMasterLibrarySearchProps {
  query?: string;
@@ -28,7 +29,7 @@ export const useMasterLibrarySearch = ({
  queryKey: ['masterLibraryTemplates', viewerId],
  queryFn: () => planter.entities.TaskWithResources.listAllVisibleTemplates(viewerId),
  enabled,
- staleTime: 1000 * 60 * 5,
+ staleTime: STALE_TIMES.long,
  });
 
  const trimmed = query.trim().toLowerCase();

@@ -11,11 +11,7 @@ import {
     type MilestoneSummary,
     type ProjectReportPayload,
 } from '../_shared/email.ts'
-
-const corsHeaders = {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
+import { corsHeaders, isServiceRoleRequest } from '../_shared/auth.ts'
 
 type TaskRow = {
     id: string
@@ -156,10 +152,78 @@ Deno.serve(async (req) => {
     }
 
     try {
+        // Hybrid auth: supervisor-report is called by BOTH the cron scheduler
+        // (service-role JWT, unscoped — processes every project with a
+        // supervisor_email) and by the EditProjectModal "Send test" button
+        // (authenticated user JWT, scoped to their project_id).
+        //
+        // - Service-role callers: trust and run unscoped.
+        // - User-JWT callers: require body.project_id AND verify the caller
+        //   has ownership of that project (via has_permission). This stops
+        //   an authenticated user from fanning out supervisor emails across
+        //   unrelated projects.
+        const authHeader = req.headers.get('Authorization') ?? ''
+        // Constant-time bearer match via the shared helper (avoids the
+        // short-circuit-on-first-mismatch timing signal of raw `===`).
+        const isServiceRole = isServiceRoleRequest(req)
+
         const supabase = createClient(
             Deno.env.get('SUPABASE_URL') ?? '',
             Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
         )
+
+        // Clone the body so we can both peek at project_id and preserve the
+        // original for the downstream parseInvocationBody call.
+        const rawBody = await req.clone().text()
+        let peekProjectId: string | undefined
+        try {
+            const parsed = rawBody ? JSON.parse(rawBody) : {}
+            peekProjectId = typeof parsed?.project_id === 'string' ? parsed.project_id : undefined
+        } catch {
+            peekProjectId = undefined
+        }
+
+        if (!isServiceRole) {
+            if (!authHeader.startsWith('Bearer ')) {
+                return new Response(JSON.stringify({ success: false, error: 'Authorization required' }), {
+                    status: 401,
+                    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+                })
+            }
+            if (!peekProjectId) {
+                return new Response(JSON.stringify({ success: false, error: 'project_id required for user-invoked calls' }), {
+                    status: 400,
+                    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+                })
+            }
+            // Resolve the caller's uid from the JWT via a lightweight
+            // supabase-auth call under the user's token (NOT service role).
+            const userClient = createClient(
+                Deno.env.get('SUPABASE_URL') ?? '',
+                Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+                { global: { headers: { Authorization: authHeader } } },
+            )
+            const { data: userRes, error: userErr } = await userClient.auth.getUser()
+            if (userErr || !userRes?.user) {
+                return new Response(JSON.stringify({ success: false, error: 'Invalid auth token' }), {
+                    status: 401,
+                    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+                })
+            }
+            // Verify ownership via has_permission (SECURITY DEFINER).
+            // @ts-expect-error rpc typing is loose for dynamic function names.
+            const { data: permOk, error: permErr } = await supabase.rpc('has_permission', {
+                p_project_id: peekProjectId,
+                p_user_id: userRes.user.id,
+                p_required_role: 'owner',
+            })
+            if (permErr || !permOk) {
+                return new Response(JSON.stringify({ success: false, error: 'Forbidden' }), {
+                    status: 403,
+                    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+                })
+            }
+        }
 
         const { project_id, dry_run } = await parseInvocationBody(req)
 

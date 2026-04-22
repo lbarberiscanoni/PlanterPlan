@@ -10,6 +10,7 @@ import { Label } from '@/shared/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/ui/select';
 import { ExternalLink, FileText, StickyNote, Plus, Trash2, Star } from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
+import { safeUrl } from '@/shared/lib/safe-url';
 import { planter } from '@/shared/api/planterClient';
 
 const resourceTypeIcons = {
@@ -136,7 +137,7 @@ export default function TaskResources({ taskId, primaryResourceId, onUpdate }: T
  </p>
  {type === 'url' && resource.resource_url && (
  <a
- href={resource.resource_url}
+ href={safeUrl(resource.resource_url)}
  target="_blank"
  rel="noopener noreferrer"
  className="text-xs text-brand-600 hover:underline truncate block"

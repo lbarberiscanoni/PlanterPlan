@@ -62,7 +62,7 @@ Component → React Query hook → planterClient → Supabase SDK
 
 ## Conventions
 
-- **TypeScript only** — no `.js` or `.jsx` files. Ever. (One documented exception: `public/sw.js`, the Wave 30 push-notification service worker. Slated for TS conversion in Wave 32 via a workbox-built `src/sw.ts`. See `docs/dev-notes.md`.)
+- **TypeScript only** — no `.js` or `.jsx` files. Ever. (One documented exception: `public/sw.js`, the Wave 30 push-notification service worker. TS conversion is not currently scheduled — the PWA/workbox track that would have subsumed this file was descoped during the post-Wave-31 roadmap renumber. See `docs/dev-notes.md`.)
 - **No barrel files** — import directly from component/hook paths.
 - **Path alias**: `@/` maps to `src/`. Use `@/features/...`, `@/shared/...`, etc.
 - **Types**: Derived from Supabase generated types in `src/shared/db/database.types.ts`, re-exported as domain types in `src/shared/db/app.types.ts`.
@@ -77,9 +77,14 @@ Component → React Query hook → planterClient → Supabase SDK
 /dashboard      → Dashboard (default after login)
 /reports        → Reports
 /project/:id    → Project detail
-/tasks          → TasksPage (My Tasks view)
+/tasks          → TasksPage (unified Task view — Wave 33 merged /daily into this surface; due-date badges + range filter; row click opens TaskDetailsPanel; title hover reveals parent project)
+/daily          → redirects to /tasks (bookmark compatibility after the Wave 33 merge)
 /settings       → Settings
 /gantt          → Gantt (lazy-loaded; reads ?projectId=:id)
+/admin          → AdminHome (Wave 34; lazy-loaded, useIsAdmin-gated — non-admins are toasted + redirected to /dashboard)
+/admin/users    → AdminUsers (server-side-filtered table of auth.users with drill-down aside)
+/admin/users/:uid → AdminUsers pre-selecting that user (deep-link from AdminSearch)
+/admin/analytics → AdminAnalytics (recharts-backed snapshot dashboard)
 ```
 
 ## Environment
@@ -118,6 +123,7 @@ RLS is enabled on all tables. Authorization is role-based per project.
 - **`notification_preferences`** — Per-user singleton (PK = `user_id` → `auth.users`). Bootstrap trigger on `auth.users` seeds a row on signup. Per-event email/push toggles, overdue-digest cadence (`off`/`daily`/`weekly`), quiet hours (start/end + IANA timezone). Wave 30.
 - **`notification_log`** — Append-only notification audit trail. `channel ∈ {'email','push'}`, `event_type` carries the dispatch state-machine phase. RLS denies INSERT/UPDATE/DELETE at policy level — only SECURITY DEFINER dispatch edge functions write. Wave 30.
 - **`push_subscriptions`** — One row per (user, browser endpoint). `UNIQUE (user_id, endpoint)`. Client inserts on subscribe, DELETEs on unsubscribe. `dispatch-push` DELETEs stale rows on HTTP 410. Wave 30.
+- **`ics_feed_tokens`** — One row per user-generated ICS calendar feed token. `UNIQUE (token)`. Client generates 256-bit tokens via `crypto.randomUUID()` × 2. Revocation is soft (`revoked_at IS NOT NULL`). Public edge function `supabase/functions/ics-feed/` accepts the token and returns `text/calendar`. Wave 35.
 
 **Views:**
 - **`tasks_with_primary_resource`** — Tasks LEFT JOINed with their primary `task_resources` row. Used by `planterClient.ts` for reads.
@@ -129,13 +135,27 @@ RLS is enabled on all tables. Authorization is role-based per project.
 - `is_complete` — Boolean completion flag (used by `check_phase_unlock` trigger).
 - `is_locked` / `prerequisite_phase_id` — Phase locking system.
 - `position` — Sort order among siblings.
-- `settings` — JSONB. Canonical keys: `published`, `recurrence`, `spawnedFromTemplate`/`spawnedOn`, `due_soon_threshold`, `is_coaching_task`, `is_strategy_template`, `project_kind` (`'date' | 'checkpoint'` on roots only, Wave 29), `phase_lead_user_ids` (string[] on phase/milestone rows, Wave 29). **Wave 29:** `settings.project_kind` gates the date-engine + nightly-sync urgency passes; `settings.phase_lead_user_ids` widens UPDATE access via the `"Enable update for phase leads"` RLS policy (CTE walks from parent — leads may edit tasks UNDER a phase, not the phase row itself).
+- `settings` — JSONB. Canonical keys: `published`, `recurrence`, `spawnedFromTemplate`/`spawnedOn`, `due_soon_threshold`, `is_coaching_task`, `is_strategy_template`, `project_kind` (`'date' | 'checkpoint'` on roots only, Wave 29), `phase_lead_user_ids` (string[] on phase/milestone rows, Wave 29), `cloned_from_template_version` (int on cloned roots, Wave 36 — stamps the source template's `template_version` at clone time). **Wave 29:** `settings.project_kind` gates the date-engine + nightly-sync urgency passes; `settings.phase_lead_user_ids` widens UPDATE access via the `"Enable update for phase leads"` RLS policy (CTE walks from parent — leads may edit tasks UNDER a phase, not the phase row itself).
+- `template_version` — Wave 36. Monotonic int on template rows, bumped by `trg_bump_template_version` BEFORE UPDATE trigger whenever a template's title / description / days_from_start / duration / settings change.
+- `cloned_from_task_id` — Wave 36. FK to `public.tasks(id) ON DELETE SET NULL`. NULL on custom additions; points to the source template task on every cloned descendant. Backs the app-side delete guard in `TaskDetailsView`.
 - `days_from_start` — Relative scheduling offset.
 - `assignee_id` — FK to auth user.
 
 ### Role Hierarchy
 
 `owner > editor > coach > viewer > limited` — defined in `project_members.role` (Refer to `docs/architecture/auth-rbac.md` for specific permissions).
+
+### Admin SECURITY DEFINER RPCs (Wave 34)
+
+Every `/admin/*` read goes through a SECURITY DEFINER RPC gated at the top of the function body by `IF NOT public.is_admin(auth.uid()) THEN RAISE EXCEPTION 'unauthorized: admin role required' END IF`.
+
+- **`admin_search_users(query, limit)`** — fuzzy email / full_name search across `auth.users`.
+- **`admin_user_detail(uid)`** — profile + project memberships + task counts as `jsonb`.
+- **`admin_recent_activity(limit)`** — cross-project activity feed joined with actor email.
+- **`admin_list_users(filter jsonb, limit, offset)`** — paginated user list with server-side role / last-login / has-overdue / search filters.
+- **`admin_analytics_snapshot()`** — one-jsonb dashboard payload (totals + time series + breakdowns + top-10s).
+
+The `admin_users` whitelist is the sole admin gate — `is_admin(auth.uid())` returns true iff a row exists for the calling user. Client wrappers live under `planter.admin.*`.
 
 ### Core RLS Helper Functions (SECURITY DEFINER)
 

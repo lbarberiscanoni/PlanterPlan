@@ -1,247 +1,136 @@
 ## Session Context
 
-PlanterPlan is a church planting project management app (React 19 + TypeScript + Supabase + Vite). Read `CLAUDE.md` for conventions and architecture. Strict typing, Feature-Sliced Design (FSD) boundaries, no direct Supabase calls in components, no raw date math — all enforced. See `.gemini/styleguide.md` for the full bar.
+PlanterPlan is a church planting project management app (React 18 + TypeScript + Supabase + Vite). Read `CLAUDE.md` for conventions and architecture. Strict typing, Feature-Sliced Design (FSD) boundaries, no direct Supabase calls in components, no raw date math — all enforced. See `.gemini/styleguide.md` for the full bar.
 
 Wave 35 shipped to `main`:
-- Stripe Checkout + Customer Portal + signed Webhook
-- Three subscription tiers (Free / Pro / Network) with project + member limits enforced via DB triggers + UI gates
-- Discount codes mapped to Stripe promotions
-- New `subscriptions`, `subscription_events`, `discount_codes` tables; Settings → Billing tab; admin discount-codes page
-- Closed `auth-rbac.md` Licensing Enforcement gap
+- Per-user signed ICS calendar feeds
 
-Spec is at **1.20.0**. Outstanding roadmap: §3.7 External Integrations (this wave — last §3.7 item), Wave 37 architecture-doc gap closures, Wave 38 release readiness.
+**Roadmap note**: the pre-renumber Wave 37 scope included five hardening items. Date-engine weekends/holidays, invite escrow, and task-tree virtualization were descoped. Only **template versioning** and **template immutability** remain, and the surviving scope is tracked here as Wave 36. The original Wave 38 release-cutover wave was also descoped, so Wave 36 is the trailing wave in the active roadmap.
 
-Wave 36 ships **External Integrations** (§3.7 last bullet): Zoho CRM/Analytics sync, AWS S3 unmanaged file uploads, ICS calendar feeds, and a generic webhook subscriber. Each is a separate task; the wave is intentionally large but all four integrations follow the same patterns (per-user OAuth/token storage + per-event webhook fanout) so they share a lot of plumbing.
+The known-gaps list this wave attacks (sourced from `docs/architecture/*.md` + `docs/dev-notes.md` + `repo-context.yaml`):
 
-**Test baseline going into Wave 36:** Wave 35 shipped at ≥740 tests. Run `npm test` and record. Lint baseline: 0 errors, ≤7 warnings — do not regress.
+1. **`library-templates.md`**: Versioning of templates — currently, if an Admin updates a Template, existing Projects created from it are not updated (intended), but tracking the original template version on the Project instance is missing.
+2. **`projects-phases.md`**: Template Immutability — Logic to prevent users from deleting specific items that originated from a Master Template (allowing deletion only for custom post-instantiation additions) is not yet fully enforced.
 
-**Read `.claude/wave-testing-strategy.md` before starting.** Wave 36 specific: zero existing-test impact (all four integrations are new + isolated). For `webhook-dispatch.test.ts`, jsdom should provide `crypto.subtle` for HMAC; verify by `console.log(typeof crypto.subtle)` in a one-off test if anything fails. AWS SDK mocks live per-test via `vi.mock('@aws-sdk/s3-request-presigner', ...)` since these are Deno-only deps that don't bundle into frontend tests.
+**Test baseline going into Wave 36:** Run `npm test` and record. Lint baseline: 0 errors, ≤7 warnings — do not regress. This wave adds no new functional surfaces — just hardening — so the test count delta is modest.
+
+**Read `.claude/wave-testing-strategy.md` before starting.** Wave 36 specific: Tasks 1 + 2 modify the `clone_project_template` RPC server-side. The existing `Testing/unit/shared/api/planterClient.clone.stamp.test.ts` test (Wave 22) asserts that `Task.clone` follows up with a `Task.update` writing `settings.spawnedFromTemplate`. Read this file first — if Task 1's stamp of `cloned_from_template_version` is added on the server side (in the RPC body) rather than the client-side follow-up, the existing test stays unchanged. Task 2's `cloned_from_task_id` populates server-side too, so client-side test is also unchanged. Add NEW assertions for both stamps in `Testing/unit/shared/api/planterClient.template.versioning.test.ts`.
 
 ## Pre-flight verification (run before any task)
 
-1. `git log --oneline` includes the 3 Wave 35 commits + docs sweep.
-2. External prerequisites — log in PR descriptions:
-   - **Task 1 (Zoho)**: Zoho developer app registered with `ZohoCRM.modules.ALL` + `ZohoAnalytics.data.READ` scopes; `ZOHO_CLIENT_ID`, `ZOHO_CLIENT_SECRET`, `ZOHO_REDIRECT_URI` set in Supabase secrets.
-   - **Task 2 (S3)**: AWS S3 bucket exists; CORS configured per `docs/operations/s3-cors-setup.md`; `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`, `S3_BUCKET` set; `S3_MAX_UPLOAD_BYTES` defaults to `104857600` (100 MB) if unset.
-   - **Task 3 (ICS)**: no external prerequisite.
-   - **Task 4 (Webhooks)**: requires the Wave 27 `activity_log` to be populated. Verify by `psql -c "SELECT count(*) FROM public.activity_log"` returns >0.
-3. Pinned dep versions for the edge functions (Deno ESM URLs):
-   - AWS S3: `https://esm.sh/@aws-sdk/client-s3@3.700.0` + `https://esm.sh/@aws-sdk/s3-request-presigner@3.700.0`
-   - Web Push (already in Wave 30): no addition.
-   - Zoho HTTP: native Deno fetch — no SDK.
-4. **Cron scheduling** — Wave 36's `zoho-sync` and `webhook-dispatch` are cron-driven. `pg_cron` is intentionally NOT enabled (per `supabase/functions/nightly-sync/README.md` and Wave 30's documentation). Use Supabase Dashboard's Scheduled Triggers or external scheduler. Add entries to `docs/operations/edge-function-schedules.md` (Wave 30) for both new functions.
+1. `git log --oneline` includes the Wave 35 commit + docs sweep (not Wave 36 — this **is** Wave 36).
+2. The existing tasks-table columns: `is_locked`, `prerequisite_phase_id`, `task_type` (Wave 25 — migration `docs/db/migrations/2026_04_18_task_type_discriminator.sql`), `template_version` (NOT YET — Task 1 adds), `cloned_from_task_id` (NOT YET — Task 2 adds). Verify the absence via `grep -E 'template_version|cloned_from_task_id' docs/db/schema.sql` — both should return nothing.
+3. The existing `clone_project_template` RPC exists in `docs/db/schema.sql` (lines ~257-472 as of Wave 23) with the signature `(p_template_id uuid, p_new_parent_id uuid, p_new_origin text, p_user_id uuid, p_title text DEFAULT NULL, p_description text DEFAULT NULL, p_start_date date DEFAULT NULL, p_due_date date DEFAULT NULL)`. Tasks 1 + 2 modify this RPC carefully (preserve the signature).
+4. **Task 1 admin UI dependency** — Task 1's Admin Templates UI (`src/pages/admin/AdminTemplates.tsx`) extends the `/admin` shell that Wave 34 created. Wave 34 **must** be merged before starting Wave 36 Task 1's UI changes; if `src/pages/admin/` does not exist, HALT and surface — this wave depends on that shell.
+5. **Architecture doc gaps** — verify both known-gap anchors are still present before flipping them:
+   - `docs/architecture/library-templates.md` has a "Versioning of templates" open gap.
+   - `docs/architecture/projects-phases.md` has a "Template Immutability" open gap.
+   If either is already marked Resolved, the wave plan has drifted — HALT.
 
 ## Branch
 
 One branch per task, cut from `main`:
-- Task 1 → `claude/wave-36-zoho-sync`
-- Task 2 → `claude/wave-36-s3-uploads`
-- Task 3 → `claude/wave-36-ics-feeds`
-- Task 4 → `claude/wave-36-webhooks`
+- Task 1 → `claude/wave-36-template-versioning`
+- Task 2 → `claude/wave-36-template-immutability`
 
 Open a PR to `main` after each task's verification gate passes. Do **not** push directly to `main`.
 
 ## Wave 36 scope
 
-Four tasks. Each is a self-contained integration that doesn't depend on the others. **Order does not matter** — the listed numbering is suggested only.
+Two tasks, each closing one documented known-gap. Each task is intentionally tight — no task should produce a PR over ~500 LOC.
 
 ---
 
-### Task 1 — Zoho CRM / Analytics sync
+### Task 1 — Template versioning
 
-**Commit:** `feat(wave-36): zoho oauth + per-user token storage + project/contact sync`
+**Commit:** `feat(wave-36): stamp template version on cloned instances + admin version log`
 
-1. **Migration** (`docs/db/migrations/2026_04_18_zoho_integration.sql`, NEW)
-   - `CREATE TABLE public.zoho_connections (user_id uuid PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE, access_token text NOT NULL, refresh_token text NOT NULL, expires_at timestamptz NOT NULL, scope text, account_url text NOT NULL, connected_at timestamptz NOT NULL DEFAULT now(), last_synced_at timestamptz)`.
-   - `CREATE TABLE public.zoho_sync_log (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), user_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE, direction text NOT NULL CHECK (direction IN ('zoho_to_planter','planter_to_zoho')), entity_type text NOT NULL, planter_id uuid, zoho_id text, action text NOT NULL CHECK (action IN ('created','updated','skipped','failed')), error text, synced_at timestamptz NOT NULL DEFAULT now())`.
-   - RLS: `zoho_connections` SELECT/UPDATE/DELETE `user_id = auth.uid()`. INSERT via the OAuth-callback edge function only. `zoho_sync_log` SELECT `user_id = auth.uid() OR is_admin(auth.uid())`. INSERT via sync function only.
+1. **Migration** (`docs/db/migrations/2026_04_18_template_versioning.sql`, NEW)
+   - Add column `template_version int NOT NULL DEFAULT 1` to `public.tasks` (only meaningful on `origin = 'template'` rows).
+   - On every UPDATE to a template task (text/structure changes), increment `template_version`. Trigger: `BEFORE UPDATE ON public.tasks WHEN OLD.origin = 'template' AND NEW.origin = 'template'` and any of `(title, description, days_from_start, duration, settings)` changed → `NEW.template_version = OLD.template_version + 1`.
+   - Stamp the cloned root with the source template's version: in the `clone_project_template` RPC (existing), when cloning, copy `source.template_version` into the cloned root's `settings.cloned_from_template_version`.
+   - **Don't** propagate updates to existing instances (intended behavior per the architecture doc) — this wave just makes the version trackable.
    - Mirror into `docs/db/schema.sql`.
 
-2. **Zoho OAuth flow** (`supabase/functions/zoho-oauth-init/`, `supabase/functions/zoho-oauth-callback/`, NEW)
-   - **`zoho-oauth-init`**: GET. Builds the Zoho OAuth URL (`accounts.zoho.com/oauth/v2/auth`) with `scope=ZohoCRM.modules.ALL,ZohoAnalytics.data.READ` + `state=<user_id-signed-jwt>` + `redirect_uri=<callback>`. Returns a redirect.
-   - **`zoho-oauth-callback`**: GET with `code` + `state`. Verifies the state JWT, exchanges code for `access_token` + `refresh_token`, stores in `zoho_connections`. Redirects back to `/settings/integrations?zoho=connected` with toast.
+2. **Admin Templates UI** (`src/pages/admin/AdminTemplates.tsx` — extend existing or NEW if absent)
+   - Show `template_version` in the template list.
+   - Per-instance view (drilldown): "Projects cloned from this template" list with each instance's `cloned_from_template_version` so admins can spot stale clones.
 
-3. **Sync edge function** (`supabase/functions/zoho-sync/`, NEW: `index.ts` + `README.md`)
-   - Cron schedule: hourly (avoid faster — Zoho API rate limits are aggressive).
-   - For each `zoho_connections` row: refresh token if expiring soon → fetch CRM Deals + Contacts → mirror as Projects + People in PlanterPlan (use `planterClient` semantics; one Deal = one PlanterPlan project; one Contact = one `people` row).
-   - **Conflict handling**: if a project already exists with the same `settings.zoho_deal_id`, update; otherwise create. Mirror the Wave 22 `settings.spawnedFromTemplate` provenance pattern.
-   - Logs every operation to `zoho_sync_log`.
-   - **Bidirectional?** Out of scope for v1 — read-only from Zoho. PlanterPlan → Zoho push is documented as a Wave 36.5 follow-up if user demand justifies.
+3. **Architecture doc** (`docs/architecture/library-templates.md`)
+   - Flip "Versioning of templates" known-gap to **Resolved (Wave 36)**. Document the trigger + the stamp on clone + the deliberate non-propagation.
 
-4. **Settings → Integrations tab** (`src/pages/Settings.tsx`)
-   - New "Integrations" tab. Shows: Zoho status (connected / disconnected), connect/disconnect buttons, last sync time, recent sync log entries.
-   - Tabs are extensible — Tasks 3 + 4 add their own UI here.
+4. **Tests**
+   - `Testing/unit/shared/api/planterClient.template.versioning.test.ts` (NEW) — `Task.update` on a template increments version; `Task.clone` stamps `settings.cloned_from_template_version`.
+   - Manual `psql` smoke at `docs/db/tests/template_versioning.sql` — increment behavior + clone stamp.
 
-5. **planterClient methods** (`src/shared/api/planterClient.ts`)
-   - `integrations.getZohoConnection()`, `integrations.disconnectZoho()`.
-   - `integrations.listZohoSyncLog(opts?)`.
+**DB migration?** Yes — one column + one trigger + one RPC modification.
 
-6. **Architecture doc** (`docs/architecture/integrations.md`, NEW)
-   - Sections: Zoho (this task), S3 Uploads (Task 2), ICS Feeds (Task 3), Webhooks (Task 4). Each section documents: data flow, auth model, storage location, failure handling.
-
-7. **Tests**
-   - `Testing/unit/shared/api/planterClient.integrations.zoho.test.ts` (NEW)
-   - `Testing/unit/supabase/functions/zoho-oauth-callback.test.ts` (NEW) — state JWT verification, token storage.
-   - `Testing/unit/supabase/functions/zoho-sync.test.ts` (NEW) — token-refresh path, deal-to-project mapping, dedupe via `settings.zoho_deal_id`.
-
-**DB migration?** Yes — two tables.
-
-**Out of scope:** Zoho Analytics deep integration (only the CRM Deals + Contacts mirror this wave). Bidirectional sync. Custom field mapping UI (the field map is hardcoded for v1; admins customize in code if needed).
+**Out of scope:** UI to "update this project to the latest template version" (deferred — would require a complex three-way merge; intentional non-propagation per architecture doc). Per-task versioning (only template-roots get version stamps — sub-task versioning is too granular for v1).
 
 ---
 
-### Task 2 — AWS S3 unmanaged file uploads
+### Task 2 — Template immutability (origin tracking on cloned tasks)
 
-**Commit:** `feat(wave-36): s3 presigned-url upload pipeline for task resources`
+**Commit:** `feat(wave-36): track template-origin on cloned tasks + UI guard against deletion`
 
-1. **Migration** (`docs/db/migrations/2026_04_18_s3_uploads.sql`, NEW)
-   - Extend `task_resources` table with two new columns: `external_storage_provider text CHECK (external_storage_provider IS NULL OR external_storage_provider IN ('s3'))`, `external_storage_url text`. Existing `storage_bucket` + `storage_path` are for Supabase Storage; the new columns are for S3.
+1. **Migration** (`docs/db/migrations/2026_04_18_task_template_origin.sql`, NEW)
+   - Add column `cloned_from_task_id uuid REFERENCES public.tasks(id) ON DELETE SET NULL` to `public.tasks`. Stamped during `clone_project_template`. NULL means "post-instantiation custom addition".
+   - Index on `cloned_from_task_id`.
+   - Modify `clone_project_template` RPC: every cloned task carries the source task's id in `cloned_from_task_id`.
+   - Backfill: NULL for all existing rows (we don't have provenance for them; document this in the migration header).
    - Mirror into `docs/db/schema.sql`.
 
-2. **Presigned-URL edge function** (`supabase/functions/s3-presign-upload/`, NEW: `index.ts` + `README.md`)
-   - POST `/s3-presign-upload` with `{ task_id, filename, content_type, size }`. Authenticated.
-   - Validates: `task_id` belongs to a project the user is a member of (RLS-equivalent check); `size <= 100 MB` (configurable via env `S3_MAX_UPLOAD_BYTES`).
-   - Generates a presigned PUT URL via AWS SDK for S3 (Deno ESM). Bucket from env `S3_BUCKET`, region from `AWS_REGION`. Object key: `tenant/<organization_id>/task/<task_id>/<uuid>-<filename>`.
-   - Returns `{ presigned_url, public_url, expires_at }`.
+2. **App-side delete guard** (`src/features/tasks/components/TaskDetailsView.tsx`, `src/features/tasks/hooks/useTaskMutations.ts`)
+   - When the user attempts to delete a task with `cloned_from_task_id IS NOT NULL` AND they are NOT the project owner: surface a modal: "This task originated from the project template. Only the project owner can delete template-origin tasks." Cancel / "Delete anyway" (owner-only).
+   - When the user IS the owner: proceed without the modal (owners can delete anything).
 
-3. **Confirm-upload function** (`supabase/functions/s3-confirm-upload/`, NEW)
-   - POST `/s3-confirm-upload` with `{ task_id, public_url, filename, content_type, size }`. Authenticated.
-   - HEAD request to `public_url` to verify the upload landed.
-   - Inserts a `task_resources` row with `external_storage_provider = 's3'`, `external_storage_url = public_url`, `resource_type = 'file'`.
-   - Returns the inserted row.
+3. **Visual indicator** (`src/features/tasks/components/TaskItem.tsx`)
+   - Subtle "T" badge on rows with `cloned_from_task_id IS NOT NULL` — tooltip: "From template".
 
-4. **Upload UI** (`src/features/tasks/components/TaskResources.tsx`)
-   - Add a "Large file upload (S3)" button next to the existing "Add resource" affordances. Disabled when the user's org has no `S3_BUCKET` configured (per-org bucket override is deferred — global bucket for v1; document this in the architecture doc).
-   - Drag-and-drop area for files >5 MB (smaller files use the existing Supabase Storage path).
-   - Two-step flow: presign → upload directly to S3 from the browser → confirm.
+4. **Architecture doc** (`docs/architecture/projects-phases.md`)
+   - Flip the "Template Immutability" known-gap to **Resolved (Wave 36)**. Document the new column + the UI gate + the owner-bypass.
 
-5. **CORS docs** (`docs/operations/s3-cors-setup.md`, NEW)
-   - Step-by-step S3 bucket CORS configuration for browser PUTs from the PlanterPlan app domain (and any white-label domain registered in `organizations.primary_domain`).
+5. **Tests**
+   - `Testing/unit/features/tasks/components/TaskDetailsView.deleteGuard.test.tsx` (NEW) — modal appears for non-owners on template-origin tasks; bypassed for owners; not shown on custom additions.
+   - Manual `psql` smoke at `docs/db/tests/task_template_origin.sql` — clone a project; every task has `cloned_from_task_id` populated. Add a custom task; `cloned_from_task_id IS NULL`.
 
-6. **Architecture doc** (`docs/architecture/integrations.md` — fill in S3 section)
+**DB migration?** Yes — one column + RPC modification.
 
-7. **Tests**
-   - `Testing/unit/supabase/functions/s3-presign-upload.test.ts` (NEW) — auth check, size limit, key format.
-   - `Testing/unit/supabase/functions/s3-confirm-upload.test.ts` (NEW)
-   - `Testing/unit/features/tasks/components/TaskResources.s3.test.tsx` (NEW) — drag-drop UI, presign call, browser PUT mock, confirm call.
-
-**DB migration?** Yes — two columns added to `task_resources`.
-
-**Out of scope:** Per-org S3 bucket (deferred — global bucket for v1; org isolation via key prefix is fine). Multi-part upload for files >100 MB (deferred). Server-side virus scanning (deferred — recommended via S3 event hook + Lambda; Wave 36.5+).
-
----
-
-### Task 3 — ICS calendar feeds
-
-**Commit:** `feat(wave-36): per-user signed ICS feed of upcoming tasks`
-
-1. **Migration** (`docs/db/migrations/2026_04_18_ics_tokens.sql`, NEW)
-   - `CREATE TABLE public.ics_feed_tokens (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), user_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE, token text NOT NULL UNIQUE, label text, project_filter uuid[], created_at timestamptz NOT NULL DEFAULT now(), revoked_at timestamptz, last_accessed_at timestamptz)`.
-   - Index on `(token)` for the public lookup.
-   - RLS: SELECT/INSERT/UPDATE/DELETE `user_id = auth.uid()`.
-   - Mirror into `docs/db/schema.sql`.
-
-2. **ICS feed edge function** (`supabase/functions/ics-feed/`, NEW: `index.ts` + `README.md`)
-   - GET `/ics-feed?token=:token`. **Public** (unauthenticated — token is the credential).
-   - Looks up token; if missing or `revoked_at IS NOT NULL`, returns 404.
-   - Updates `last_accessed_at`.
-   - Queries `tasks` for the token's `user_id` filtered by `assignee_id = user_id`, `due_date IS NOT NULL`, `due_date >= now() - 30 days`. Optional `project_filter` narrows by `root_id IN (...)`.
-   - Renders an iCalendar (`.ics`) document — one VEVENT per task, with VALARM 1 day before. Use `text/calendar` content-type.
-
-3. **Settings UI** (`src/pages/Settings.tsx` — Integrations tab from Task 1)
-   - "Calendar feeds" section.
-   - "Generate new feed" button: prompts for label + project filter (multi-select of user's projects), generates a random 32-char token via `crypto.randomUUID()`-style helper, returns the iCal URL.
-   - Lists existing feeds with copy-URL + revoke buttons.
-
-4. **planterClient methods** (`src/shared/api/planterClient.ts`)
-   - `integrations.listIcsFeedTokens()`, `integrations.createIcsFeedToken({ label, project_filter })`, `integrations.revokeIcsFeedToken(id)`.
-
-5. **Architecture doc** (`docs/architecture/integrations.md` — fill in ICS section)
-
-6. **Tests**
-   - `Testing/unit/supabase/functions/ics-feed.test.ts` (NEW) — token lookup, 404 on revoked, ICS rendering correctness, project filter.
-   - `Testing/unit/shared/api/planterClient.integrations.ics.test.ts` (NEW)
-
-**DB migration?** Yes — one table.
-
-**Out of scope:** Two-way calendar sync (Google Calendar / Outlook write-back) — that's a much larger integration, deferred. Per-task subscription / single-task .ics download (deferred — feed-only for v1).
-
----
-
-### Task 4 — Generic webhook subscriber
-
-**Commit:** `feat(wave-36): per-user webhook subscriptions for activity-log events`
-
-1. **Migration** (`docs/db/migrations/2026_04_18_webhook_subscriptions.sql`, NEW)
-   - `CREATE TABLE public.webhook_subscriptions (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), user_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE, target_url text NOT NULL CHECK (target_url ~* '^https://'), secret text NOT NULL, event_types text[] NOT NULL DEFAULT ARRAY['task.created','task.status_changed','comment.posted'], project_filter uuid[], active boolean NOT NULL DEFAULT true, created_at timestamptz NOT NULL DEFAULT now(), last_delivered_at timestamptz, last_failure text)`.
-   - `CREATE TABLE public.webhook_deliveries (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), subscription_id uuid NOT NULL REFERENCES public.webhook_subscriptions(id) ON DELETE CASCADE, event_type text NOT NULL, payload jsonb NOT NULL, response_status int, response_body text, attempts int NOT NULL DEFAULT 0, delivered_at timestamptz, created_at timestamptz NOT NULL DEFAULT now())`.
-   - Index on `webhook_deliveries.subscription_id, created_at DESC`.
-   - RLS: `webhook_subscriptions` SELECT/INSERT/UPDATE/DELETE `user_id = auth.uid()`. `webhook_deliveries` SELECT via the subscription's user.
-   - Mirror into `docs/db/schema.sql`.
-
-2. **Dispatch edge function** (`supabase/functions/webhook-dispatch/`, NEW: `index.ts` + `README.md`)
-   - Cron schedule: every minute. Picks up new `activity_log` rows since the last tick (track `last_activity_log_id` in a small key-value `kv_metadata` table or in a `webhook_dispatch_state` row).
-   - For each new activity: matches against active `webhook_subscriptions` (event_type intersects, project_filter matches), POSTs the payload with `X-PlanterPlan-Signature` HMAC header (signed with `secret`).
-   - Records every attempt in `webhook_deliveries`. Retries up to 3 times with exponential backoff. After 3 failures, marks subscription `last_failure` and continues; after 10 consecutive failures, sets `active = false` and emails the owner.
-
-3. **Settings UI** (`src/pages/Settings.tsx` — Integrations tab)
-   - "Webhooks" section.
-   - "Add webhook" form: target URL, event-type checkboxes, project filter, auto-generated secret with copy button.
-   - Lists existing webhooks with status, recent-delivery counts, edit/disable/delete buttons.
-   - Click a webhook → drawer with recent `webhook_deliveries` (status, attempt count, response body preview).
-
-4. **planterClient methods** (`src/shared/api/planterClient.ts`)
-   - `integrations.listWebhooks()`, `integrations.createWebhook(...)`, `integrations.updateWebhook(id, ...)`, `integrations.deleteWebhook(id)`, `integrations.listWebhookDeliveries(subscriptionId, opts?)`.
-
-5. **Architecture doc** (`docs/architecture/integrations.md` — fill in Webhooks section)
-   - Document the HMAC signing contract so consumers can verify on receipt.
-
-6. **Tests**
-   - `Testing/unit/supabase/functions/webhook-dispatch.test.ts` (NEW) — event filtering, retry+backoff, deactivation after 10 failures, HMAC signature.
-   - `Testing/unit/shared/api/planterClient.integrations.webhooks.test.ts` (NEW)
-
-**DB migration?** Yes — two tables + index.
-
-**Out of scope:** Custom payload templating (deferred — fixed payload per event for v1). Per-event-type rate limits (deferred). Bulk replay UI for failed deliveries (deferred).
+**Out of scope:** Server-side enforcement of the delete restriction (the UI gate is enough for v1; a server-side guard would require a per-row policy that's brittle — the owner-bypass behavior is more naturally expressed in app code). Tracking edits to template-origin tasks (deferred — only deletion is gated for v1).
 
 ---
 
 ## Documentation Currency Pass (mandatory — before review)
 
-1. **`spec.md`** — flip §3.7 External Integrations from `[ ]` to `[x]` with sub-bullets per integration. Bump version to **1.21.0**. Update `Last Updated`.
-2. **`docs/AGENT_CONTEXT.md`** — add "Integrations (Wave 36)" golden-path bullet.
-3. **`docs/architecture/integrations.md`** is in (filled across all four tasks).
-4. **`docs/operations/s3-cors-setup.md`** is in (Task 2).
-5. **`docs/dev-notes.md`** — add: "**Active:** Zoho sync is read-only (CRM → PlanterPlan). Bidirectional push deferred. S3 uploads use a global bucket (per-org bucket deferred). Webhooks are best-effort with 3-retry exponential backoff; bulk replay UI deferred."
-6. **`repo-context.yaml`** — bump `wave_status.current` to `Wave 36 (External Integrations)`, update `last_completed`, `spec_version`, add `wave_36_highlights:` block.
-7. **`CLAUDE.md`** — add the new tables (`zoho_connections`, `zoho_sync_log`, `ics_feed_tokens`, `webhook_subscriptions`, `webhook_deliveries`) to Tables. New "Integrations" subsection with env var inventory (Zoho client id/secret, AWS keys/region/bucket, Resend already in env from Wave 22). Add the new edge functions to the Cron Jobs list.
-8. **`.env.example`** — add `ZOHO_CLIENT_ID=`, `ZOHO_CLIENT_SECRET=`, `ZOHO_REDIRECT_URI=`, `AWS_ACCESS_KEY_ID=`, `AWS_SECRET_ACCESS_KEY=`, `AWS_REGION=`, `S3_BUCKET=`, `S3_MAX_UPLOAD_BYTES=`.
+1. **`spec.md`** — append a short note in §3.8 "Technical Hardening & Infrastructure": "Wave 36 closed two architecture-doc known-gaps (template versioning, template immutability)." Bump version. Update `Last Updated`.
+2. **`docs/AGENT_CONTEXT.md`** — add "Hardening Pass (Wave 36)" golden-path bullet listing the two subsurfaces.
+3. **`docs/architecture/library-templates.md`** — template-versioning gap → Resolved.
+4. **`docs/architecture/projects-phases.md`** — template-immutability gap → Resolved.
+5. **`docs/dev-notes.md`** — confirm currency. Note the two remaining architecture-doc known-gaps that stay open (date-engine weekends/holidays, invite escrow) now that the wrapping wave was descoped.
+6. **`repo-context.yaml`** — bump `wave_status.current` to `Wave 36 (Template Hardening)`, update `last_completed`, `spec_version`, add `wave_36_highlights:` block.
+7. **`CLAUDE.md`** — note the new `template_version` and `cloned_from_task_id` columns on `tasks`.
 
 Land docs as `docs(wave-36): documentation currency sweep`.
 
 ## Wave Review (mandatory — before commit + push to main)
 
-1. **Zoho end-to-end** — connect a Zoho account → trigger sync (manual + cron) → confirm CRM Deals appear as PlanterPlan projects with `settings.zoho_deal_id` stamped. Re-sync → no duplicates.
-2. **S3 upload** — drag a 50 MB file onto a task → presign returns → browser PUT to S3 succeeds → confirm creates `task_resources` row → file appears in the resources list with the S3 URL.
-3. **ICS feed** — generate a feed → copy URL → import into Google Calendar → tasks appear with correct due dates + reminders.
-4. **Webhook delivery** — set up a webhook subscription pointing to a webhook.site URL → trigger a task creation → webhook fires within one cron tick → HMAC signature verifies on the receiving end.
-5. **Failure handling** — register a webhook to an invalid URL → confirm 3 retries + `last_failure` stamped + after 10 failures the subscription auto-deactivates.
-6. **No FSD drift** — every integration's UI lives in `features/settings/`; data layer in `planterClient.integrations.*`; no shared imports back from features.
-7. **Type drift** — multiple new tables hand-edited; verify all are in sync.
-8. **Test-impact reconciled** — zero existing-test impact (all four integrations are new + isolated); webhook HMAC test verifies signature; ICS test parses generated `.ics` for structural correctness; cron schedules added to `docs/operations/edge-function-schedules.md`; no `it.skip`. Test count ≥ baseline + new tests.
-9. **Lint + build + tests** — green per `.claude/wave-execution-protocol.md` §4 + §8.6 (cron schedules go to operations doc, NOT pg_cron — HALT if any plan reference says otherwise).
+1. **Template versioning** — edit a template → `template_version` increments. Clone → `settings.cloned_from_template_version` matches the new version. Edit again → existing instance's stamp does NOT update (intentional).
+2. **Template immutability** — clone a project → every task has `cloned_from_task_id`. As editor (not owner), attempt to delete a template-origin task → modal blocks. As owner → proceeds.
+3. **No FSD drift** — every new file lives in the right slice. Helpers in `lib/`, hooks in `hooks/`, components in `components/`. No barrel files. No `shared/` → `features/` imports.
+4. **Type drift** — `database.types.ts` hand-edited cleanly across the two migrations.
+5. **Test-impact reconciled** — Wave 22 `planterClient.clone.stamp.test.ts` stays green (Tasks 1+2 stamps happen server-side in the RPC); no `it.skip`. Test count ≥ baseline + new tests.
+6. **Lint + build + tests** — green per `.claude/wave-execution-protocol.md` §4 (HALT on any failure).
 
-## Commit & Push to Main (mandatory — gates Wave 37)
+## Commit & Push to Main (mandatory)
 
-After all four Tasks merge:
+After both Tasks merge:
 1. `git checkout main && git pull && npm install && npm run lint && npm run build && npx vitest run`.
-2. The history should show: 4 task commits + 1 docs sweep commit on top of Wave 35.
+2. The history should show: 2 task commits + 1 docs sweep commit on top of Wave 35.
 3. Push to `origin/main`. CI green.
-4. **Do not start Wave 37** until the above is true.
 
 ## Verification Gate (per task, before push)
 
-**Every command below is a HALT condition per `.claude/wave-execution-protocol.md` §4. Cron schedules go to `docs/operations/edge-function-schedules.md` (Wave 30) — `pg_cron` is NOT enabled (§8.6 of the protocol).**
+**Every command below is a HALT condition per `.claude/wave-execution-protocol.md` §4.**
 
 ```bash
 npm run lint      # 0 errors required (≤7 pre-existing warnings tolerated). FAIL → HALT.
@@ -256,55 +145,42 @@ Manual smoke per Wave Review.
 
 - `CLAUDE.md` — conventions, commands, architecture overview
 - `.gemini/styleguide.md` — strict typing, FSD boundaries, Tailwind constraints, no arbitrary values
-- `docs/architecture/notifications.md` — Wave 30 dispatch pipeline; Task 4 mirrors the cron-driven dispatch + retry pattern
-- `docs/architecture/dashboard-analytics.md` — Wave 27 `activity_log` is the source for Task 4 webhooks
-- Zoho OAuth + CRM API docs — read before Task 1
-- AWS S3 presigned URL docs — read before Task 2
-- iCalendar (RFC 5545) reference — read before Task 3
-- HMAC signing standards (Stripe webhook docs are a good model) — Task 4
+- `docs/architecture/library-templates.md` — Task 1 host
+- `docs/architecture/projects-phases.md` — Task 2 host
+- `src/shared/api/planterClient.ts` (`Task.clone`) — Tasks 1 + 2 hooks
 
 ## Critical Files
 
 **Will edit:**
-- `docs/db/schema.sql` (mirror six new migrations / extensions)
-- `docs/architecture/integrations.md` (filled across all four tasks)
+- `docs/db/schema.sql` (mirror two new migrations)
+- `docs/architecture/library-templates.md` / `projects-phases.md` (2 known-gaps → Resolved)
 - `docs/AGENT_CONTEXT.md` (Wave 36 golden path)
-- `docs/dev-notes.md` (multiple integration deferrals noted)
-- `src/shared/db/database.types.ts` (six new tables / columns)
+- `docs/dev-notes.md` (remaining open gaps noted)
+- `src/shared/db/database.types.ts` (new columns on `tasks`)
 - `src/shared/db/app.types.ts` (corresponding row types)
-- `src/shared/api/planterClient.ts` (`integrations.*` namespace)
-- `src/pages/Settings.tsx` (Integrations tab — extends from Task 1)
-- `src/features/tasks/components/TaskResources.tsx` (S3 upload UI)
-- `spec.md` (flip §3.7 External Integrations to `[x]`, bump to 1.21.0)
+- `src/shared/api/planterClient.ts` (template clone version stamping)
+- `src/features/tasks/components/TaskDetailsView.tsx` (delete guard)
+- `src/features/tasks/hooks/useTaskMutations.ts` (delete guard wiring)
+- `src/features/tasks/components/TaskItem.tsx` (template badge)
+- `src/pages/admin/AdminTemplates.tsx` (extend or create — version column + cloned-from drilldown)
+- `spec.md` (§3.8 hardening note)
 - `repo-context.yaml` (Wave 36 highlights)
-- `CLAUDE.md` (Tables + Integrations subsection + Cron Jobs)
-- `.env.example` (8 new env vars across Zoho + AWS)
+- `CLAUDE.md` (Tables — note new `tasks` columns)
 
 **Will create:**
-- `docs/db/migrations/2026_04_18_zoho_integration.sql`
-- `docs/db/migrations/2026_04_18_s3_uploads.sql`
-- `docs/db/migrations/2026_04_18_ics_tokens.sql`
-- `docs/db/migrations/2026_04_18_webhook_subscriptions.sql`
-- `docs/architecture/integrations.md`
-- `docs/operations/s3-cors-setup.md`
-- `supabase/functions/zoho-oauth-init/{index.ts,README.md}`
-- `supabase/functions/zoho-oauth-callback/{index.ts,README.md}`
-- `supabase/functions/zoho-sync/{index.ts,README.md}`
-- `supabase/functions/s3-presign-upload/{index.ts,README.md}`
-- `supabase/functions/s3-confirm-upload/{index.ts,README.md}`
-- `supabase/functions/ics-feed/{index.ts,README.md}`
-- `supabase/functions/webhook-dispatch/{index.ts,README.md}`
-- Tests under `Testing/unit/...` mirroring the source paths (~12 new test files)
+- `docs/db/migrations/2026_04_18_template_versioning.sql`
+- `docs/db/migrations/2026_04_18_task_template_origin.sql`
+- `docs/db/tests/template_versioning.sql`
+- `docs/db/tests/task_template_origin.sql`
+- Tests under `Testing/unit/...` (2 new test files)
 
 **Explicitly out of scope this wave:**
-- Bidirectional Zoho sync
-- Per-org S3 bucket
-- Multi-part S3 upload >100 MB
-- Server-side virus scanning
-- Two-way calendar sync (Google / Outlook)
-- Custom webhook payload templating
-- Webhook bulk-replay UI
+- Date-engine weekends + holidays (descoped — open gap stays open)
+- Invite escrow for non-signed-up emails (descoped — open gap stays open)
+- Task-tree virtualization for 1000+ tasks (descoped — stays in tech-debt)
+- Template "update this project to latest version" UI
+- Server-side enforcement of template-origin delete (UI gate only for v1)
 
 ## Ground Rules (non-negotiable — from `CLAUDE.md` + `.gemini/styleguide.md`)
 
-TypeScript-only; no `.js` / `.jsx`; no barrel files (import directly from concrete paths); path alias `@/` → `src/`; no raw date math (ICS rendering uses `date-engine` for the DTSTART/DTEND ISO strings); no direct `supabase.from()` in components (`planterClient.integrations.*`); Tailwind utility classes only (no arbitrary values, no pure black — use `slate-900` / `zinc-900`); optimistic mutations must force-refetch on error; max subtask depth = 1; template vs instance clarified on any cross-cutting work; new deps allowed: AWS S3 SDK (Deno ESM), Stripe (already from Wave 35) — motivate each in the PR with bundle-size impact (Deno-only deps don't affect frontend bundle); atomic revertable commits; build + lint + tests all clean before every push; DB migrations are additive-only; webhook delivery secret is generated server-side and shown to the user **once** (in the create response) — never stored in plaintext on the frontend, never logged in error toasts.
+TypeScript-only; no `.js` / `.jsx`; no barrel files (import directly from concrete paths); path alias `@/` → `src/`; no raw date math; no direct `supabase.from()` in components; Tailwind utility classes only (no arbitrary values, no pure black — use `slate-900` / `zinc-900`); optimistic mutations must force-refetch on error; max subtask depth = 1; template vs instance clarified on any cross-cutting work — Tasks 1 + 2 are this wave's most cross-cutting work and depend on the `origin` field everywhere; atomic revertable commits; build + lint + tests all clean before every push; DB migrations are additive-only.

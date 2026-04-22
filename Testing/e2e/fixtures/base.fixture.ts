@@ -4,7 +4,6 @@ import { LoginPage } from '../pages/LoginPage';
 import { DashboardPage } from '../pages/DashboardPage';
 import { ProjectPage } from '../pages/ProjectPage';
 import { TasksPage } from '../pages/TasksPage';
-import { DailyTasksPage } from '../pages/DailyTasksPage';
 import { ReportsPage } from '../pages/ReportsPage';
 import { SettingsPage } from '../pages/SettingsPage';
 import { TeamPage } from '../pages/TeamPage';
@@ -16,7 +15,6 @@ export const test = base.extend<{
   dashboardPage: DashboardPage;
   projectPage: ProjectPage;
   tasksPage: TasksPage;
-  dailyTasksPage: DailyTasksPage;
   reportsPage: ReportsPage;
   settingsPage: SettingsPage;
   teamPage: TeamPage;
@@ -35,9 +33,6 @@ export const test = base.extend<{
   },
   tasksPage: async ({ page }, use) => {
     await use(new TasksPage(page));
-  },
-  dailyTasksPage: async ({ page }, use) => {
-    await use(new DailyTasksPage(page));
   },
   reportsPage: async ({ page }, use) => {
     await use(new ReportsPage(page));

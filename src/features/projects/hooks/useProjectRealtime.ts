@@ -35,7 +35,9 @@ export const useProjectRealtime = (projectId: string | null = null): void => {
             : undefined,
         },
         (payload: Record<string, unknown>) => {
-          console.log('[Realtime] Task Change detected:', payload);
+          if (import.meta.env.DEV) {
+            console.log('[Realtime] Task Change detected:', payload);
+          }
           try {
             // Strictly guard incoming WebSocket payloads
             const changedTask = TaskPayloadSchema.parse(payload.new || payload.old);

@@ -1,11 +1,7 @@
 import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { isRecurrenceRule, shouldFireRecurrenceOn, RecurrenceRule } from '../_shared/recurrence.ts'
 import { isCheckpointProject, toUtcIsoDate } from '../_shared/date.ts'
-
-const corsHeaders = {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
+import { corsHeaders, requireServiceRole } from '../_shared/auth.ts'
 
 const DEFAULT_DUE_SOON_THRESHOLD_DAYS = 3
 
@@ -175,6 +171,12 @@ Deno.serve(async (req) => {
     if (req.method === 'OPTIONS') {
         return new Response('ok', { headers: corsHeaders })
     }
+
+    // Security: cron-only. Reject non-service-role callers — nightly-sync
+    // writes status updates across every project and spawns recurrence
+    // clones; must not be callable by end users.
+    const authFail = requireServiceRole(req)
+    if (authFail) return authFail
 
     try {
         const supabase = createClient(

@@ -87,7 +87,7 @@ export default function AppSidebar({ onClose, currentProject, className }: AppSi
  </h3>
  <div className="px-3 py-2 rounded-lg bg-muted/50">
  <p className="text-sm font-medium text-card-foreground truncate">{currentProject.title}</p>
- <Link to={`/Project?id=${currentProject.id}`}>
+ <Link to={`/Project/${currentProject.id}`}>
  <Button
  variant="link"
  size="sm"

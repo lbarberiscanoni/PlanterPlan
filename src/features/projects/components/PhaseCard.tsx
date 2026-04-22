@@ -8,14 +8,19 @@ import { cn } from '@/shared/lib/utils';
 import { TASK_STATUS } from '@/shared/constants';
 import { PHASE_STATUS_COLORS } from '@/shared/constants/colors';
 import { extractProjectKind } from '@/features/projects/lib/project-kind';
+import { isPastDate } from '@/shared/lib/date-engine';
 import type { TaskRow } from '@/shared/db/app.types';
 
 function getPhaseStatus(progress: number, totalTasks: number, phaseTasks: TaskRow[]): string {
  if (totalTasks === 0) return 'not_started';
  if (progress === 100) return 'completed';
- const now = new Date();
+ // Route through date-engine so the UTC-vs-local-midnight edge case
+ // (YYYY-MM-DD due dates parsed as UTC midnight, compared against a
+ // local-TZ `new Date()`) is handled consistently with the rest of the
+ // codebase. `isPastDate` returns true only if the date is strictly
+ // before today's UTC calendar day.
  const hasOverdue = phaseTasks.some(
-  (t) => t.due_date && new Date(t.due_date) < now && t.status !== TASK_STATUS.COMPLETED
+  (t) => isPastDate(t.due_date) && t.status !== TASK_STATUS.COMPLETED
  );
  if (hasOverdue) return 'overdue';
  if (progress > 0) return 'in_progress';

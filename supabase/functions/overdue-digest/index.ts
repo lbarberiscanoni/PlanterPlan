@@ -1,14 +1,16 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { renderOverdueDigestEmail, sendEmail } from '../_shared/email.ts'
+import { corsHeaders, requireServiceRole } from '../_shared/auth.ts'
 import { dispatchOverdueDigest, type DigestEmailSender } from './dispatch.ts'
-
-const corsHeaders = {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
 
 Deno.serve(async (req) => {
     if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
+
+    // Security: cron-only. Reject non-service-role callers to prevent
+    // arbitrary authenticated users from triggering mass-email fan-out
+    // under the app's RESEND_FROM_ADDRESS.
+    const authFail = requireServiceRole(req)
+    if (authFail) return authFail
 
     try {
         const supabase = createClient(

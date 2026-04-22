@@ -78,11 +78,23 @@ export const formatDate = (date: DateInput | null | undefined, formatStr: string
  return format(d, formatStr);
 };
 
-/** Returns `true` if the date is strictly in the past (not today). */
+/** Returns `true` if the date is strictly in the past (not today).
+ *
+ * Date-only strings (`YYYY-MM-DD`) are compared as UTC calendar days to match
+ * the same-day convention used by {@link isTodayDate} / {@link toIsoDate} and
+ * to avoid local-TZ drift near midnight boundaries. Datetime / `Date` inputs
+ * still use `date-fns` `isPast` + {@link isTodayDate} (which itself promotes
+ * date-only strings to the UTC branch) so the "today" carve-out remains
+ * UTC-stable on every input shape.
+ */
 export const isPastDate = (date: DateInput | null | undefined): boolean => {
+ if (date == null) return false;
+ if (typeof date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(date)) {
+  return date < new Date().toISOString().split('T')[0];
+ }
  const d = resolve(date);
  if (!d) return false;
- return isPast(d) && !isToday(d);
+ return isPast(d) && !isTodayDate(d);
 };
 
 /** Returns `true` if the date is today.
@@ -233,6 +245,60 @@ export const calculateScheduleFromOffset = (
  start_date: dateOnly,
  due_date: dateOnly,
  };
+};
+
+// ---------------------------------------------------------------------------
+// Wave-follow-up helpers — consumed by useProjectReports + Reports.tsx so
+// both go through the centralized date-engine rather than hand-rolling
+// UTC-midnight / month-key math. Kept here alongside the other toIso /
+// format helpers because they share the same parsing semantics.
+// ---------------------------------------------------------------------------
+
+/**
+ * Returns the `YYYY-MM` prefix of a Date, built from its UTC year + month.
+ *
+ * @param d Source Date. Must be a real Date object (undefined/null input
+ *   returns null from the sibling `dateStringToMonthKey`).
+ * @returns `YYYY-MM` string built from the UTC year + month.
+ */
+export const toMonthKey = (d: Date): string => {
+ const year = d.getUTCFullYear();
+ const month = String(d.getUTCMonth() + 1).padStart(2, '0');
+ return `${year}-${month}`;
+};
+
+/**
+ * Accept `YYYY-MM-DD` or a full ISO timestamp; return the `YYYY-MM` prefix.
+ * Null / undefined / invalid inputs return `null`.
+ *
+ * @param raw ISO date string (optional).
+ * @returns `YYYY-MM` string or `null`.
+ */
+export const dateStringToMonthKey = (raw: string | null | undefined): string | null => {
+ if (!raw) return null;
+ if (/^\d{4}-\d{2}/.test(raw)) return raw.slice(0, 7);
+ const d = new Date(raw);
+ if (Number.isNaN(d.getTime())) return null;
+ return toMonthKey(d);
+};
+
+/**
+ * Parse an ISO date string and return the UTC-midnight epoch milliseconds
+ * of that calendar day. `YYYY-MM-DD` inputs are treated as UTC-midnight
+ * of that day; full timestamps are truncated to UTC-midnight of their
+ * calendar day. Null / invalid inputs return `null`.
+ *
+ * Uses `Date.UTC` for the explicit UTC epoch (no mutating setters).
+ *
+ * @param raw ISO date string.
+ * @returns Epoch milliseconds at UTC-midnight, or `null`.
+ */
+export const dateStringToUtcMidnight = (raw: string | null | undefined): number | null => {
+ if (!raw) return null;
+ const iso = /^\d{4}-\d{2}-\d{2}$/.test(raw) ? `${raw}T00:00:00.000Z` : raw;
+ const d = new Date(iso);
+ if (Number.isNaN(d.getTime())) return null;
+ return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
 };
 
 /**

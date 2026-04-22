@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { planter } from '@/shared/api/planterClient';
+import { STALE_TIMES } from '@/shared/lib/react-query-config';
 
 /** User profile data returned by the API. */
 interface UserProfile {
@@ -23,7 +24,7 @@ export function useUser() {
  avatar_url: (user.user_metadata?.avatar_url as string) || null,
  };
  },
- staleTime: 1000 * 60 * 5, // 5 minutes
+ staleTime: STALE_TIMES.long, // 5 minutes
  retry: false,
  });
 }

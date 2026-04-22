@@ -1,18 +1,20 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { sendEmail } from '../_shared/email.ts'
+import { corsHeaders, requireServiceRole } from '../_shared/auth.ts'
 import {
     dispatchPendingMentions,
     type EmailSender,
     type PushInvoker,
 } from './dispatch.ts'
 
-const corsHeaders = {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
-
 Deno.serve(async (req) => {
     if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
+
+    // Security: dispatcher callable only by service role (scheduler or other
+    // edge functions with the service key). Without this, any authenticated
+    // user could trigger mention dispatch and spam the notification pipeline.
+    const authFail = requireServiceRole(req)
+    if (authFail) return authFail
 
     try {
         const supabase = createClient(

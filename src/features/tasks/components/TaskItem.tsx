@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import RoleIndicator from '@/shared/ui/RoleIndicator';
 import { SortableContext, useSortable } from '@dnd-kit/sortable';
 import { useDroppable } from '@dnd-kit/core';
@@ -12,6 +13,11 @@ import TaskStatusSelect from './TaskStatusSelect';
 import TaskControlButtons from './TaskControlButtons';
 import InlineTaskInput from './InlineTaskInput';
 import { Avatar, AvatarFallback } from '@/shared/ui/avatar';
+import {
+ dueBadgeToneClass,
+ formatTaskDueBadge,
+} from '@/shared/lib/date-engine/formatTaskDueBadge';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/ui/tooltip';
 import type { PresenceState } from '@/features/projects/hooks/useProjectPresence';
 
 export type { TaskItemData } from '@/shared/types/tasks';
@@ -43,6 +49,12 @@ interface TaskItemProps {
  presentUsers?: PresenceState[];
  /** Wave 27: viewer's id — used to hide self from the focus chip group. */
  currentUserId?: string | null;
+ /**
+  * Wave 33: parent project title. When present, the task title is wrapped in a
+  * hover tooltip revealing this text. Used by the unified Tasks page to
+  * disambiguate tasks from different projects.
+  */
+ parentProjectTitle?: string | null;
 }
 
 const MAX_FOCUS_CHIPS = 3;
@@ -72,10 +84,28 @@ const TaskItem = ({
  dropIndicator,
  presentUsers = [],
  currentUserId = null,
+ parentProjectTitle = null,
 }: TaskItemProps) => {
+ const { t } = useTranslation();
  const indentWidth = level * 20;
  const isSelected = selectedTaskId === task.id;
  const canHaveChildren = level < 4;
+
+ // Wave 33: right-aligned due-date badge. The threshold defaults to 3 because
+ // TaskItem doesn't receive the root-task settings; the tone is a visual hint,
+ // not a correctness signal (status filters elsewhere consume the per-project
+ // threshold directly).
+ const dueBadge = useMemo(
+ () => formatTaskDueBadge({ dueDate: task.due_date }),
+ [task.due_date],
+ );
+ const dueBadgeText = dueBadge
+ ? dueBadge.kind === 'today'
+ ? t('tasks.dueBadge.today')
+ : dueBadge.kind === 'tomorrow'
+ ? t('tasks.dueBadge.tomorrow')
+ : dueBadge.label
+ : null;
 
  const isExpanded = !!task.isExpanded;
  const hasChildren = task.children && task.children.length > 0;
@@ -234,12 +264,27 @@ const TaskItem = ({
  )}
 
  <div className="flex items-center gap-3 min-w-0 overflow-hidden">
+ {parentProjectTitle ? (
+ <Tooltip>
+ <TooltipTrigger asChild>
  <span
- className="font-semibold text-slate-900 text-sm truncate"
- title={task.title}
+ className="font-semibold text-slate-900 text-sm truncate cursor-default"
+ data-testid={`task-row-title-${task.id}`}
  >
  {task.title}
  </span>
+ </TooltipTrigger>
+ <TooltipContent>{parentProjectTitle}</TooltipContent>
+ </Tooltip>
+ ) : (
+ <span
+ className="font-semibold text-slate-900 text-sm truncate"
+ title={task.title}
+ data-testid={`task-row-title-${task.id}`}
+ >
+ {task.title}
+ </span>
+ )}
  {task.duration && (
  <span className="text-xs bg-slate-100 px-2 py-0.5 rounded text-slate-500 whitespace-nowrap flex-shrink-0">
  {task.duration}
@@ -251,11 +296,37 @@ const TaskItem = ({
  {task.resource_type}
  </span>
  )}
+ {(task as TaskItemData & { cloned_from_task_id?: string | null }).cloned_from_task_id && (
+ <Tooltip>
+ <TooltipTrigger asChild>
+ <span
+ className="px-1.5 py-0.5 text-xs uppercase font-semibold rounded bg-indigo-50 text-indigo-700 border border-indigo-100 whitespace-nowrap flex-shrink-0"
+ data-testid={`task-row-template-badge-${task.id}`}
+ >
+ T
+ </span>
+ </TooltipTrigger>
+ <TooltipContent>From template</TooltipContent>
+ </Tooltip>
+ )}
  </div>
  </div>
 
  <div className="flex items-center gap-3 flex-shrink-0">
  {task.membership_role && <RoleIndicator role={task.membership_role} />}
+
+ {dueBadge && dueBadgeText && (
+ <span
+ className={cn(
+ 'text-sm font-medium whitespace-nowrap',
+ dueBadgeToneClass(dueBadge.tone),
+ )}
+ data-testid={`task-row-due-badge-${task.id}`}
+ data-tone={dueBadge.tone}
+ >
+ {dueBadgeText}
+ </span>
+ )}
 
  <TaskStatusSelect
  status={task.status}

@@ -71,9 +71,9 @@ export function CommandPalette({ projects = [] }: CommandPaletteProps) {
  <LayoutDashboard className="mr-2 h-4 w-4" />
  <span>Project Dashboard</span>
  </CommandItem>
- <CommandItem onSelect={() => runCommand(() => navigate('/daily'))}>
+ <CommandItem onSelect={() => runCommand(() => navigate('/tasks'))}>
  <Calendar className="mr-2 h-4 w-4" />
- <span>Daily Tasks</span>
+ <span>My Tasks</span>
  </CommandItem>
  <CommandItem onSelect={() => runCommand(() => navigate('/settings'))}>
  <Settings className="mr-2 h-4 w-4" />

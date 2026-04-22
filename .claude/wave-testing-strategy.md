@@ -1,4 +1,7 @@
-# Wave 26-38 Testing Strategy
+# Waves 26–37 Testing Strategy
+
+> **Roadmap note**: the pre-renumber plan's Waves 32 (PWA + Offline), 34 (White Labeling), 35 (Stripe Monetization + Licensing), and 38 (Release Cutover) were descoped, and wave numbers were reassigned sequentially after Wave 31. The active roadmap is: Wave 32 (UX bug fixes) → Wave 33 (unified Tasks view) → Wave 34 (Advanced Admin Management) → Wave 35 (ICS feeds) → Wave 36 (template hardening). Historical references to the removed waves have been stripped from this doc.
+
 
 **Audience**: any agent (Sonnet 4.6, Opus 4.7, future) executing the wave plans.
 
@@ -46,9 +49,6 @@ Add these globals as their owning waves arrive. **Do not add them all at once** 
 | 26 | `globalThis.crypto.randomUUID` polyfill if not present in jsdom | `useTaskComments` optimistic insert uses temp uuid |
 | 30 | Mock `navigator.serviceWorker` (returns object with `register`, `ready`, `getRegistration`) and `Notification` (with `requestPermission` + static `permission` getter) | `usePushSubscription` reads both at module load |
 | 31 | Initialize i18next with the test resources (in-memory) and wrap `renderWithQueryClient` to include `<I18nextProvider>` | Component tests need `t()` to resolve; otherwise they render the i18n key as the literal string |
-| 32 | Default `Object.defineProperty(navigator, 'onLine', { value: true, writable: true, configurable: true })` + `IntersectionObserver` mock (Wave 37 virtualization needs it) | Queue-aware mutation hooks branch on `navigator.onLine` |
-| 32 | Install `fake-indexeddb/auto` import in `setupTests.ts` (one-line: `import 'fake-indexeddb/auto'`) | Wave 32 queue + replay tests need IndexedDB; node lacks it |
-| 34 | If `<TenantProvider>` is needed inside any unit test: extend `renderWithProviders` (see §2.3) | Most component tests don't need tenant context — mock `useTenant` per-test instead |
 
 ### 2.2 Factory additions (`Testing/test-utils/factories.ts`)
 
@@ -65,15 +65,8 @@ Mirror the existing `makeTask` / `makeProject` style: faker defaults + `override
 | 30 | `makeNotificationPref(overrides?)` | `NotificationPreferencesRow` with all booleans true and `email_overdue_digest: 'daily'` |
 | 30 | `makeNotificationLogRow(overrides?)` | `NotificationLogRow` with default `event_type: 'mention_pending'` |
 | 30 | `makePushSubscription(overrides?)` | `{ endpoint, p256dh, auth, user_agent }` + DB row variant |
-| 33 | `makeAdminUser(overrides?)` | Mirror `makeTeamMember` for admin tests |
-| 34 | `makeOrganization(overrides?)` | `OrganizationRow` with `slug: 'test-org'`, `branding: { logo_url: null, primary_color: null }` |
-| 34 | `makeOrganizationMember(overrides?)` | `OrganizationMemberRow` with default `role: 'member'` |
-| 35 | `makeSubscription(overrides?)` | `SubscriptionRow` with default `plan: 'free'`, `status: 'active'` |
-| 35 | `makeStripeWebhookEvent(type, overrides?)` | Stripe event payload skeleton — `customer.subscription.created` / `.updated` / `.deleted`, `invoice.payment_failed`, etc. |
-| 36 | `makeWebhookSubscription(overrides?)` | Wave 36 webhook row |
-| 36 | `makeIcsFeedToken(overrides?)` | Wave 36 ICS token row |
-| 37 | `makeHolidayCalendar(overrides?)` | Wave 37 holiday row |
-| 37 | `makeProjectInvite(overrides?)` | Wave 37 extends `project_invites` — factory should default `claimed_at: null`, `expires_at: now + 90 days` |
+| 34 | `makeAdminUser(overrides?)` | Mirror `makeTeamMember` for admin tests |
+| 35 | `makeIcsFeedToken(overrides?)` | Wave 35 ICS token row |
 
 Re-export each from `Testing/test-utils/index.ts` so callers `import { makeComment } from '@test/factories'`.
 
@@ -81,20 +74,17 @@ Re-export each from `Testing/test-utils/index.ts` so callers `import { makeComme
 
 Today: `renderWithQueryClient(ui, options?)` wraps with `<QueryClientProvider>`.
 
-After Wave 31 + 34, add a richer helper alongside (don't replace the existing):
+Wave 31 shipped a richer helper alongside (without replacing the existing):
 
 ```ts
-// Testing/test-utils/render-with-providers.tsx (NEW; lands in Wave 31)
+// Testing/test-utils/render-with-providers.tsx (landed in Wave 31)
 export function renderWithProviders(ui: ReactElement, options?: {
   queryClient?: QueryClient;
   authState?: Partial<AuthContextValue>;     // optional auth override
   locale?: 'en' | 'es';                       // Wave 31
-  tenant?: Partial<OrganizationRow>;          // Wave 34
   initialRoute?: string;                      // for tests that need <BrowserRouter>
 }): RenderResult & { queryClient: QueryClient }
 ```
-
-Wave 31 ships the `locale` parameter; Wave 34 extends with `tenant`. Wave 32 doesn't need this — its test surfaces are isolated hooks (`usePushSubscription`, `queue.ts`, etc.) that don't need providers.
 
 ### 2.4 Cross-cutting mocks (`Testing/test-utils/mocks/`, NEW directory)
 
@@ -106,9 +96,6 @@ Land each as its owning wave arrives:
 | 30 | `Testing/test-utils/mocks/service-worker.ts` | `installServiceWorkerMock()` — sets up `navigator.serviceWorker` with `register`, `ready`, `controller`, `getRegistration`. |
 | 30 | `Testing/test-utils/mocks/notification-api.ts` | `installNotificationMock(initialPermission)` — globals for `Notification.permission`, `Notification.requestPermission()`, `PushManager`. |
 | 31 | `Testing/test-utils/mocks/i18n.ts` | `mockUseTranslation()` — returns `{ t: (key) => key, i18n: { language: 'en', changeLanguage: vi.fn() } }`. Use ONLY in tests that don't need real i18n resolution (most tests should use the real provider via `renderWithProviders`). |
-| 32 | `Testing/test-utils/mocks/online.ts` | `setOnlineStatus(value: boolean)` — flips `navigator.onLine` and dispatches `online`/`offline` events. |
-| 34 | `Testing/test-utils/mocks/tenant.ts` | `mockUseTenant(org?)` — returns `{ org: makeOrganization(org), isDefaultTenant: !org, refetch: vi.fn() }`. |
-| 35 | `Testing/test-utils/mocks/stripe.ts` | `signStripePayload(payload, secret)` — replicates Stripe's HMAC for webhook tests. |
 
 ---
 
@@ -143,7 +130,7 @@ For each wave: (a) **existing tests at risk** (will break or need extension), (b
 - [ ] If `crypto.randomUUID` is missing in jsdom for the optimistic insert: add `globalThis.crypto = { randomUUID: () => '00000000-0000-0000-0000-000000000000' }` to `setupTests.ts`. Verify by running tests once first; many recent jsdom versions have it.
 
 **E2E impact:**
-- New feature file: `Testing/e2e/features/project/task-comments.feature` (deferred to Wave 38's E2E coverage matrix). Wave 26 itself does NOT add E2E scenarios — the unit tests + manual smoke cover it.
+- New feature file: `Testing/e2e/features/project/task-comments.feature` deferred — no wave assigned. Wave 26 itself does NOT add E2E scenarios; unit tests + manual smoke cover it.
 
 ---
 
@@ -170,7 +157,7 @@ For each wave: (a) **existing tests at risk** (will break or need extension), (b
 - [ ] Reuse `Testing/test-utils/mocks/supabase-channel.ts` from Wave 26; extend it to support presence events (`presence.sync`, `.join`, `.leave`) if not already present.
 
 **E2E impact:**
-- New scenarios: activity log appears after task create/update/delete; presence chips show in two browsers. Wave 38 coverage matrix includes these.
+- New scenarios: activity log appears after task create/update/delete; presence chips show in two browsers. Deferred — no wave assigned.
 - Persona seed: ensure the global setup logs in TWO instances of the `editor` user (or two different users on the same project) to exercise presence dedup. Add a `Testing/e2e/fixtures/two-users.fixture.ts` if needed.
 
 ---
@@ -196,7 +183,7 @@ For each wave: (a) **existing tests at risk** (will break or need extension), (b
 - [ ] Mock `gantt-task-react`: `vi.mock('gantt-task-react', () => ({ Gantt: vi.fn(({ tasks, onDateChange }) => null), ViewMode: { Day: 'Day', Week: 'Week', Month: 'Month' } }))`. Per-test or extracted to `Testing/test-utils/mocks/gantt.ts` if used >1x.
 
 **E2E impact:**
-- New scenario: navigate `/gantt?projectId=:id`, drag a bar, verify dates persist. Wave 38 covers.
+- New scenario: navigate `/gantt?projectId=:id`, drag a bar, verify dates persist. Deferred — no wave assigned.
 
 ---
 
@@ -224,7 +211,7 @@ For each wave: (a) **existing tests at risk** (will break or need extension), (b
 - No new factories required (existing `makeProject` + `makeTask` cover the cases when their `settings` are overridden via `makeProject({ settings: { project_kind: 'checkpoint' } })`).
 
 **E2E impact:**
-- New scenarios: checkpoint kind toggle + lock UX; phase-lead viewer can edit assigned-phase tasks but not sibling phases. Wave 38 matrix.
+- New scenarios: checkpoint kind toggle + lock UX; phase-lead viewer can edit assigned-phase tasks but not sibling phases. Deferred — no wave assigned.
 - E2E persona: the existing `viewer` and `limited` personas suffice for Phase Lead testing.
 
 ---
@@ -256,7 +243,7 @@ For each wave: (a) **existing tests at risk** (will break or need extension), (b
 - [ ] `Testing/setupTests.ts` — call `installServiceWorkerMock()` and `installNotificationMock('default')` from a `beforeAll` so EVERY test starts with a clean SW + Notification mock. Individual tests can override with `Notification.permission = 'granted'` etc.
 
 **E2E impact:**
-- Push notification E2E: Playwright supports notifications via `context.grantPermissions(['notifications'])`. Wave 38 adds scenarios.
+- Push notification E2E: Playwright supports notifications via `context.grantPermissions(['notifications'])`. Deferred — no wave assigned.
 - The `dispatch-notifications` cron is operator-scheduled; E2E tests can manually invoke via `planter.functions.invoke('dispatch-notifications', {})` to drive the state machine.
 - Email delivery in test mode: Resend has a test mode; document the API key swap in the wave's PR description.
 
@@ -302,52 +289,70 @@ For each wave: (a) **existing tests at risk** (will break or need extension), (b
 - [ ] `Testing/setupTests.ts` — initialize i18n with en.json eagerly so the `useTranslation` hook resolves before any test renders.
 
 **E2E impact:**
-- Locale-switching scenario: change locale to Spanish, walk a few key pages, verify text is in Spanish. Wave 38 matrix.
+- Locale-switching scenario: change locale to Spanish, walk a few key pages, verify text is in Spanish. Deferred — no wave assigned.
 - The existing E2E tests assert strings ("Login failed", "Please enter a valid email address"). These strings come from `t('errors.login_failed')` etc. **Provided the test runs in `en` locale (default), the assertions are unchanged.** No E2E test breaks.
 
 ---
 
-### Wave 32 — PWA + Offline
+### Wave 32 — UX Bug Fixes
+
+> **Audit note (2026-04-22)**: Wave 32 was originally scoped with three tasks. The first (project due-date cache invalidation on edit) was discovered during pre-flight to already be shipped in Wave 15 (commit `c88b3e7`) with its regression test at commit `30616d8`. That task was dropped and Wave 32 now ships two tasks — the two listed below. See `.claude/wave-32-prompt.md` for the renumbered task list.
 
 **Existing tests at risk:**
 
 | Test file | Risk | Mitigation |
 | --- | --- | --- |
-| `Testing/unit/features/tasks/hooks/useTaskMutations.test.ts` | Wave 32 wraps `useUpdateTask` with offline-queue logic. The hook now branches on `navigator.onLine`. **Existing tests don't set navigator.onLine** — if jsdom's default is `true`, tests pass through unchanged. If jsdom's default is `false` (or undefined), tests will hit the queue path. | (1) `Testing/setupTests.ts` — set `Object.defineProperty(navigator, 'onLine', { value: true, writable: true })` in a `beforeEach`. (2) Existing `useUpdateTask` tests pass through the online branch; **add new test for the offline branch** that calls `setOnlineStatus(false)` then verifies `enqueue(...)` was called. |
-| `Testing/unit/features/tasks/hooks/useTaskMutations.coachingRefetch.test.ts` | Same. | Same fix in setupTests covers this. |
-| `Testing/unit/features/tasks/hooks/useTaskComments.test.tsx` (Wave 26) | `useCreateComment` is now queue-wrapped. Same risk + mitigation. | Same. |
-| Realtime channel tests (Wave 26 + 27) | The Wave 32 `src/sw.ts` push handler subsumes Wave 30's `public/sw.js`. Realtime channel tests don't touch the service worker. | No change. |
+| `Testing/unit/features/tasks/hooks/useTaskFilters.test.ts` (exists) | Task 1 rewrites the `milestones` predicate and fixes any inert status filters. Any test that exercises the old (wrong) milestone behavior will need to be rewritten. | Read the file first; keep the structure, rewrite the milestone assertions to match `task_type === 'milestone'` rather than the structural-position heuristic. |
+| `Testing/unit/pages/Dashboard.test.tsx` (if exists) | Task 2 adds a "New Template" button in the Dashboard header. `CreateTemplateModal` is already imported + mounted; Task 2 only adds the button that fires `actions.setShowTemplateModal(true)`. Existing assertions that count header buttons will go from N to N+1. | Extend: add a new test for the button wiring (spy on `useDashboard`'s `actions.setShowTemplateModal`); fix any header-button-count assertion. |
 
 **New tests:**
-- [ ] `Testing/unit/features/pwa/components/InstallPrompt.test.tsx`
-- [ ] `Testing/unit/features/pwa/components/InstallHintIos.test.tsx`
-- [ ] `Testing/unit/features/pwa/components/ConnectivityIndicator.test.tsx`
-- [ ] `Testing/unit/features/pwa/components/PendingChangesBadge.test.tsx`
-- [ ] `Testing/unit/shared/lib/offline/queue.test.ts`
-- [ ] `Testing/unit/shared/lib/offline/replay.test.ts`
-- [ ] `Testing/unit/features/tasks/hooks/useTaskMutations.offline.test.ts`
+- [ ] `Testing/unit/features/tasks/hooks/useTaskFilters.test.ts` — extend. Fixture: 1 project, 2 phases, 3 milestones (`task_type: 'milestone'`), 5 mixed-status tasks. Assert each of the 9 filters returns the correct subset. Milestone filter returns ONLY `task_type === 'milestone'` rows.
+- [ ] `Testing/unit/pages/Dashboard.test.tsx` — extend or NEW. Assert: "New Template" button renders; clicking it calls `actions.setShowTemplateModal(true)`.
 
 **New infrastructure:**
-- [ ] `package.json` add **dev dep**: `"fake-indexeddb": "^6.0.0"` — needed for IndexedDB in jsdom. (Counted as one of the wave's allowed additions; mention in PR.)
-- [ ] `Testing/setupTests.ts` — append `import 'fake-indexeddb/auto';` at the top.
-- [ ] `Testing/setupTests.ts` — set `navigator.onLine = true` default in `beforeEach`.
-- [ ] `Testing/test-utils/mocks/online.ts` (NEW) — `setOnlineStatus(value: boolean)` flips the flag and dispatches the matching event.
-- [ ] Mock `vite-plugin-pwa`'s `useRegisterSW` if any component imports it (likely `<InstallPrompt>`). Inline per-test or in a shared mock file.
+- [ ] No new factories. Existing `makeTask`, `makeProject` cover the scenarios via overrides (add `task_type: 'milestone'` override if the factory doesn't accept it today; tiny extension).
 
 **E2E impact:**
-- Lighthouse PWA audit (Wave 38) needs the production build serving from `npx vite preview`. Wave 32 plan already documents this.
-- Offline E2E: Playwright supports `context.setOffline(true)`. Wave 38 adds a scenario.
+- Zero new E2E scenarios. Unit coverage is sufficient for these fixes.
 
 ---
 
-### Wave 33 — Advanced Admin Management
+### Wave 33 — Unified Tasks View
 
 **Existing tests at risk:**
 
 | Test file | Risk | Mitigation |
 | --- | --- | --- |
-| `Testing/unit/shared/contexts/AuthContext.test.tsx` | Wave 33 doesn't change AuthContext; just consumes `isAdmin`. | No change. |
-| `Testing/unit/shared/api/auth.test.ts` | Wave 33 doesn't change `authApi`. | No change. |
+| `Testing/unit/pages/DailyTasks.test.tsx` (if exists) | Task 2 DELETES the `/daily` page. This test must be deleted, not skipped. Any useful assertions (the date-badge rendering logic) are folded into the new `TaskItem.dueBadge.test.tsx`. | Delete the file. Port any unique fixture data / assertions into the new tests. |
+| `Testing/unit/pages/TasksPage.test.tsx` (if exists) | Tasks 2 + 3 both add surfaces to TasksPage: due-date range filter UI, details-panel mount, task-title tooltip. | Extend in place. Don't create parallel suites. |
+| `Testing/unit/features/tasks/components/TaskItem.test.tsx` (if exists) | Task 2 adds a due-date badge; Task 3 wraps the title in `<Tooltip>`. Existing assertions about row structure may need small selector updates (tooltip wrapper adds a DOM node). | Extend. Prefer semantic queries (`getByRole('button')`, `getByText`) over brittle structural selectors. |
+| `Testing/unit/features/tasks/hooks/useTaskFilters.test.ts` | Task 2 adds `dueDateRange` to the filter state. The Wave 32 tests shouldn't break, but the test for the full filter-state shape (if any) needs the new field. | Extend: add `dueDateRange` cases (inclusive bounds, open-ended, AND-combination with status filters). |
+| Any test rendering `<App>` at the root | Task 1 adds `<TooltipProvider>` to the app shell. If a test renders `<App>` directly (not via `renderWithProviders`), tooltips won't work — but they also weren't there before, so this only matters for Task 3's tooltip assertions. | Route new tests through the existing `renderWithProviders` helper; add TooltipProvider to that helper if it doesn't already wrap it. |
+
+**New tests:**
+- [ ] `Testing/unit/shared/ui/tooltip.test.tsx` — smoke: `userEvent.hover` on trigger reveals content.
+- [ ] `Testing/unit/shared/lib/date-engine/formatTaskDueBadge.test.ts` — relative-wording rules ("Today", "Tomorrow", weekday + short date, full date), injected clock.
+- [ ] `Testing/unit/features/tasks/components/TaskItem.dueBadge.test.tsx` — colors + wording per distance-from-today.
+- [ ] `Testing/unit/pages/TasksPage.test.tsx` (extend or NEW) — click → panel opens; filter change preserves panel; hover title reveals project name.
+
+**New infrastructure:**
+- [ ] Extend `Testing/test-utils/render-with-providers.tsx` (if it exists; else add) to wrap in `<TooltipProvider delayDuration={0}>` so Task 3's hover tests are deterministic.
+- [ ] No new factories. Use existing `makeTask` with `due_date` + `root_id` overrides.
+
+**E2E impact:**
+- Navigation smoke: typing `/daily` lands on `/tasks` (redirect). Add one Playwright scenario.
+- Tooltip hover + panel-click scenarios are better covered in unit tests (Playwright hover is flaky across browsers).
+
+---
+
+### Wave 34 — Advanced Admin Management
+
+**Existing tests at risk:**
+
+| Test file | Risk | Mitigation |
+| --- | --- | --- |
+| `Testing/unit/shared/contexts/AuthContext.test.tsx` | Wave 34 doesn't change AuthContext; just consumes `isAdmin`. | No change. |
+| `Testing/unit/shared/api/auth.test.ts` | Wave 34 doesn't change `authApi`. | No change. |
 | All other tests | No impact. | No change. |
 
 **New tests:**
@@ -364,149 +369,50 @@ For each wave: (a) **existing tests at risk** (will break or need extension), (b
 
 **E2E impact:**
 - New persona: `e2e/.auth/admin.json` — sign in as an admin user (`admin@example.com` or similar; pre-create in `scripts/seed-e2e.js` and add to `admin_users` table).
-- Wave 33 needs to extend `seed-e2e.js` to insert the admin user into `admin_users`. Document in the wave plan.
-- New E2E feature file: `Testing/e2e/features/admin/admin-shell.feature` and `admin-users.feature` — Wave 38 expands.
+- Wave 34 needs to extend `seed-e2e.js` to insert the admin user into `admin_users`. Document in the wave plan.
+- New E2E feature files: `Testing/e2e/features/admin/admin-shell.feature` and `admin-users.feature`.
 
 ---
 
-### Wave 34 — White Labeling
+### Wave 35 — External Integrations (ICS only)
 
 **Existing tests at risk:**
 
 | Test file | Risk | Mitigation |
 | --- | --- | --- |
-| `Testing/unit/shared/contexts/AuthContext.test.tsx` | Wave 34 adds `<TenantProvider>` between providers. AuthContext is independent. | No change. |
-| `Testing/unit/features/projects/hooks/useProjectMutations.test.ts` | `useCreateProject` will now have its `organization_id` populated server-side via the trigger. Unit tests mock `Project.create` — no trigger fires. | No change. |
-| All component tests | If any component reads `useTenant()` directly and the test doesn't mock it, the test will throw on missing context. | If a component is updated in Wave 34 to consume `useTenant()`, its test must add `vi.mock('@/shared/contexts/TenantContext', () => ({ useTenant: () => mockUseTenant() }))`. Wave 34 plan: scan all updated components and list affected tests. |
+| All existing tests | Wave 35 adds a new ICS endpoint + token table; no existing API or behavior changes. | No change. |
 
 **New tests:**
-- [ ] `Testing/unit/shared/contexts/TenantContext.test.tsx`
-- [ ] `Testing/unit/shared/contexts/TenantContext.branding.test.tsx`
-- [ ] `Testing/unit/shared/api/planterClient.organizations.test.ts`
-- [ ] `Testing/unit/pages/admin/AdminOrganizations.test.tsx`
-- [ ] `Testing/unit/pages/admin/AdminOrganizationDetail.test.tsx`
-- [ ] `Testing/unit/supabase/functions/resolve-tenant.test.ts`
-
-**New infrastructure:**
-- [ ] `Testing/test-utils/factories.ts` — `makeOrganization`, `makeOrganizationMember`.
-- [ ] `Testing/test-utils/mocks/tenant.ts` (NEW) — `mockUseTenant(orgOverrides?)`.
-- [ ] Extend `Testing/test-utils/render-with-providers.tsx` (added in Wave 31) with a `tenant?: Partial<OrganizationRow>` option.
-
-**E2E impact:**
-- New persona: `org-admin@example.com` for org-admin tests (different from global admin).
-- Custom-domain test: would require DNS/host file manipulation; skip in unit/E2E for v1, document as manual smoke.
-- The existing E2E tests run on `localhost:5173` which resolves to the default `planterplan` org; no impact.
-
----
-
-### Wave 35 — Stripe Monetization + License Enforcement
-
-**Existing tests at risk:**
-
-| Test file | Risk | Mitigation |
-| --- | --- | --- |
-| `Testing/unit/features/projects/hooks/useProjectMutations.test.ts` | `useCreateProject` is now license-gated. Unit tests mock `Project.create` — server trigger doesn't fire — no impact. | No change. |
-| `Testing/unit/features/projects/components/EditProjectModal.test.tsx` | Wave 35 doesn't change EditProjectModal directly. | No change. |
-
-**New tests:**
-- [ ] `Testing/unit/shared/api/planterClient.billing.test.ts`
-- [ ] `Testing/unit/shared/api/planterClient.discountCodes.test.ts`
-- [ ] `Testing/unit/shared/constants/billing.test.ts`
-- [ ] `Testing/unit/features/settings/hooks/useSubscription.test.tsx`
-- [ ] `Testing/unit/pages/Settings.billing.test.tsx`
-- [ ] `Testing/unit/pages/admin/AdminDiscountCodes.test.tsx`
-- [ ] `Testing/unit/features/projects/components/NewProjectForm.licenseGate.test.tsx`
-- [ ] `Testing/unit/supabase/functions/stripe-webhook.test.ts`
-
-**New infrastructure:**
-- [ ] `Testing/test-utils/factories.ts` — `makeSubscription`, `makeStripeWebhookEvent(type, overrides)`.
-- [ ] `Testing/test-utils/mocks/stripe.ts` (NEW) — `signStripePayload(payload, secret)` helper that replicates Stripe's HMAC for webhook signature tests.
-
-**E2E impact:**
-- **CRITICAL E2E gotcha**: every existing E2E test that creates more than 1 project per user will fail under the new free-plan limit. **Mitigation**: extend `scripts/seed-e2e.js` (or add a Wave 35 step in global-setup) to upgrade the test personas (`owner`, `editor`, `test@example.com`, etc.) to the `pro` plan via direct DB UPDATE before tests run. Document this in the Wave 35 plan as a hard prerequisite for E2E.
-- Stripe Checkout / portal: use Stripe test mode for E2E. Document the test card `4242 4242 4242 4242` in the Wave 35 PR description.
-
-**Add to Wave 35 plan**: a one-line "E2E persona upgrade" pre-flight step.
-
----
-
-### Wave 36 — External Integrations
-
-**Existing tests at risk:**
-
-| Test file | Risk | Mitigation |
-| --- | --- | --- |
-| All existing tests | Wave 36 adds new tables + functions; no existing API or behavior changes. | No change. |
-
-**New tests:**
-- [ ] `Testing/unit/shared/api/planterClient.integrations.zoho.test.ts`
 - [ ] `Testing/unit/shared/api/planterClient.integrations.ics.test.ts`
-- [ ] `Testing/unit/shared/api/planterClient.integrations.webhooks.test.ts`
-- [ ] `Testing/unit/supabase/functions/zoho-oauth-callback.test.ts`
-- [ ] `Testing/unit/supabase/functions/zoho-sync.test.ts`
-- [ ] `Testing/unit/supabase/functions/s3-presign-upload.test.ts`
-- [ ] `Testing/unit/supabase/functions/s3-confirm-upload.test.ts`
 - [ ] `Testing/unit/supabase/functions/ics-feed.test.ts`
-- [ ] `Testing/unit/supabase/functions/webhook-dispatch.test.ts`
-- [ ] `Testing/unit/features/tasks/components/TaskResources.s3.test.tsx`
 
 **New infrastructure:**
-- [ ] `Testing/test-utils/factories.ts` — `makeWebhookSubscription`, `makeIcsFeedToken`.
-- [ ] AWS SDK mock: per-test `vi.mock('@aws-sdk/s3-request-presigner', ...)` since Deno-side dep doesn't bundle into frontend tests; only the function tests need this mock.
-- [ ] `crypto.subtle` mock for HMAC signing in `webhook-dispatch.test.ts` (jsdom should already have it; verify).
+- [ ] `Testing/test-utils/factories.ts` — `makeIcsFeedToken`.
 
 **E2E impact:**
-- Zoho OAuth E2E: skip (would require real Zoho test app). Manual smoke only — document in Wave 38.
-- S3 upload E2E: requires a real S3 bucket OR a mock S3 server. Defer to manual smoke.
-- ICS feed E2E: simple — fetch the feed URL, parse the .ics, assert structure. Wave 38 adds.
-- Webhook E2E: spin up a webhook.site URL, register, trigger an activity, fetch the delivery from webhook.site. Manual or Wave 38 if automated.
+- ICS feed E2E: simple — fetch the feed URL, parse the .ics, assert structure. Deferred — no wave assigned.
 
 ---
 
-### Wave 37 — Hardening
+### Wave 36 — Template Hardening
 
 **Existing tests at risk:**
 
 | Test file | Risk | Mitigation |
 | --- | --- | --- |
-| `Testing/unit/shared/lib/date-engine/index.test.ts` | Task 1 adds `addBusinessDays` and `nextBusinessDay` exports. Existing tests for `addDaysToDate`, etc., are unchanged. | No change to existing; add new `describe('addBusinessDays', ...)` block. |
-| `Testing/unit/shared/api/planterClient.clone.stamp.test.ts` (Wave 22) | Tasks 3 + 4 modify `clone_project_template` RPC behavior: now also stamps `cloned_from_template_version` (Task 3) and `cloned_from_task_id` on every cloned descendant (Task 4). The existing test asserts that `Task.clone` follows up with a `Task.update` writing `settings.spawnedFromTemplate`. **Task 3 + 4 work happens server-side in the RPC** — the client-side `Task.clone` payload doesn't change. | Likely no change. **But verify**: if the client-side `Task.clone` is updated to wait for the new fields in the response, the assertion needs extending. Read the file. |
-| `Testing/unit/features/tasks/hooks/useTaskMutations.test.ts` | Task 4's UI delete-guard adds a confirmation dialog before delete. If `useDeleteTask` test triggers a delete on a cloned task, the new dialog interaction would block. **The dialog is in the COMPONENT (`TaskDetailsView`), not the hook.** So `useDeleteTask` is unchanged. | No change to hook tests. New tests cover the component-level guard. |
-| `Testing/unit/features/tasks/components/TaskList.test*` (if exists) | Task 5 adds `<TaskList.virtualized>` swap when >500 tasks. Default render path unchanged for small projects. Existing tests use small mock data → unchanged. | No change to existing; add a new test that exercises the >500 path with `react-virtuoso` mocked. |
+| `Testing/unit/shared/api/planterClient.clone.stamp.test.ts` (Wave 22) | Tasks 1 + 2 modify `clone_project_template` RPC behavior: now also stamps `cloned_from_template_version` (Task 1) and `cloned_from_task_id` on every cloned descendant (Task 2). The existing test asserts that `Task.clone` follows up with a `Task.update` writing `settings.spawnedFromTemplate`. **Task 1 + 2 work happens server-side in the RPC** — the client-side `Task.clone` payload doesn't change. | Likely no change. **But verify**: if the client-side `Task.clone` is updated to wait for the new fields in the response, the assertion needs extending. Read the file. |
+| `Testing/unit/features/tasks/hooks/useTaskMutations.test.ts` | Task 2's UI delete-guard adds a confirmation dialog before delete. If `useDeleteTask` test triggers a delete on a cloned task, the new dialog interaction would block. **The dialog is in the COMPONENT (`TaskDetailsView`), not the hook.** So `useDeleteTask` is unchanged. | No change to hook tests. New tests cover the component-level guard. |
 
 **New tests:**
-- [ ] `Testing/unit/shared/lib/date-engine/business-days.test.ts`
-- [ ] `Testing/unit/features/projects/components/EditProjectModal.weekendsHolidays.test.tsx`
-- [ ] `Testing/unit/supabase/functions/invite-by-email.escrow.test.ts`
 - [ ] `Testing/unit/shared/api/planterClient.template.versioning.test.ts`
 - [ ] `Testing/unit/features/tasks/components/TaskDetailsView.deleteGuard.test.tsx`
-- [ ] `Testing/unit/features/tasks/components/TaskList.virtualized.test.tsx`
 
 **New infrastructure:**
-- [ ] `Testing/test-utils/factories.ts` — `makeHolidayCalendar`, `makeProjectInvite` (extends to capture `claimed_at`/`claimed_by`).
-- [ ] Mock `react-virtuoso`: `vi.mock('react-virtuoso', () => ({ Virtuoso: vi.fn(({ data, itemContent }) => data.map((d, i) => itemContent(i, d))) }))` — renders all items synchronously for test simplicity; assertions about WHICH items render are out of scope (Virtuoso's virtualization correctness is the lib's responsibility).
+- [ ] No new factories required. The existing `makeTask` + `makeProject` cover the added `settings` fields via overrides.
 
 **E2E impact:**
-- Weekends/holidays scenario: Wave 38 matrix.
-- Invite escrow: Wave 38 — invite a non-existent email, sign up that email, verify auto-claim.
-- Template versioning: Wave 38 — clone a template, verify version stamp in DB.
-- Template immutability delete-guard: Wave 38 — non-owner attempts delete on cloned task, dialog appears.
-- Virtualization: hard to test functionally; Wave 38 includes a perf-budget assertion (1500-task render <200ms).
-
----
-
-### Wave 38 — Release Readiness
-
-**This IS the testing wave.** No existing tests "break" — Wave 38 ADDS coverage.
-
-**Workstream outputs:**
-- **Task 1**: ~150 new E2E scenarios across 8+ feature files. Persona × flow matrix.
-- **Task 2**: `@axe-core/playwright` integration with axe scans on every E2E scenario. WCAG 2.1 AA compliance audit.
-- **Task 3**: RLS smoke runner (`docs/db/tests/run_all_rls_smokes.sh`); OWASP Top 10 audit doc.
-- **Task 4**: Lighthouse budgets; bundle-size budgets; performance audit.
-- **Task 5**: Release cutover; CHANGELOG; deployment runbook.
-
-**Critical existing-test impact**: Task 4's bundle-size budget will likely surface that some routes aren't lazy-loaded. Wave 28 (gantt) and Wave 33 (admin) plans already require lazy loading; Wave 38 verifies with a budget test.
+- Template versioning: clone a template, verify version stamp in DB. Deferred — no wave assigned.
+- Template immutability delete-guard: non-owner attempts delete on cloned task, dialog appears. Deferred — no wave assigned.
 
 ---
 
@@ -521,12 +427,11 @@ For each wave: (a) **existing tests at risk** (will break or need extension), (b
 | 30 | Service worker permission grant: `context.grantPermissions(['notifications'])` per-test for push scenarios |
 | 31 | Locale-switch helper in `common.steps.ts`: `Given the user's locale is "es"` step that calls `localStorage.setItem('planterplan.locale', 'es')` before navigation |
 | 32 | Offline helper in `common.steps.ts`: `Given the user is offline` / `Given the user is back online` steps that call `context.setOffline(true|false)` |
-| 33 | New `admin@example.com` persona; `e2e/.auth/admin.json`; extend `seed-e2e.js` to insert the user into `admin_users` |
-| 34 | New `org-admin@example.com` persona on the `crossway-network` test org. Multi-tenant test scenarios |
-| 35 | **Critical**: extend `seed-e2e.js` to upgrade ALL existing personas (owner, editor, viewer, limited, coach, default) to the `pro` plan via direct `subscriptions` UPDATE. Without this, every multi-project E2E scenario breaks under the new free-plan limit. |
-| 36 | Webhook test endpoint: use `webhook.site` or a Playwright-side `request.newContext()` mock server. Document in Wave 36 PR |
-| 37 | None new — existing personas test all gap-closure scenarios |
-| 38 | Wave 38 Task 1 finalizes the persona × flow matrix; no NEW personas, but extensive scenario expansion |
+| 32 | None new — Wave 32 is a bug-fix wave with unit-test coverage only |
+| 33 | `/daily` → `/tasks` redirect smoke; no new persona |
+| 34 | New `admin@example.com` persona; `e2e/.auth/admin.json`; extend `seed-e2e.js` to insert the user into `admin_users` |
+| 35 | ICS feed endpoint smoke: fetch the feed URL with a token and parse the .ics output |
+| 36 | None new — existing personas test all template-versioning + immutability scenarios |
 
 ---
 
@@ -541,13 +446,9 @@ npm test          # unit + integration; baseline + new wave's tests
 git status        # clean
 ```
 
-For Waves 28, 30, 32, 33, 34 with route additions: also confirm the new chunk is lazy-loaded via `npm run build` chunk inventory.
+For Waves 28, 30, 34 with route additions: also confirm the new chunk is lazy-loaded via `npm run build` chunk inventory.
 
-For Waves 31 + 38: also run `npm run test:e2e` after the unit suite (Wave 31's locale switcher needs E2E coverage; Wave 38 IS the E2E wave).
-
-For Wave 35: extend the gate to include "verify E2E personas have plan = 'pro'" before running E2E.
-
-For Wave 38 final cutover: full gate per the wave plan (lint + build + vitest + e2e + lighthouse + RLS smoke runner).
+For Waves 31 + 33: also run `npm run test:e2e` after the unit suite (locale switcher + `/daily` redirect need E2E coverage).
 
 ---
 
@@ -557,30 +458,31 @@ When a wave plan modifies a source file, use this table to find the existing tes
 
 | Source file (modified by wave) | Existing test files that mock or render it |
 | --- | --- |
-| `src/features/tasks/components/TaskDetailsView.tsx` | `TaskDetailsView.coachingBadge.test.tsx`, `TaskDetailsView.email.test.tsx`, `TaskDetailsView.related.test.tsx`. (Wave 26 + 27 + 29 + 37 modify this) |
+| `src/features/tasks/components/TaskDetailsView.tsx` | `TaskDetailsView.coachingBadge.test.tsx`, `TaskDetailsView.email.test.tsx`, `TaskDetailsView.related.test.tsx`. (Wave 26 + 27 + 29 + 36 modify this; Wave 36 adds `TaskDetailsView.deleteGuard.test.tsx`.) |
 | `src/features/tasks/components/TaskList.tsx` | (Verify with grep — likely none directly; tests render via integration through `Project.tsx` which has its own e2e) |
-| `src/features/tasks/components/TaskFormFields.tsx` | `TaskForm.coaching.test.tsx` (Wave 22 precedent). Wave 29 + 37 add new field-level tests. |
-| `src/features/tasks/hooks/useTaskMutations.ts` | `useTaskMutations.test.ts`, `useTaskMutations.coachingRefetch.test.ts`. Wave 32 wraps with offline queue → `useTaskMutations.offline.test.ts` (NEW). |
-| `src/features/tasks/hooks/useTaskComments.ts` (Wave 26) | `useTaskComments.test.tsx` (NEW Wave 26). Wave 32 wraps with offline queue → adds `useTaskMutations.offline.test.ts` patterns. |
-| `src/features/projects/components/EditProjectModal.tsx` | `EditProjectModal.test.tsx`, `EditProjectModal.testSend.test.tsx`. Wave 29 + 37 add `EditProjectModal.kind.test.tsx` and `.weekendsHolidays.test.tsx`. |
+| `src/features/tasks/components/TaskItem.tsx` | `TaskItem.test.tsx` (if exists). **Wave 33** adds `TaskItem.dueBadge.test.tsx` and extends existing selectors to account for the `<Tooltip>` wrapper around the title. |
+| `src/features/tasks/components/TaskFormFields.tsx` | `TaskForm.coaching.test.tsx` (Wave 22 precedent). Wave 29 adds new field-level tests. |
+| `src/features/tasks/hooks/useTaskMutations.ts` | `useTaskMutations.test.ts`, `useTaskMutations.coachingRefetch.test.ts`. |
+| `src/features/tasks/hooks/useTaskComments.ts` (Wave 26) | `useTaskComments.test.tsx` (NEW Wave 26). |
+| `src/features/tasks/hooks/useTaskFilters.ts` | **Wave 32** fixes the `milestones` + inert-status predicates; **Wave 33** adds `dueDateRange`. Tests: `useTaskFilters.test.ts` (already exists pre-Wave-32; Wave 32 extends with per-filter fixture coverage, Wave 33 extends again with `dueDateRange`). |
+| `src/features/projects/components/EditProjectModal.tsx` | `EditProjectModal.test.tsx`, `EditProjectModal.testSend.test.tsx`. Wave 29 adds `EditProjectModal.kind.test.tsx`. |
 | `src/features/projects/components/ProjectSwitcher.tsx` | `ProjectSwitcher.test.tsx`. (Not modified post-Wave-25.) |
 | `src/features/projects/components/PhaseCard.tsx` | (No existing test inventory entry; Wave 29 adds `PhaseCard.donut.test.tsx`.) |
-| `src/features/projects/hooks/useProjectMutations.ts` | `useProjectMutations.test.ts`. (Wave 35 adds license-gate behavior — new test file.) |
+| `src/features/projects/hooks/useProjectMutations.ts` | `useProjectMutations.test.ts`. The dual-cache-invalidation assertion (`['projects']` + `['project', projectId]`) was originally scoped into Wave 32 but discovered during pre-flight to have landed in Wave 15 (commit `c88b3e7`); test coverage landed at commit `30616d8`. Wave 32 dropped this task. |
 | `src/features/projects/hooks/useProjectRealtime.ts` | `useProjectRealtime.test.ts`. (Not modified by Wave 27 — `useProjectPresence` is a separate hook.) |
-| `src/shared/api/planterClient.ts` | `planterClient.test.ts`, `planterClient.clone.stamp.test.ts`, `planterClient.listSiblings.test.ts`, `planterClient.updateStatus.syncflags.test.ts`. **Every wave that adds a new entity namespace also adds a new test file** (`planterClient.taskComments.test.ts`, `.activityLog.test.ts`, `.notifications.test.ts`, `.organizations.test.ts`, `.billing.test.ts`, `.discountCodes.test.ts`, `.integrations.{zoho,ics,webhooks}.test.ts`). |
-| `src/shared/lib/date-engine/index.ts` | `date-engine/index.test.ts`, `date-engine/payloadHelpers.test.ts`, `date-engine.urgency.test.ts`. (Wave 29 adds `checkpoint.test.ts`; Wave 37 adds `business-days.test.ts`.) |
-| `src/shared/contexts/AuthContext.tsx` | `AuthContext.test.tsx`, `AuthContext.savedEmailAddresses.test.tsx`. (Wave 30 doesn't change AuthContext; Wave 34 wraps with `<TenantProvider>` — separate context.) |
+| `src/pages/TasksPage.tsx` | `TasksPage.test.tsx` (if exists). **Wave 33** adds due-date range filter, click-to-panel, title tooltip wiring — extends this file in place. |
+| `src/pages/Dashboard.tsx` | `Dashboard.test.tsx` (if exists). **Wave 32** adds "New Template" button assertion. |
+| `src/shared/api/planterClient.ts` | `planterClient.test.ts`, `planterClient.clone.stamp.test.ts`, `planterClient.listSiblings.test.ts`, `planterClient.updateStatus.syncflags.test.ts`. **Every wave that adds a new entity namespace also adds a new test file** (`planterClient.taskComments.test.ts`, `.activityLog.test.ts`, `.notifications.test.ts`, `.integrations.ics.test.ts`, `.template.versioning.test.ts`). |
+| `src/shared/lib/date-engine/index.ts` | `date-engine/index.test.ts`, `date-engine/payloadHelpers.test.ts`, `date-engine.urgency.test.ts`. (Wave 29 adds `checkpoint.test.ts`; Wave 33 adds `formatTaskDueBadge.test.ts`.) |
+| `src/shared/contexts/AuthContext.tsx` | `AuthContext.test.tsx`, `AuthContext.savedEmailAddresses.test.tsx`. (Wave 30 doesn't change AuthContext.) |
+| `src/shared/ui/tooltip.tsx` (NEW in Wave 33) | `tooltip.test.tsx` (NEW in Wave 33). |
 | `src/shared/db/database.types.ts` | (No direct test; type drift caught at compile time via `npm run build`.) |
-| `src/pages/Settings.tsx` | (No existing test inventory entry. Wave 30 adds `Settings.notifications.test.tsx`; Wave 35 adds `Settings.billing.test.tsx`.) |
+| `src/pages/Settings.tsx` | (No existing test inventory entry. Wave 30 adds `Settings.notifications.test.tsx`.) |
 
 ---
 
 ## 7. What NOT to test (out of scope across all waves)
 
-- **Workbox runtime caching strategies** (Wave 32) — these are workbox's responsibility; test them via Lighthouse PWA audit, not unit tests.
-- **Stripe SDK internals** (Wave 35) — test the webhook handler's contract (signature verify + idempotency + state machine), not Stripe's HTTP behavior.
-- **AWS S3 actual upload** (Wave 36) — test the presign-URL function's contract; the browser PUT is integration territory.
-- **Zoho API responses** (Wave 36) — test the sync function's mapping logic with mocked Zoho responses.
 - **Web Push browser push delivery** (Wave 30) — VAPID + browser handle this. Test the dispatcher's pref-respect + quiet-hours + 410-cleanup logic.
 - **DB triggers fire in unit tests** — they DON'T. Unit tests mock Supabase. Test trigger correctness via `psql` smokes documented in `docs/db/tests/*.sql`.
 - **i18n key resolution against .json files** (Wave 31) — covered by `en-json.test.ts` + `es-json.test.ts`. Don't re-assert in every component test; just check the rendered text matches the en value.

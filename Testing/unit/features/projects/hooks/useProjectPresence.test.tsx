@@ -13,10 +13,15 @@ vi.mock('@/shared/db/client', () => ({
     },
 }));
 
+// Stable references: the `user` object MUST keep the same identity across
+// renders, or the `[projectId, user]` dep array on `useProjectPresence`'s
+// effect re-fires every render → cleanup setMyPresenceKey(null) races the
+// async `setMyPresenceKey(user.id)` in subscribe's callback, producing an
+// intermittent `null` vs `'me'` observed by the first test.
+const mockAuthUser = { id: 'me', email: 'me@example.com' };
+const mockAuthValue = { user: mockAuthUser };
 vi.mock('@/shared/contexts/AuthContext', () => ({
-    useAuth: () => ({
-        user: { id: 'me', email: 'me@example.com' },
-    }),
+    useAuth: () => mockAuthValue,
 }));
 
 import { useProjectPresence } from '@/features/projects/hooks/useProjectPresence';

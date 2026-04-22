@@ -31,6 +31,11 @@ The Library & Templates domain provides the administrative scaffolding for Plant
 * **Projects:** Serves as the origin layer for `CreateProjectModal`.
 
 ## Known Gaps / Technical Debt
-* Versioning of templates: Currently, if an Admin updates a Template, existing Projects created from it are not updated (which is intended), but tracking the original template version on the Project instance is missing.
+
+### Resolved
+
+* **Versioning of templates (resolved Wave 36)**: `public.tasks.template_version int NOT NULL DEFAULT 1` (migration `docs/db/migrations/2026_04_18_template_versioning.sql`). BEFORE UPDATE trigger `trg_bump_template_version` increments the column on text / structural edits to `origin = 'template'` rows (title / description / days_from_start / duration / settings). `Task.clone` stamps `settings.cloned_from_template_version = source.template_version` on the cloned root. **Intentional non-propagation**: edits to a source template do NOT update existing instances — the architecture doc explicitly reserved that behavior, and Wave 36 only makes the version stamp trackable so admins can spot drift in `/admin/templates` (Admin Templates UI surfaces each instance's stamped version vs the source template's current version with a "stale" badge when behind).
+
+### Active
 * **Topically-related library suggestions (deferred):** Wave 22 shipped the "hide already-present templates" half of the §3.5 bullet. Surfacing templates *related to* the ones already in the project (recommender) stays in §6 Backlog.
 * **Pre-Wave-22 clone backfill:** instances cloned before Wave 22 have no `settings.spawnedFromTemplate` stamp on their roots, so the Master Library combobox still lists them as "available" until re-cloned. A backfill migration wasn't worth it given how cheap re-cloning is and the stamp ships forward for every new clone.

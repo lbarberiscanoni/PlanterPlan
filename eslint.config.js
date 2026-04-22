@@ -48,7 +48,12 @@ export default tseslint.config(
     }
   },
   {
-    files: ['src/features/**/*.slice.{ts,tsx}', 'src/features/**/*.types.{ts,tsx}'],
+    // Post-megabatch hardening: was previously scoped to just
+    // `*.slice.*` / `*.types.*` files (roughly 0 files in this codebase),
+    // which meant CLAUDE.md's "ESLint-enforced" claim for the
+    // features → app boundary was effectively unenforced. Broaden to every
+    // TS/TSX file in the features layer.
+    files: ['src/features/**/*.{ts,tsx}'],
     rules: {
       'no-restricted-imports': [
         'error',

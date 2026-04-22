@@ -1,6 +1,7 @@
 import { useQuery, useInfiniteQuery } from '@tanstack/react-query';
 import { useAuth } from '@/shared/contexts/AuthContext';
 import { planter } from '@/shared/api/planterClient';
+import { STALE_TIMES } from '@/shared/lib/react-query-config';
 import { Project, Task } from '@/shared/db/app.types';
 
 const PAGE_SIZE = 20;
@@ -30,7 +31,7 @@ export const useTaskQuery = () => {
             return lastPage.length === PAGE_SIZE ? allPages.length + 1 : undefined;
         },
         enabled: !!currentUserId,
-        staleTime: 1000 * 60 * 2, // 2 minutes
+        staleTime: STALE_TIMES.medium,
     });
 
     // 2. Fetch Templates
@@ -44,8 +45,8 @@ export const useTaskQuery = () => {
             return await planter.entities.Task.filter({ origin: 'template', parent_task_id: null, creator: currentUserId }) as Task[];
         },
         enabled: !!currentUserId,
-        staleTime: 1000 * 60 * 5, // 5 minutes
-        gcTime: 1000 * 60 * 30,    // 30 minutes
+        staleTime: STALE_TIMES.long,
+        gcTime: STALE_TIMES.veryLong,
     });
 
     // 3. Fetch Joined Projects
@@ -60,7 +61,7 @@ export const useTaskQuery = () => {
             return await planter.entities.Project.listJoined(currentUserId);
         },
         enabled: !!currentUserId,
-        staleTime: 1000 * 60 * 2, // 2 minutes
+        staleTime: STALE_TIMES.medium,
     });
 
     // Combine instances and templates into tasks

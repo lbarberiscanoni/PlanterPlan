@@ -5,16 +5,21 @@ import { Toaster } from 'sonner';
 import { I18nextProvider } from 'react-i18next';
 import { i18n } from '@/shared/i18n';
 import { AuthProvider, useAuth } from '@/shared/contexts/AuthContext';
+import { TooltipProvider } from '@/shared/ui/tooltip';
 import DashboardLayout from '../layouts/DashboardLayout';
 import Dashboard from '../pages/Dashboard';
 import Reports from '../pages/Reports';
 import Project from '../pages/Project';
 import Settings from '../pages/Settings';
 import TasksPage from '../pages/TasksPage';
-import DailyTasks from '../pages/DailyTasks';
 import LoginForm from '@/pages/components/LoginForm';
 
 const Gantt = lazy(() => import('@/pages/Gantt'));
+const AdminLayout = lazy(() => import('@/pages/admin/AdminLayout'));
+const AdminHome = lazy(() => import('@/pages/admin/AdminHome'));
+const AdminUsers = lazy(() => import('@/pages/admin/AdminUsers'));
+const AdminAnalytics = lazy(() => import('@/pages/admin/AdminAnalytics'));
+const AdminTemplates = lazy(() => import('@/pages/admin/AdminTemplates'));
 
 const queryClient = new QueryClient();
 
@@ -29,6 +34,7 @@ export default function App() {
  <QueryClientProvider client={queryClient}>
  <I18nextProvider i18n={i18n}>
  <AuthProvider>
+ <TooltipProvider delayDuration={300}>
  <Router>
  <Routes>
  <Route path="/login" element={<LoginForm />} />
@@ -39,16 +45,27 @@ export default function App() {
  <Route path="Project/:projectId" element={<Project />} />
  <Route path="Project" element={<Project />} />
  <Route path="tasks" element={<TasksPage />} />
- <Route path="daily" element={<DailyTasks />} />
+ <Route path="daily" element={<Navigate to="/tasks" replace />} />
  <Route path="settings" element={<Settings />} />
  <Route
  path="gantt"
  element={<Suspense fallback={<div className="p-6 text-sm text-slate-600">Loading gantt…</div>}><Gantt /></Suspense>}
  />
+ <Route
+ path="admin"
+ element={<Suspense fallback={<div className="p-6 text-sm text-slate-600">Loading admin…</div>}><AdminLayout /></Suspense>}
+ >
+ <Route index element={<Suspense fallback={null}><AdminHome /></Suspense>} />
+ <Route path="users" element={<Suspense fallback={null}><AdminUsers /></Suspense>} />
+ <Route path="users/:uid" element={<Suspense fallback={null}><AdminUsers /></Suspense>} />
+ <Route path="analytics" element={<Suspense fallback={null}><AdminAnalytics /></Suspense>} />
+ <Route path="templates" element={<Suspense fallback={null}><AdminTemplates /></Suspense>} />
+ </Route>
  </Route>
  </Routes>
  </Router>
  <Toaster richColors position="top-right" />
+ </TooltipProvider>
  </AuthProvider>
  </I18nextProvider>
  </QueryClientProvider >

@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react';
 import { ExternalLink, FileText, StickyNote, Search, BookOpen } from 'lucide-react';
 import { Input } from '@/shared/ui/input';
 import { cn } from '@/shared/lib/utils';
+import { safeUrl } from '@/shared/lib/safe-url';
 import { useProjectResources } from '@/features/projects/hooks/useProjectResources';
 import type { ResourceWithTask } from '@/shared/db/app.types';
 
@@ -57,7 +58,7 @@ function ResourceCard({ resource }: { resource: ResourceWithTask }) {
 
                 {type === 'url' && resource.resource_url && (
                     <a
-                        href={resource.resource_url}
+                        href={safeUrl(resource.resource_url)}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="text-xs text-brand-600 hover:underline truncate block mt-0.5"

@@ -1,3 +1,7 @@
+// Storage swap runs before any other import so the in-memory polyfill is in
+// place before `@/shared/i18n` initializes `i18next-browser-languagedetector`
+// and probes `window.localStorage`. See `./install-storage` for the rationale.
+import './install-storage';
 import '@testing-library/jest-dom';
 import { vi, beforeEach } from 'vitest';
 // Eager i18n init so components calling `useTranslation` resolve against
@@ -25,35 +29,6 @@ Object.defineProperty(window, 'matchMedia', {
  removeEventListener: vi.fn(),
  dispatchEvent: vi.fn(),
  })),
-});
-
-// jsdom 29 ships a persistence-backed localStorage that fails without a
-// `--localstorage-file` path (vitest doesn't supply one). Install a plain
-// in-memory Storage so tests have the full API and are isolated per run.
-class MemoryStorage implements Storage {
- private store = new Map<string, string>();
- get length(): number { return this.store.size; }
- clear(): void { this.store.clear(); }
- getItem(key: string): string | null {
-  return this.store.get(key) ?? null;
- }
- key(index: number): string | null {
-  const keys = Array.from(this.store.keys());
-  return (index >= 0 && index < keys.length) ? keys[index] : null;
- }
- removeItem(key: string): void { this.store.delete(key); }
- setItem(key: string, value: string): void { this.store.set(key, String(value)); }
-}
-
-Object.defineProperty(window, 'localStorage', {
- value: new MemoryStorage(),
- writable: true,
- configurable: true,
-});
-Object.defineProperty(window, 'sessionStorage', {
- value: new MemoryStorage(),
- writable: true,
- configurable: true,
 });
 
 beforeEach(() => {

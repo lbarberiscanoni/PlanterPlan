@@ -83,8 +83,10 @@ and the dispatcher logs accordingly (degrades gracefully; doesn't throw).
 Transport-only. Loaded by other functions (mention dispatcher, digest).
 Requires `VAPID_PRIVATE_KEY` + `VITE_VAPID_PUBLIC_KEY` + `VAPID_SUBJECT`.
 Service worker (`public/sw.js`) handles the browser side —
-**documented JS exception** to the TS-only rule; slated for Wave 32's
-workbox conversion (`src/sw.ts`). See `docs/dev-notes.md`.
+**documented JS exception** to the TS-only rule; TS conversion is not
+currently scheduled (the PWA/workbox track that would have subsumed this
+file was descoped during the post-Wave-31 roadmap renumber).
+See `docs/dev-notes.md`.
 
 `dispatch-push` contract: `{ user_ids, title, body, url?, tag?, event_type }`.
 For each user/sub pair: send via web-push, DELETE on 410, log outcome.
@@ -181,3 +183,9 @@ Triggers (preferred), GitHub Actions, or external pingers.
   see growing `push_subscriptions` row counts per user, the browser may
   not be returning 410 (dev environment quirk) — manual cleanup is
   `DELETE FROM push_subscriptions WHERE last_used_at < now() - interval '90 days'`.
+
+## Admin new-project trigger (Wave 34)
+
+Wave 34 Task 3 adds `trg_notify_admin_on_new_project` — AFTER INSERT on `public.tasks` WHEN `parent_task_id IS NULL AND origin = 'instance'`. The trigger function INSERTs one `notification_log` row per admin in `public.admin_users` (excluding the creator, if the creator is themselves an admin) with `event_type = 'admin_new_project_pending'` and `channel = 'email'`. Everything downstream — quiet-hours, per-admin opt-out, delivery retry — reuses the same `dispatch-notifications` cron pipeline this doc already covers.
+
+Closes the "Admin Notifications" known-gap deferred from Wave 30. Migration: `docs/db/migrations/2026_04_18_new_project_admin_notify.sql`.

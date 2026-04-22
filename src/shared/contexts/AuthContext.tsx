@@ -88,21 +88,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     let alive = true;
 
     const fetchRole = async () => {
+      // Security: default to the least-privileged role until the async
+      // admin check returns. The previous code optimistically set role to
+      // 'owner' on localhost and in the post-check default — which (a)
+      // created dev/prod parity drift (localhost users looked like owners
+      // even though RLS never treated them that way) and (b) meant the
+      // brief race window between initial auth + admin-check showed
+      // privileged UI affordances to non-owners. Default to 'viewer'
+      // everywhere; the project-scoped role is hydrated per-project via
+      // `useTeam(projectId)`.
       try {
-        const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-        if (isLocal) {
-          setUser(prev => prev ? { ...prev, role: prev.role || 'owner' } : null);
-          const isAdmin = await authApi.checkIsAdmin(user.id);
-          if (alive && isAdmin) setUser(prev => prev ? { ...prev, role: 'admin' } : null);
-          return;
-        }
-
         const isAdmin = await authApi.checkIsAdmin(user.id);
         if (alive) {
-          setUser(prev => prev ? { ...prev, role: isAdmin ? 'admin' : 'owner' } : null);
+          setUser(prev => prev ? { ...prev, role: isAdmin ? 'admin' : 'viewer' } : null);
         }
       } catch {
-        if (alive) setUser(prev => prev ? { ...prev, role: prev.role || 'viewer' } : null);
+        if (alive) setUser(prev => prev ? { ...prev, role: 'viewer' } : null);
       }
     };
 

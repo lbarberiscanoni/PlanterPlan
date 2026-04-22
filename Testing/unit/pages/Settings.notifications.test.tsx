@@ -27,6 +27,21 @@ vi.mock('@/features/settings/hooks/usePushSubscription', () => ({
     }),
 }));
 
+// Wave 35: Settings imports IcsFeedsCard which pulls in planterClient →
+// supabase client bootstrap. Neutralize the whole card so this test keeps
+// focusing on the Notifications tab only.
+vi.mock('@/features/settings/components/IcsFeedsCard', () => ({
+    default: () => null,
+}));
+
+vi.mock('@/shared/db/client', () => ({
+    supabase: {
+        auth: {
+            onAuthStateChange: () => ({ data: { subscription: { unsubscribe: vi.fn() } } }),
+        },
+    },
+}));
+
 // The existing Settings page reads `useSettings`; stub it so we're not testing
 // the Profile/Security tabs here.
 vi.mock('@/features/settings/hooks/useSettings', () => ({

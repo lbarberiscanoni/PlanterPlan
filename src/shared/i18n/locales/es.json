@@ -129,14 +129,17 @@
         "completed": "Aún no hay tareas completadas.",
         "all_tasks": "No hay tareas en ninguno de tus proyectos.",
         "milestones": "No se han encontrado hitos."
+      },
+      "dateRange": {
+        "label": "Vencimiento entre",
+        "start_aria": "Inicio del rango de fechas de vencimiento",
+        "end_aria": "Fin del rango de fechas de vencimiento",
+        "clear": "Borrar"
       }
     },
-    "daily": {
-      "title": "Tareas diarias",
-      "all_caught_up": "¡Todo al día!",
-      "no_overdue": "No tienes tareas que venzan hoy ni atrasadas. ¡Gran trabajo!",
-      "due_count_one": "{{count}} tarea vence hoy o está atrasada",
-      "due_count_other": "{{count}} tareas vencen hoy o están atrasadas"
+    "dueBadge": {
+      "today": "Hoy",
+      "tomorrow": "Mañana"
     },
     "status": {
       "todo": "Pendiente",
@@ -312,6 +315,7 @@
     "title": "Panel de proyectos",
     "subtitle": "Gestiona tus proyectos de plantación de iglesias",
     "new_project": "Nuevo proyecto",
+    "new_template": "Nueva plantilla",
     "no_projects_title": "Aún no hay proyectos",
     "no_projects_description": "Inicia tu camino de plantación de iglesias creando tu primer proyecto",
     "create_first_project": "Crea tu primer proyecto",
@@ -349,6 +353,7 @@
     "page_subtitle": "Gestiona tu cuenta y las preferencias de la aplicación",
     "tab_profile": "Perfil",
     "tab_notifications": "Notificaciones",
+    "tab_integrations": "Integraciones",
     "tab_security": "Seguridad",
     "profile": {
       "personal_info": "Información personal",

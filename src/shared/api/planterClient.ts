@@ -1,6 +1,7 @@
 import { supabase } from '../db/client';
 import { toIsoDate, nowUtcIso, calculateMinMaxDates } from '@/shared/lib/date-engine';
-import { retry } from '../lib/retry.js';
+import { retry } from '../lib/retry';
+import { assertSafeUrl } from '@/shared/lib/safe-url';
 import type { Database } from '@/shared/db/database.types';
 import type {
     Project,
@@ -20,7 +21,15 @@ import type {
     NotificationPreferencesUpdate,
     NotificationLogRow,
     PushSubscriptionRow,
-    PushSubscriptionInsert
+    PushSubscriptionInsert,
+    AdminUserSearchRow,
+    AdminUserDetail,
+    AdminActivityRow,
+    AdminListUserRow,
+    AdminListUsersFilter,
+    AdminAnalyticsSnapshot,
+    IcsFeedTokenRow,
+    CreateIcsFeedTokenInput,
 } from '@/shared/db/app.types';
 import type { User as AuthUser } from '@supabase/supabase-js';
 
@@ -35,7 +44,14 @@ export interface CreateProjectPayload {
 }
 
 export class PlanterError extends Error {
-    constructor(message: string, public status?: number, public metadata?: unknown) {
+    // `status` is either a numeric HTTP-ish status (e.g. 401, 500 for
+    // client-synthesized errors) OR a string PostgREST / Postgres error
+    // code (e.g. "23505" for unique_violation, "PGRST302" for permission
+    // denied). Previously we ran parseInt on `error.code` before passing
+    // it in — but PostgREST codes are non-numeric strings, so parseInt
+    // returned NaN at 36 sites, making this field useless for branching.
+    // The current call sites pass `error.code ?? '500'` directly.
+    constructor(message: string, public status?: number | string, public metadata?: unknown) {
         super(message);
         this.name = 'PlanterError';
     }
@@ -88,6 +104,28 @@ export interface PlanterClient {
         updatePreferences: (patch: NotificationPreferencesUpdate) => Promise<NotificationPreferencesRow>;
         /** Returns recent notification-log rows for the caller (newest first). */
         listLog: (opts?: { limit?: number; before?: string; eventType?: string }) => Promise<NotificationLogRow[]>;
+    };
+    /** Wave 34 — admin-only cross-tenant RPCs. Each RPC is SECURITY DEFINER + is_admin(auth.uid())-gated. */
+    admin: {
+        /** Fuzzy search across auth.users by email / full_name. Returns up to `limit` matches (default 20, max 100). Debounce at the caller. */
+        searchUsers: (query: string, limit?: number) => Promise<AdminUserSearchRow[]>;
+        /** Full user-detail payload: profile, project memberships, task counts. */
+        userDetail: (uid: string) => Promise<AdminUserDetail | null>;
+        /** Cross-project activity feed (hydrated with actor email). */
+        recentActivity: (limit?: number) => Promise<AdminActivityRow[]>;
+        /** Paginated user list with server-side filters (Wave 34 Task 2). */
+        listUsers: (filter: AdminListUsersFilter, limit?: number, offset?: number) => Promise<AdminListUserRow[]>;
+        /** Aggregated analytics snapshot for the /admin/analytics dashboard (Wave 34 Task 3). */
+        analyticsSnapshot: () => Promise<AdminAnalyticsSnapshot | null>;
+    };
+    /** Wave 35 — third-party integrations (starts with ICS calendar feeds). */
+    integrations: {
+        /** List the current user's ICS tokens (active + revoked). */
+        listIcsFeedTokens: () => Promise<IcsFeedTokenRow[]>;
+        /** Create a new ICS token. Client generates the random token value via crypto.randomUUID(). */
+        createIcsFeedToken: (input: CreateIcsFeedTokenInput) => Promise<IcsFeedTokenRow>;
+        /** Soft-revoke a token (sets revoked_at = now). */
+        revokeIcsFeedToken: (id: string) => Promise<IcsFeedTokenRow>;
     };
 }
 
@@ -237,7 +275,7 @@ const createEntityClient = <T, TInsert, TUpdate>(tableName: string, select = '*'
             const query = fromTable(tableName).select(select);
             applySignal(query, opts?.signal);
             const { data, error } = await query;
-            if (error) throw new PlanterError(error.message, parseInt(error.code ?? '500'));
+            if (error) throw new PlanterError(error.message, error.code ?? '500');
             return (data as T[]) || [];
         });
     },
@@ -246,7 +284,7 @@ const createEntityClient = <T, TInsert, TUpdate>(tableName: string, select = '*'
             const query = fromTable(tableName).select(select).eq('id', id).maybeSingle();
             applySignal(query, opts?.signal);
             const { data, error } = await query;
-            if (error) throw new PlanterError(error.message, parseInt(error.code ?? '500'));
+            if (error) throw new PlanterError(error.message, error.code ?? '500');
             return (data as T) || null;
         });
     },
@@ -255,7 +293,7 @@ const createEntityClient = <T, TInsert, TUpdate>(tableName: string, select = '*'
             const query = fromTable(tableName).insert(payload as Record<string, unknown>).select(select);
             applySignal(query, opts?.signal);
             const { data, error } = await query;
-            if (error) throw new PlanterError(error.message, parseInt(error.code ?? '500'));
+            if (error) throw new PlanterError(error.message, error.code ?? '500');
             return (data as T[])?.[0] || (data as T);
         });
     },
@@ -264,7 +302,7 @@ const createEntityClient = <T, TInsert, TUpdate>(tableName: string, select = '*'
             const query = fromTable(tableName).update(payload as Record<string, unknown>).eq('id', id).select(select);
             applySignal(query, opts?.signal);
             const { data, error } = await query;
-            if (error) throw new PlanterError(error.message, parseInt(error.code ?? '500'));
+            if (error) throw new PlanterError(error.message, error.code ?? '500');
             return (data as T[])?.[0] || (data as T);
         });
     },
@@ -273,7 +311,7 @@ const createEntityClient = <T, TInsert, TUpdate>(tableName: string, select = '*'
             const query = fromTable(tableName).delete().eq('id', id);
             applySignal(query, opts?.signal);
             const { error } = await query;
-            if (error) throw new PlanterError(error.message, parseInt(error.code ?? '500'));
+            if (error) throw new PlanterError(error.message, error.code ?? '500');
             return true;
         });
     },
@@ -291,7 +329,7 @@ const createEntityClient = <T, TInsert, TUpdate>(tableName: string, select = '*'
             });
 
             const { data, error } = await query;
-            if (error) throw new PlanterError(error.message, parseInt(error.code ?? '500'));
+            if (error) throw new PlanterError(error.message, error.code ?? '500');
             return (data as T[]) || [];
         });
     },
@@ -300,7 +338,7 @@ const createEntityClient = <T, TInsert, TUpdate>(tableName: string, select = '*'
             const query = fromTable(tableName).select(select).eq('creator', userId);
             applySignal(query, opts?.signal);
             const { data, error } = await query;
-            if (error) throw new PlanterError(error.message, parseInt(error.code ?? '500'));
+            if (error) throw new PlanterError(error.message, error.code ?? '500');
             return (data as T[]) || [];
         });
     },
@@ -313,7 +351,7 @@ const createEntityClient = <T, TInsert, TUpdate>(tableName: string, select = '*'
             }).select(select);
             if (options.signal) query = query.abortSignal(options.signal);
             const { data, error } = await query;
-            if (error) throw new PlanterError(error.message, parseInt(error.code ?? '500'));
+            if (error) throw new PlanterError(error.message, error.code ?? '500');
             return { data: data as T | T[], error: null };
         });
     }
@@ -369,7 +407,7 @@ export const planter: PlanterClient = {
                         .eq('origin', 'instance')
                         .order('created_at', { ascending: false });
 
-                    if (error) throw new PlanterError(error.message, parseInt(error.code ?? '500'));
+                    if (error) throw new PlanterError(error.message, error.code ?? '500');
                     return (data as Project[]) || [];
                 });
             },
@@ -415,7 +453,7 @@ export const planter: PlanterClient = {
                         .insert(taskPayload)
                         .select('*');
 
-                    if (error) throw new PlanterError(error.message, parseInt(error.code ?? '500'));
+                    if (error) throw new PlanterError(error.message, error.code ?? '500');
                     const project = Array.isArray(data) ? (data[0] as Project) : (data as unknown as Project);
 
                     if (!project?.id) {
@@ -447,7 +485,7 @@ export const planter: PlanterClient = {
                         .eq('id', projectId)
                         .maybeSingle();
 
-                    if (pErr) throw new PlanterError(pErr.message, parseInt(pErr.code ?? '500'));
+                    if (pErr) throw new PlanterError(pErr.message, pErr.code ?? '500');
                     const project = pData as Project;
                     if (!project) throw new Error('Project not found');
 
@@ -456,7 +494,7 @@ export const planter: PlanterClient = {
                         .select('id,root_id,is_complete')
                         .eq('root_id', projectId);
 
-                    if (cErr) throw new PlanterError(cErr.message, parseInt(cErr.code ?? '500'));
+                    if (cErr) throw new PlanterError(cErr.message, cErr.code ?? '500');
                     const children = (cData as Task[]) || [];
 
                     const totalTasks = children.length;
@@ -492,7 +530,7 @@ export const planter: PlanterClient = {
 
                     if (options?.signal) query = query.abortSignal(options.signal);
                     const { data, error } = await query;
-                    if (error) throw new PlanterError(error.message, parseInt(error.code ?? '500'));
+                    if (error) throw new PlanterError(error.message, error.code ?? '500');
                     return (data as Project[]) || [];
                 });
             },
@@ -507,7 +545,7 @@ export const planter: PlanterClient = {
                             .eq('project_members.user_id', userId)
                             .neq('creator', userId);
 
-                        if (error) throw new PlanterError(error.message, parseInt(error.code ?? '500'));
+                        if (error) throw new PlanterError(error.message, error.code ?? '500');
                         return (data as Project[]) || [];
                     } catch {
                         return [];
@@ -528,7 +566,7 @@ export const planter: PlanterClient = {
                     });
 
                     const { data, error } = await query;
-                    if (error) throw new PlanterError(error.message, parseInt(error.code ?? '500'));
+                    if (error) throw new PlanterError(error.message, error.code ?? '500');
                     return (data as Project[]) || [];
                 });
             },
@@ -538,7 +576,7 @@ export const planter: PlanterClient = {
                     .insert({ project_id: projectId, user_id: userId, role })
                     .select('*');
 
-                if (error) throw new PlanterError(error.message, parseInt(error.code ?? '500'));
+                if (error) throw new PlanterError(error.message, error.code ?? '500');
                 return { data: (data as TeamMemberRow[])?.[0], error: null };
             },
             addMemberByEmail: async (projectId: string, email: string, role: string): Promise<{ data: TeamMemberRow | undefined, error: Error | null }> => {
@@ -549,7 +587,7 @@ export const planter: PlanterClient = {
                         p_email: email,
                         p_role: role,
                     });
-                    if (error) throw new PlanterError(error.message, parseInt(error.code ?? '500'));
+                    if (error) throw new PlanterError(error.message, error.code ?? '500');
                     return { data: data as TeamMemberRow | undefined, error: null };
                 });
             },
@@ -740,10 +778,28 @@ export const planter: PlanterClient = {
                             // any settings the RPC populated.
                             if (existing) {
                                 const prevSettings = (existing.settings ?? {}) as Record<string, unknown>;
-                                const mergedSettings = {
+                                // Wave 36 Task 1: stamp the source template's current
+                                // template_version onto the instance root so admins can
+                                // spot clones stuck on older template iterations. Look
+                                // up the source template's version; gracefully skip if
+                                // the template row no longer exists.
+                                let templateVersionStamp: number | undefined;
+                                try {
+                                    const sourceTemplate = await planter.entities.Task.get(templateId);
+                                    if (sourceTemplate && typeof (sourceTemplate as Task & { template_version?: number }).template_version === 'number') {
+                                        templateVersionStamp = (sourceTemplate as Task & { template_version: number }).template_version;
+                                    }
+                                } catch (srcLookupErr) {
+                                    console.warn('[PlanterClient.clone] template_version lookup failed', srcLookupErr);
+                                }
+
+                                const mergedSettings: Record<string, unknown> = {
                                     ...prevSettings,
                                     spawnedFromTemplate: templateId,
                                 };
+                                if (templateVersionStamp !== undefined) {
+                                    mergedSettings.cloned_from_template_version = templateVersionStamp;
+                                }
                                 const updated = await planter.entities.Task.update(newRootId, {
                                     settings: mergedSettings as unknown as TaskUpdate['settings'],
                                 });
@@ -777,7 +833,7 @@ export const planter: PlanterClient = {
                         .neq('id', taskId)
                         .order('position', { ascending: true });
 
-                    if (error) throw new PlanterError(error.message, parseInt(error.code ?? '500'));
+                    if (error) throw new PlanterError(error.message, error.code ?? '500');
                     return (data as Task[]) || [];
                 });
             }
@@ -816,7 +872,7 @@ export const planter: PlanterClient = {
                     if (signal) query = query.abortSignal(signal);
 
                     const { data, error } = await query;
-                    if (error) throw new PlanterError(error.message, parseInt(error.code ?? '500'));
+                    if (error) throw new PlanterError(error.message, error.code ?? '500');
                     return { data: (data as Task[]) || [], error: null };
                 });
             },
@@ -846,7 +902,7 @@ export const planter: PlanterClient = {
                     if (signal) q = q.abortSignal(signal);
 
                     const { data, error } = await q;
-                    if (error) throw new PlanterError(error.message, parseInt(error.code ?? '500'));
+                    if (error) throw new PlanterError(error.message, error.code ?? '500');
                     return { data: (data as Task[]) || [], error: null };
                 });
             },
@@ -864,30 +920,74 @@ export const planter: PlanterClient = {
                     query = query.order('created_at', { ascending: false });
 
                     const { data, error } = await query;
-                    if (error) throw new PlanterError(error.message, parseInt(error.code ?? '500'));
+                    if (error) throw new PlanterError(error.message, error.code ?? '500');
                     return (data as Task[]) || [];
                 });
             }
         },
-        TaskResource: {
-            ...createEntityClient<TaskResourceRow, Database['public']['Tables']['task_resources']['Insert'], Database['public']['Tables']['task_resources']['Update']>('task_resources'),
-            setPrimary: async (taskId: string, resourceId: string | null) => {
-                await planter.entities.Task.update(taskId, { primary_resource_id: resourceId } as TaskUpdate);
-            },
-            listByProject: async (projectId: string, opts?: { signal?: AbortSignal }): Promise<ResourceWithTask[]> => {
-                return retry(async () => {
-                    let query = supabase
-                        .from('task_resources')
-                        .select('*, task:tasks!inner(id, title, root_id)')
-                        .eq('tasks.root_id', projectId)
-                        .order('created_at', { ascending: false });
-                    if (opts?.signal) query = query.abortSignal(opts.signal);
-                    const { data, error } = await query;
-                    if (error) throw new PlanterError(error.message, parseInt(error.code ?? '500'));
-                    return (data as ResourceWithTask[]) || [];
-                });
-            },
-        },
+        TaskResource: (() => {
+            const base = createEntityClient<TaskResourceRow, Database['public']['Tables']['task_resources']['Insert'], Database['public']['Tables']['task_resources']['Update']>('task_resources');
+            // Server-boundary companion to the render-time `safeUrl` guard:
+            // reject `javascript:` / `data:` / `vbscript:` / etc. schemes at the
+            // create/update boundary so a stored XSS payload can't reach the
+            // database. Authorization itself (who may INSERT / UPDATE which
+            // row) is enforced by RLS on `task_resources` — this wrapper is
+            // scheme validation only. Accepts http / https / mailto / tel
+            // plus relative paths resolved against the shared placeholder
+            // base in `safe-url.ts` (mirrors render-time resolution).
+            const throwUnsafe = (reason: string) => new PlanterError(reason, 400);
+            return {
+                ...base,
+                /**
+                 * Validates `resource_url` scheme then delegates to `base.create`.
+                 * Authorization: RLS-scoped (project owner / editor).
+                 */
+                create: async (payload: Database['public']['Tables']['task_resources']['Insert'] | Database['public']['Tables']['task_resources']['Insert'][], options?: { signal?: AbortSignal }) => {
+                    const rows = Array.isArray(payload) ? payload : [payload];
+                    for (const row of rows) {
+                        assertSafeUrl((row as { resource_url?: unknown }).resource_url, throwUnsafe);
+                    }
+                    return base.create(payload, options);
+                },
+                /**
+                 * Validates `resource_url` scheme then delegates to `base.update`.
+                 * Authorization: RLS-scoped (project owner / editor).
+                 */
+                update: async (id: string, payload: Database['public']['Tables']['task_resources']['Update'], options?: { signal?: AbortSignal }) => {
+                    assertSafeUrl((payload as { resource_url?: unknown }).resource_url, throwUnsafe);
+                    return base.update(id, payload, options);
+                },
+                /**
+                 * Validates `resource_url` scheme on every row then delegates to
+                 * `base.upsert`. Closes the write path that would otherwise bypass
+                 * the scheme allowlist via the inherited `createEntityClient` method.
+                 * Authorization: RLS-scoped (project owner / editor).
+                 */
+                upsert: async (payload: Database['public']['Tables']['task_resources']['Insert'] | Database['public']['Tables']['task_resources']['Insert'][], options?: { onConflict?: string; ignoreDuplicates?: boolean; signal?: AbortSignal }) => {
+                    const rows = Array.isArray(payload) ? payload : [payload];
+                    for (const row of rows) {
+                        assertSafeUrl((row as { resource_url?: unknown }).resource_url, throwUnsafe);
+                    }
+                    return base.upsert(payload, options);
+                },
+                setPrimary: async (taskId: string, resourceId: string | null) => {
+                    await planter.entities.Task.update(taskId, { primary_resource_id: resourceId } as TaskUpdate);
+                },
+                listByProject: async (projectId: string, opts?: { signal?: AbortSignal }): Promise<ResourceWithTask[]> => {
+                    return retry(async () => {
+                        let query = supabase
+                            .from('task_resources')
+                            .select('*, task:tasks!inner(id, title, root_id)')
+                            .eq('tasks.root_id', projectId)
+                            .order('created_at', { ascending: false });
+                        if (opts?.signal) query = query.abortSignal(opts.signal);
+                        const { data, error } = await query;
+                        if (error) throw new PlanterError(error.message, error.code ?? '500');
+                        return (data as ResourceWithTask[]) || [];
+                    });
+                },
+            };
+        })(),
         TeamMember: createEntityClient<TeamMemberRow, Database['public']['Tables']['project_members']['Insert'], Database['public']['Tables']['project_members']['Update']>('project_members'),
         Person: createEntityClient<PersonRow, Database['public']['Tables']['people']['Insert'], Database['public']['Tables']['people']['Update']>('people'),
 
@@ -909,7 +1009,7 @@ export const planter: PlanterClient = {
                         .select('*, author:users(id, email, user_metadata)')
                         .eq('task_id', taskId)
                         .order('created_at', { ascending: true });
-                    if (error) throw new PlanterError(error.message, parseInt(error.code ?? '500'));
+                    if (error) throw new PlanterError(error.message, error.code ?? '500');
                     return ((data as unknown) as TaskCommentWithAuthor[]) || [];
                 });
             },
@@ -927,7 +1027,7 @@ export const planter: PlanterClient = {
                         .insert(insert)
                         .select('*, author:users(id, email, user_metadata)')
                         .single();
-                    if (error) throw new PlanterError(error.message, parseInt(error.code ?? '500'));
+                    if (error) throw new PlanterError(error.message, error.code ?? '500');
                     return (data as unknown) as TaskCommentWithAuthor;
                 });
             },
@@ -944,7 +1044,7 @@ export const planter: PlanterClient = {
                         .eq('id', commentId)
                         .select('*')
                         .single();
-                    if (error) throw new PlanterError(error.message, parseInt(error.code ?? '500'));
+                    if (error) throw new PlanterError(error.message, error.code ?? '500');
                     return data as TaskCommentRow;
                 });
             },
@@ -960,7 +1060,7 @@ export const planter: PlanterClient = {
                         .eq('id', commentId)
                         .select('*')
                         .single();
-                    if (error) throw new PlanterError(error.message, parseInt(error.code ?? '500'));
+                    if (error) throw new PlanterError(error.message, error.code ?? '500');
                     return data as TaskCommentRow;
                 });
             },
@@ -995,7 +1095,7 @@ export const planter: PlanterClient = {
                         }).in('entity_type', opts.entityTypes);
                     }
                     const { data, error } = await query;
-                    if (error) throw new PlanterError(error.message, parseInt(error.code ?? '500'));
+                    if (error) throw new PlanterError(error.message, error.code ?? '500');
                     return ((data as unknown) as ActivityLogWithActor[]) || [];
                 });
             },
@@ -1012,7 +1112,7 @@ export const planter: PlanterClient = {
                         .eq('entity_id', entityId)
                         .order('created_at', { ascending: false })
                         .limit(opts?.limit ?? 20);
-                    if (error) throw new PlanterError(error.message, parseInt(error.code ?? '500'));
+                    if (error) throw new PlanterError(error.message, error.code ?? '500');
                     return ((data as unknown) as ActivityLogWithActor[]) || [];
                 });
             },
@@ -1029,7 +1129,7 @@ export const planter: PlanterClient = {
                         .insert(payload)
                         .select('*')
                         .single();
-                    if (error) throw new PlanterError(error.message, parseInt(error.code ?? '500'));
+                    if (error) throw new PlanterError(error.message, error.code ?? '500');
                     return data as PushSubscriptionRow;
                 });
             },
@@ -1039,7 +1139,7 @@ export const planter: PlanterClient = {
                         .from('push_subscriptions')
                         .select('*')
                         .order('created_at', { ascending: false });
-                    if (error) throw new PlanterError(error.message, parseInt(error.code ?? '500'));
+                    if (error) throw new PlanterError(error.message, error.code ?? '500');
                     return (data as PushSubscriptionRow[]) || [];
                 });
             },
@@ -1049,7 +1149,7 @@ export const planter: PlanterClient = {
                         .from('push_subscriptions')
                         .delete()
                         .eq('endpoint', endpoint);
-                    if (error) throw new PlanterError(error.message, parseInt(error.code ?? '500'));
+                    if (error) throw new PlanterError(error.message, error.code ?? '500');
                 });
             },
         } satisfies PushSubscriptionEntityClient,
@@ -1064,7 +1164,7 @@ export const planter: PlanterClient = {
             try {
                 // @ts-expect-error Supabase rpc typing is tightly coupled to Database generics — params are validated at runtime
                 const { data, error } = await supabase.rpc(functionName, params);
-                if (error) throw new PlanterError(error.message, parseInt(error.code ?? '500'));
+                if (error) throw new PlanterError(error.message, error.code ?? '500');
                 return { data: data as T, error: null };
             } catch (error: unknown) {
                 if (error instanceof PlanterError) throw error;
@@ -1118,7 +1218,7 @@ export const planter: PlanterClient = {
                     .select('*')
                     .limit(1)
                     .maybeSingle();
-                if (error) throw new PlanterError(error.message, parseInt(error.code ?? '500'));
+                if (error) throw new PlanterError(error.message, error.code ?? '500');
                 if (!data) {
                     throw new PlanterError('notification_preferences row missing for caller', 404);
                 }
@@ -1132,7 +1232,7 @@ export const planter: PlanterClient = {
                     .update(patch)
                     .select('*')
                     .single();
-                if (error) throw new PlanterError(error.message, parseInt(error.code ?? '500'));
+                if (error) throw new PlanterError(error.message, error.code ?? '500');
                 return data as NotificationPreferencesRow;
             });
         },
@@ -1146,8 +1246,187 @@ export const planter: PlanterClient = {
                 if (opts?.before) query = query.lt('sent_at', opts.before);
                 if (opts?.eventType) query = query.eq('event_type', opts.eventType);
                 const { data, error } = await query;
-                if (error) throw new PlanterError(error.message, parseInt(error.code ?? '500'));
+                if (error) throw new PlanterError(error.message, error.code ?? '500');
                 return (data as NotificationLogRow[]) || [];
+            });
+        },
+    },
+    admin: {
+        /**
+         * Wave 34 — fuzzy search across `auth.users` (email / full_name).
+         * Gated server-side by `public.is_admin(auth.uid())`; non-admin callers
+         * raise `unauthorized`. Debounce at the call site (min 2 chars / 200ms).
+         *
+         * @param query  Free-text fragment; `%` and `_` are escaped server-side.
+         * @param limit  Max rows to return (clamped to 1..100 by the RPC).
+         * @returns Up to `limit` `AdminUserSearchRow` rows, newest-signed-in first.
+         */
+        searchUsers: async (query: string, limit?: number): Promise<AdminUserSearchRow[]> => {
+            const { data, error } = await planter.rpc<AdminUserSearchRow[]>('admin_search_users', {
+                p_query: query,
+                p_max_results: limit ?? 20,
+            });
+            if (error) throw error;
+            return data ?? [];
+        },
+        /**
+         * Wave 34 — single-user drill-down. Profile + project memberships +
+         * task counts (assigned / completed-30d / overdue). Gated by
+         * `public.is_admin(auth.uid())`.
+         *
+         * @param uid `auth.users.id` of the user to inspect.
+         * @returns `AdminUserDetail` or `null` if the uid doesn't exist.
+         */
+        userDetail: async (uid: string): Promise<AdminUserDetail | null> => {
+            const { data, error } = await planter.rpc<AdminUserDetail | null>('admin_user_detail', {
+                p_uid: uid,
+            });
+            if (error) throw error;
+            return data ?? null;
+        },
+        /**
+         * Wave 34 — cross-project activity feed joined with `auth.users` on
+         * actor_id for email hydration. Backs the `/admin` home surface.
+         * Gated by `public.is_admin(auth.uid())`.
+         *
+         * @param limit Max rows (clamped to 1..200).
+         * @returns Newest `AdminActivityRow[]` first.
+         */
+        recentActivity: async (limit?: number): Promise<AdminActivityRow[]> => {
+            const { data, error } = await planter.rpc<AdminActivityRow[]>('admin_recent_activity', {
+                p_limit: limit ?? 50,
+            });
+            if (error) throw error;
+            return data ?? [];
+        },
+        /**
+         * Wave 34 — paginated user list with server-side filtering.
+         * Gated by `public.is_admin(auth.uid())`.
+         *
+         * @param filter `{ role?, lastLogin?, hasOverdue?, search? }`. `search`
+         *   is LIKE-escaped server-side; unknown keys are ignored.
+         * @param limit  Rows per page (clamped to 1..200; default 50).
+         * @param offset Rows to skip (default 0).
+         * @returns `AdminListUserRow[]` ordered by last_sign_in_at DESC.
+         */
+        listUsers: async (
+            filter: AdminListUsersFilter,
+            limit?: number,
+            offset?: number,
+        ): Promise<AdminListUserRow[]> => {
+            const { data, error } = await planter.rpc<AdminListUserRow[]>('admin_list_users', {
+                filter,
+                p_limit: limit ?? 50,
+                p_offset: offset ?? 0,
+            });
+            if (error) throw error;
+            return data ?? [];
+        },
+        /**
+         * Wave 34 — single-RPC dashboard payload (totals + time series +
+         * breakdowns + top-10 lists). Cached at the hook layer with a
+         * 5-minute staleTime. Gated by `public.is_admin(auth.uid())`.
+         *
+         * @returns `AdminAnalyticsSnapshot` with every chart's data, or
+         *   `null` if the server returns an empty snapshot.
+         */
+        analyticsSnapshot: async (): Promise<AdminAnalyticsSnapshot | null> => {
+            const { data, error } = await planter.rpc<AdminAnalyticsSnapshot | null>(
+                'admin_analytics_snapshot',
+                {},
+            );
+            if (error) throw error;
+            return data ?? null;
+        },
+    },
+    integrations: {
+        /**
+         * Wave 35 — list the caller's ICS calendar feed tokens (active +
+         * revoked), newest first. RLS auto-filters to `user_id = auth.uid()`.
+         *
+         * @returns Array of `IcsFeedTokenRow`, possibly empty.
+         */
+        listIcsFeedTokens: async (): Promise<IcsFeedTokenRow[]> => {
+            return retry(async () => {
+                const { data: { user }, error: authError } = await supabase.auth.getUser();
+                if (authError) throw new PlanterError(authError.message, 401);
+                if (!user) throw new PlanterError('Not authenticated', 401);
+                const { data, error } = await supabase
+                    .from('ics_feed_tokens')
+                    .select('*')
+                    .eq('user_id', user.id)
+                    .order('created_at', { ascending: false });
+                if (error) throw new PlanterError(error.message, error.code ?? '500');
+                return (data as IcsFeedTokenRow[]) ?? [];
+            });
+        },
+        /**
+         * Wave 35 — create a new ICS feed token for the caller. Generates
+         * 256 bits of randomness via the Web Crypto API (`crypto.getRandomValues`).
+         * No non-cryptographic fallback — we throw if secure random is
+         * unavailable rather than ship a predictable credential.
+         *
+         * @param input `{ label?, project_filter? }`. `project_filter` narrows
+         *   the feed to tasks whose `root_id IN (...)`; null for all projects.
+         * @returns The inserted row, including the plaintext token (the only
+         *   time the token is returned to the client; subsequent reads see
+         *   it masked by convention — clients should persist/display only once).
+         */
+        createIcsFeedToken: async (input: CreateIcsFeedTokenInput): Promise<IcsFeedTokenRow> => {
+            return retry(async () => {
+                const { data: { user }, error: authError } = await supabase.auth.getUser();
+                if (authError) throw new PlanterError(authError.message, 401);
+                if (!user) throw new PlanterError('Not authenticated', 401);
+
+                // Generate the opaque token client-side using the Web Crypto API —
+                // 256 bits (32 bytes → 64 hex chars). The token IS the credential
+                // for the public /functions/v1/ics-feed endpoint, so there is NO
+                // non-cryptographic fallback: if the runtime cannot produce secure
+                // random bytes, we throw rather than ship a predictable token.
+                if (typeof crypto === 'undefined' || typeof crypto.getRandomValues !== 'function') {
+                    throw new PlanterError(
+                        'Secure random source unavailable; cannot generate ICS feed token.',
+                        500,
+                    );
+                }
+                const tokenBytes = new Uint8Array(32);
+                crypto.getRandomValues(tokenBytes);
+                const token = Array.from(tokenBytes, (b) => b.toString(16).padStart(2, '0')).join('');
+
+                const payload = {
+                    user_id: user.id,
+                    token,
+                    label: input.label ?? null,
+                    project_filter: input.project_filter ?? null,
+                };
+
+                const { data, error } = await supabase
+                    .from('ics_feed_tokens')
+                    .insert(payload)
+                    .select('*')
+                    .single();
+                if (error) throw new PlanterError(error.message, error.code ?? '500');
+                return data as IcsFeedTokenRow;
+            });
+        },
+        /**
+         * Wave 35 — soft-revoke an ICS feed token by stamping `revoked_at`.
+         * The row stays visible for audit trail (last_accessed_at remains
+         * queryable). Subsequent fetches against the token's URL return 404.
+         *
+         * @param id Primary key of the token row to revoke.
+         * @returns The updated row (with `revoked_at` set).
+         */
+        revokeIcsFeedToken: async (id: string): Promise<IcsFeedTokenRow> => {
+            return retry(async () => {
+                const { data, error } = await supabase
+                    .from('ics_feed_tokens')
+                    .update({ revoked_at: nowUtcIso() })
+                    .eq('id', id)
+                    .select('*')
+                    .single();
+                if (error) throw new PlanterError(error.message, error.code ?? '500');
+                return data as IcsFeedTokenRow;
             });
         },
     },

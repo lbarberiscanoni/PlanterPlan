@@ -221,6 +221,9 @@ Given('the user has no tasks due today', async () => {
 });
 
 When('the user navigates to the daily tasks page', async ({ page }) => {
+  // Wave 33: /daily was merged into /tasks — the route now redirects. Keep
+  // the step semantically pointing to the old URL so existing scenarios
+  // exercise the redirect path too.
   await page.goto('/daily');
   await page.waitForLoadState('networkidle');
 });

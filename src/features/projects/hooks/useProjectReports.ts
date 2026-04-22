@@ -1,6 +1,11 @@
 import { useMemo } from 'react';
 import { TASK_STATUS } from '@/shared/constants';
 import { CheckCircle2, Clock, AlertTriangle, Circle } from 'lucide-react';
+import {
+ dateStringToMonthKey,
+ dateStringToUtcMidnight,
+ toMonthKey,
+} from '@/shared/lib/date-engine';
 import type { TaskRow } from '@/shared/db/app.types';
 
 export interface UseProjectReportsOptions {
@@ -9,30 +14,6 @@ export interface UseProjectReportsOptions {
  /** Reference time (testable clock). Defaults to `new Date()`. */
  now?: Date;
 }
-
-const toMonthKey = (d: Date): string => {
- const year = d.getUTCFullYear();
- const month = String(d.getUTCMonth() + 1).padStart(2, '0');
- return `${year}-${month}`;
-};
-
-const dateStringToMonthKey = (raw: string | null | undefined): string | null => {
- if (!raw) return null;
- // Accepts "YYYY-MM-DD" and "YYYY-MM-DDTHH:mm:ssZ".
- if (/^\d{4}-\d{2}/.test(raw)) return raw.slice(0, 7);
- const d = new Date(raw);
- if (isNaN(d.getTime())) return null;
- return toMonthKey(d);
-};
-
-const dateStringToUtcMidnight = (raw: string | null | undefined): number | null => {
- if (!raw) return null;
- const iso = /^\d{4}-\d{2}-\d{2}$/.test(raw) ? `${raw}T00:00:00.000Z` : raw;
- const d = new Date(iso);
- if (isNaN(d.getTime())) return null;
- d.setUTCHours(0, 0, 0, 0);
- return d.getTime();
-};
 
 export function useProjectReports(
  tasks: TaskRow[],

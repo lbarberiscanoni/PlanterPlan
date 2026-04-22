@@ -92,7 +92,7 @@ Every wave plan's Session Context declares a starting test baseline (`Wave N-1 s
 ### 3.4 Test types this protocol covers
 
 - **Unit tests** (`Testing/unit/**`) — every wave's primary gate. `npm test`.
-- **E2E scenarios** (`Testing/e2e/**`) — required only for waves that touch the personas, the seed script, or the global setup (Wave 33 admin persona, Wave 35 plan upgrade, Wave 38 final). For other waves, E2E is informational; Wave 38 catches deferred E2E coverage.
+- **E2E scenarios** (`Testing/e2e/**`) — required only for waves that touch the personas, the seed script, or the global setup (Wave 34 admin persona; Wave 33 `/daily` → `/tasks` redirect smoke). For other waves, E2E is informational.
 - **Manual smoke tests** documented in each wave plan — these are not optional. Walk them. If a smoke fails, HALT.
 
 ### 3.5 What test-failure HALT looks like in practice
@@ -213,14 +213,7 @@ If `Testing/e2e/global-setup.ts` fails to log in a persona:
 - HALT (per the global-setup graceful-failure pattern, the persona's `.auth.json` will be empty).
 - Surface the failure. Don't proceed with E2E using a broken persona — every test using that persona will spuriously fail.
 
-### 8.5 Workbox / service worker drift (Wave 32+)
-
-If `npm run build` produces a worker that doesn't match the expected manifest, or the install/activate handlers are missing:
-
-- HALT.
-- Wave 32 subsumes Wave 30's `public/sw.js` — verify the deletion was performed AND `src/sw.ts` exists with the push handler intact.
-
-### 8.6 Cron schedule confusion (Wave 30, 35, 36)
+### 8.5 Cron schedule confusion (Wave 30)
 
 Multiple waves add cron-driven edge functions. **`pg_cron` is intentionally NOT enabled.** If a wave plan's smoke test instructs you to "schedule via pg_cron," that's a planning error — `docs/operations/edge-function-schedules.md` is the source of truth. Use Supabase Scheduled Triggers OR an external scheduler. Surface any pg_cron mention to the user.
 

@@ -85,9 +85,9 @@ const ProjectSidebar = ({
  icon={<LayoutDashboard className="w-5 h-5" />}
  />
  <GlobalNavItem
- label="Daily Tasks"
- isActive={location.pathname === '/daily'}
- onClick={() => handleGlobalNav('/daily')}
+ label="My Tasks"
+ isActive={location.pathname === '/tasks'}
+ onClick={() => handleGlobalNav('/tasks')}
  icon={<Calendar className="w-5 h-5" />}
  />
  <GlobalNavItem

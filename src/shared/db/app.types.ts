@@ -200,3 +200,103 @@ export interface TaskSettings {
 export type RecurrenceRule =
     | { kind: 'weekly'; weekday: 0 | 1 | 2 | 3 | 4 | 5 | 6; targetProjectId: string }
     | { kind: 'monthly'; dayOfMonth: number; targetProjectId: string };
+
+// ----------------------------------------------------------------------------
+// Admin (Wave 34)
+// ----------------------------------------------------------------------------
+
+/** Row returned by `public.admin_search_users`. */
+export interface AdminUserSearchRow {
+    id: string;
+    email: string;
+    display_name: string;
+    last_sign_in_at: string | null;
+    project_count: number;
+}
+
+/** Shape returned by `public.admin_user_detail(uid)`. */
+export interface AdminUserDetail {
+    profile: {
+        id: string;
+        email: string;
+        display_name: string;
+        last_sign_in_at: string | null;
+        created_at: string;
+        is_admin: boolean;
+    };
+    projects: Array<{ project_id: string; role: string; project_title: string | null }>;
+    task_counts: { assigned: number; completed: number; overdue: number };
+}
+
+/** Row returned by `public.admin_recent_activity`. */
+export interface AdminActivityRow {
+    id: string;
+    project_id: string | null;
+    actor_id: string | null;
+    actor_email: string | null;
+    entity_type: string;
+    entity_id: string | null;
+    action: string;
+    payload: unknown;
+    created_at: string;
+}
+
+/**
+ * Row returned by `public.admin_list_users` (Wave 34 Task 2). The RPC pushes
+ * filters server-side so the UI doesn't carry millions of rows.
+ */
+export interface AdminListUserRow {
+    id: string;
+    email: string;
+    display_name: string;
+    last_sign_in_at: string | null;
+    is_admin: boolean;
+    active_project_count: number;
+    completed_tasks_30d: number;
+    overdue_task_count: number;
+}
+
+/** Filter shape for `admin_list_users`. */
+export interface AdminListUsersFilter {
+    role?: 'all' | 'admin' | 'standard';
+    lastLogin?: 'all' | 'last_7' | 'last_30' | 'inactive';
+    hasOverdue?: boolean;
+    search?: string;
+}
+
+/** Shape returned by `public.admin_analytics_snapshot()` (Wave 34 Task 3). */
+export interface AdminAnalyticsSnapshot {
+    totals: {
+        users: number;
+        projects: number;
+        active_projects_30d: number;
+        new_users_30d: number;
+    };
+    new_projects_per_week: Array<{ week_start: string; count: number }>;
+    project_kind_breakdown: Array<{ kind: 'date' | 'checkpoint'; count: number }>;
+    task_status_breakdown: Array<{ status: string; count: number }>;
+    most_active_users: Array<{ user_id: string; email: string; display_name: string; tasks_created_30d: number }>;
+    most_popular_templates: Array<{ template_id: string; title: string; clone_count: number }>;
+}
+
+// ----------------------------------------------------------------------------
+// Integrations (Wave 35) — ICS feed tokens
+// ----------------------------------------------------------------------------
+
+/** Row in `public.ics_feed_tokens`. */
+export interface IcsFeedTokenRow {
+    id: string;
+    user_id: string;
+    token: string;
+    label: string | null;
+    project_filter: string[] | null;
+    created_at: string;
+    revoked_at: string | null;
+    last_accessed_at: string | null;
+}
+
+/** Payload for creating a new ICS token. The client generates the token value via crypto.randomUUID(). */
+export interface CreateIcsFeedTokenInput {
+    label?: string | null;
+    project_filter?: string[] | null;
+}

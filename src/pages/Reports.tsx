@@ -8,6 +8,7 @@ import { Card } from '@/shared/ui/card';
 import { Progress } from '@/shared/ui/progress';
 import { ArrowLeft, Loader2, BarChart, TrendingUp, CheckCircle2, AlertTriangle, Clock } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { toMonthKey } from '@/shared/lib/date-engine';
 import { useAuth } from '@/shared/contexts/AuthContext';
 import {
     Select,
@@ -59,11 +60,7 @@ export default function Reports() {
     const phases = allTasks.filter((t) => t.parent_task_id === projectId);
     const tasks = allTasks.filter((t) => t.parent_task_id !== projectId);
 
-    const defaultMonthKey = () => {
-        const d = new Date();
-        return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
-    };
-    const [selectedMonth, setSelectedMonth] = useState<string>(defaultMonthKey);
+    const [selectedMonth, setSelectedMonth] = useState<string>(() => toMonthKey(new Date()));
 
     const {
         statsConfig,
@@ -93,7 +90,7 @@ export default function Reports() {
                 <div className="bg-white border-b border-slate-200 shadow-sm">
                     <div className="max-w-6xl mx-auto px-4 py-8">
                         <div className="flex items-center gap-4">
-                            <Link to={`/Project?id=${projectId}`}>
+                            <Link to={`/Project/${projectId}`}>
                                 <Button variant="ghost" size="icon" className="rounded-full hover:bg-slate-100">
                                     <ArrowLeft className="w-5 h-5" />
                                 </Button>
@@ -228,7 +225,7 @@ export default function Reports() {
                                             <input
                                                 type="month"
                                                 value={selectedMonth}
-                                                onChange={(e) => setSelectedMonth(e.target.value || defaultMonthKey())}
+                                                onChange={(e) => setSelectedMonth(e.target.value || toMonthKey(new Date()))}
                                                 className="px-2 py-1 rounded-md border border-border bg-card text-sm"
                                                 aria-label={t('projects.reports.month_aria')}
                                             />
@@ -242,7 +239,7 @@ export default function Reports() {
                                             emptyText={t('projects.reports.none_completed')}
                                             noDueDateLabel={t('projects.reports.no_due_date')}
                                             items={completedThisMonth}
-                                            onItemClick={() => navigate(`/Project?id=${projectId}`)}
+                                            onItemClick={() => navigate(`/Project/${projectId}`)}
                                         />
                                         <MilestoneList
                                             heading={t('projects.reports.overdue_heading')}
@@ -251,7 +248,7 @@ export default function Reports() {
                                             emptyText={t('projects.reports.none_overdue')}
                                             noDueDateLabel={t('projects.reports.no_due_date')}
                                             items={overdueMilestones}
-                                            onItemClick={() => navigate(`/Project?id=${projectId}`)}
+                                            onItemClick={() => navigate(`/Project/${projectId}`)}
                                         />
                                         <MilestoneList
                                             heading={t('projects.reports.upcoming_this_month')}
@@ -260,7 +257,7 @@ export default function Reports() {
                                             emptyText={t('projects.reports.none_upcoming')}
                                             noDueDateLabel={t('projects.reports.no_due_date')}
                                             items={upcomingThisMonth}
-                                            onItemClick={() => navigate(`/Project?id=${projectId}`)}
+                                            onItemClick={() => navigate(`/Project/${projectId}`)}
                                         />
                                     </div>
                                 </div>
@@ -278,7 +275,7 @@ export default function Reports() {
                                         {phaseData.map((phase) => (
                                             <div
                                                 key={phase.id}
-                                                onClick={() => navigate(`/Project?id=${projectId}`)}
+                                                onClick={() => navigate(`/Project/${projectId}`)}
                                                 className="p-4 rounded-xl border border-border cursor-pointer hover:border-orange-200 hover:bg-accent transition-all duration-300"
                                             >
                                                 <div className="flex items-center gap-4 mb-3">

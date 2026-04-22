@@ -57,6 +57,13 @@ interface TaskDetailsViewProps {
     onTaskUpdated?: () => void;
     canEdit?: boolean;
     allProjectTasks?: TaskItemData[];
+    /**
+     * Wave 36 Task 2: used by the delete-guard modal. When the task has
+     * `cloned_from_task_id IS NOT NULL` and `membershipRole !== 'owner'`,
+     * the modal blocks the delete with a "only the project owner can
+     * delete template-origin tasks" message.
+     */
+    membershipRole?: string;
     [key: string]: unknown;
 }
 
@@ -66,12 +73,19 @@ const TaskDetailsView = ({
     onDeleteTask,
     onTaskUpdated,
     canEdit = true,
+    membershipRole,
     ...props
 }: TaskDetailsViewProps) => {
     const { user, savedEmailAddresses, rememberEmailAddress } = useAuth();
     const { data: siblings = [] } = useTaskSiblings(task?.id, task?.parent_task_id);
     const [emailOpen, setEmailOpen] = useState(false);
     const [strategyDialogOpen, setStrategyDialogOpen] = useState(false);
+    // Wave 36 Task 2: delete-guard modal state for template-origin tasks.
+    const [deleteGuardOpen, setDeleteGuardOpen] = useState(false);
+    const isTemplateOrigin = Boolean(
+        (task as (TaskItemData & { cloned_from_task_id?: string | null }) | null)?.cloned_from_task_id,
+    );
+    const isProjectOwner = membershipRole === 'owner';
 
     // Edge-trigger the Strategy Template follow-up dialog: fires exactly once
     // per transition into `completed`, regardless of how many re-renders happen
@@ -423,7 +437,17 @@ const TaskDetailsView = ({
                 {onDeleteTask && canEdit && (
                     <button
                         type="button"
-                        onClick={() => onDeleteTask(task)}
+                        onClick={() => {
+                            // Wave 36 Task 2: template-origin guard. Non-owners
+                            // see a modal before deleting cloned-from-template
+                            // rows. Owners bypass the modal.
+                            if (isTemplateOrigin && !isProjectOwner) {
+                                setDeleteGuardOpen(true);
+                                return;
+                            }
+                            onDeleteTask(task);
+                        }}
+                        data-testid="delete-task-btn"
                         className="flex-1 py-3 px-4 bg-card border border-rose-200 text-rose-600 rounded-lg shadow-sm hover:bg-rose-50 hover:shadow-md transition-all font-medium text-sm"
                     >
                         Delete Task
@@ -490,6 +514,28 @@ const TaskDetailsView = ({
                             </Button>
                         </DialogFooter>
                     </form>
+                </DialogContent>
+            </Dialog>
+
+            {/* Wave 36 Task 2: template-origin delete guard. */}
+            <Dialog open={deleteGuardOpen} onOpenChange={setDeleteGuardOpen}>
+                <DialogContent data-testid="template-origin-delete-guard">
+                    <DialogHeader>
+                        <DialogTitle>Cannot delete template task</DialogTitle>
+                        <DialogDescription>
+                            This task originated from the project template. Only the project owner
+                            can delete template-origin tasks.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter>
+                        <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => setDeleteGuardOpen(false)}
+                        >
+                            OK
+                        </Button>
+                    </DialogFooter>
                 </DialogContent>
             </Dialog>
 

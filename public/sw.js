@@ -1,8 +1,8 @@
 /**
  * PlanterPlan service worker — push notification handler.
  *
- * EXCEPTION: this is the only non-TypeScript file in src/. Wave 32 will
- * subsume it with a workbox-built TS worker (`src/sw.ts`) and DELETE this file.
+ * EXCEPTION: this is the only non-TypeScript file in src/. TS conversion is
+ * not currently scheduled (the former Wave 32 PWA/workbox track was descoped).
  * Tracked in docs/dev-notes.md.
  */
 self.addEventListener('install', () => self.skipWaiting());

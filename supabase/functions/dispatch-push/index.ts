@@ -1,14 +1,17 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import webPush from 'https://esm.sh/web-push@3.6.7'
 import { dispatchToUsers, type DispatchBody, type PushSubRow, type SendResult } from './dispatch.ts'
-
-const corsHeaders = {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
+import { corsHeaders, requireServiceRole } from '../_shared/auth.ts'
 
 Deno.serve(async (req) => {
     if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
+
+    // Security: dispatch-push delivers Web Push notifications signed by
+    // the app's VAPID subject. Attacker-controlled title / body / url on
+    // an unauthenticated callable would be a perfect phishing vector.
+    // Require the service-role bearer so only internal callers reach this.
+    const authFail = requireServiceRole(req)
+    if (authFail) return authFail
 
     try {
         const body = (await req.json()) as DispatchBody
@@ -28,16 +31,12 @@ Deno.serve(async (req) => {
         const publicKey = Deno.env.get('VITE_VAPID_PUBLIC_KEY')
         const subject = Deno.env.get('VAPID_SUBJECT')
         if (!privateKey || !publicKey || !subject) {
-            console.warn('[dispatch-push] VAPID env missing; short-circuiting to log-only')
-            for (const uid of body.user_ids) {
-                await supabase.from('notification_log').insert({
-                    user_id: uid,
-                    channel: 'push',
-                    event_type: body.event_type,
-                    payload: { title: body.title },
-                    error: 'vapid_unconfigured',
-                })
-            }
+            // Don't write per-user notification_log rows here — the caller
+            // (dispatch-notifications) already logs terminal state per user
+            // via its state machine (`mention_failed` branch when neither
+            // push nor email succeeded). Writing rows here too produced
+            // O(N²) log growth on any VAPID-missing environment.
+            console.warn('[dispatch-push] VAPID env missing; short-circuiting to caller')
             return new Response(JSON.stringify({ success: false, error: 'vapid_unconfigured' }), {
                 headers: { ...corsHeaders, 'Content-Type': 'application/json' },
                 status: 200,

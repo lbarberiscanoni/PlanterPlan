@@ -66,6 +66,18 @@ serve(async (req) => {
       throw new Error('Forbidden: Insufficient permissions to invite users.');
     }
 
+    // Security hardening: mirror the privilege-escalation gate in the SQL
+    // `invite_user_to_project` RPC. Without this, an editor could POST
+    // {role: 'owner'} and self-promote — the `allowedRoles` check above only
+    // verifies the caller CAN invite, not what role they can assign.
+    const ASSIGNABLE_ROLES = ['owner', 'editor', 'coach', 'viewer', 'limited'];
+    if (role && !ASSIGNABLE_ROLES.includes(role)) {
+      throw new Error('Forbidden: invalid role.');
+    }
+    if (memberData.role === 'editor' && role === 'owner') {
+      throw new Error('Forbidden: editors cannot assign the Owner role.');
+    }
+
     // 5. Initialize Admin Client (Only after auth check passes)
     const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
 
@@ -106,6 +118,20 @@ serve(async (req) => {
       throw new Error('Failed to resolve user from invite.');
     }
 
+    // Security hardening: block an editor from demoting / overwriting an
+    // existing owner via upsert. Mirror the SQL RPC's behavior.
+    if (memberData.role === 'editor') {
+      const { data: existingRow } = await supabaseAdmin
+        .from('project_members')
+        .select('role')
+        .eq('project_id', projectId)
+        .eq('user_id', targetUserId)
+        .maybeSingle();
+      if (existingRow && existingRow.role === 'owner') {
+        throw new Error('Forbidden: editors cannot modify an existing Owner.');
+      }
+    }
+
     // 7. Insert into Project Members
     const { error: insertError } = await supabaseAdmin.from('project_members').upsert({
       project_id: projectId,
@@ -128,10 +154,22 @@ serve(async (req) => {
       }
     );
   } catch (error) {
-    // ... Error handling
+    // Log the full detail server-side for debugging; return a sanitized
+    // client-facing message. Preserve the specific "Forbidden" / "Access
+    // Denied" / "Invalid input" branches because those are the product-
+    // meaningful errors the UI expects. Everything else collapses to a
+    // generic "Invite failed" so upstream provider exceptions (Supabase
+    // admin API internal paths) don't leak to the browser.
     console.error('Edge Function Exception:', error);
-    const isServerError = error.message?.includes('Server configuration error');
-    return new Response(JSON.stringify({ error: error.message }), {
+    const message: string = error?.message ?? '';
+    const isServerError = message.includes('Server configuration error');
+    const isProductError =
+      message.startsWith('Forbidden:') ||
+      message.startsWith('Access Denied:') ||
+      message.startsWith('Missing') ||
+      message.startsWith('Invalid');
+    const clientMessage = isProductError ? message : 'Invite failed';
+    return new Response(JSON.stringify({ error: clientMessage }), {
       status: isServerError ? 500 : 400,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });

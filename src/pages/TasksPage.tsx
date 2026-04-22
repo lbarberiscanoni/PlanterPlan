@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { DndContext, closestCorners, useSensor, useSensors, PointerSensor, KeyboardSensor } from '@dnd-kit/core';
 import { sortableKeyboardCoordinates } from '@dnd-kit/sortable';
@@ -7,10 +7,15 @@ import type { DragEndEvent } from '@dnd-kit/core';
 import type { TaskRow, TaskUpdate, Project } from '@/shared/db/app.types';
 import { planter } from '@/shared/api/planterClient';
 import TaskItem from '@/features/tasks/components/TaskItem';
-import { Loader2, List, LayoutGrid } from 'lucide-react';
+import TaskDetailsPanel from '@/features/tasks/components/TaskDetailsPanel';
+import { Loader2, List, LayoutGrid, X } from 'lucide-react';
 import ProjectBoardView from '@/features/tasks/components/board/ProjectBoardView';
+import { useAuth } from '@/shared/contexts/AuthContext';
+import { useTeam } from '@/features/people/hooks/useTeam';
+import { ROLES } from '@/shared/constants';
 import {
        useTaskFilters,
+       type DueDateRange,
        type TaskFilterKey,
        type TaskSortKey,
 } from '@/features/tasks/hooks/useTaskFilters';
@@ -40,6 +45,18 @@ export default function TasksPage() {
        const [viewMode, setViewMode] = useState('list');
        const [filter, setFilter] = useState<TaskFilterKey>('my_tasks');
        const [sort, setSort] = useState<TaskSortKey>('chronological');
+       const [selectedTask, setSelectedTask] = useState<TaskRow | null>(null);
+       const [dueStart, setDueStart] = useState<string>('');
+       const [dueEnd, setDueEnd] = useState<string>('');
+       const dueDateRange = useMemo<DueDateRange>(
+              () => ({ start: dueStart || null, end: dueEnd || null }),
+              [dueStart, dueEnd],
+       );
+       const hasDueRange = dueDateRange.start !== null || dueDateRange.end !== null;
+       const clearDueRange = useCallback(() => {
+              setDueStart('');
+              setDueEnd('');
+       }, []);
 
        const updateTask = useCallback(
               async (taskId: string, updates: Record<string, unknown>) => {
@@ -76,8 +93,46 @@ export default function TasksPage() {
               updateTask(id, { status });
        }, [updateTask]);
        const handleNoop = useCallback(() => { }, []);
+       const handleTaskClick = useCallback((task: TaskRow) => {
+              setSelectedTask(task);
+       }, []);
+       const closeDetailsPanel = useCallback(() => {
+              setSelectedTask(null);
+       }, []);
 
-       const visibleTasks = useTaskFilters({ tasks, filter, sort });
+       // Wave 33 + 36: resolve the caller's membership role for the selected
+       // task's parent project. Threads into TaskDetailsPanel so the Wave 36
+       // template-origin delete guard can distinguish owners from everyone
+       // else. Mirror the logic in Project.tsx: creator → OWNER override if
+       // no membership row exists.
+       const { user } = useAuth();
+       const selectedRootId = selectedTask?.root_id ?? null;
+       const { teamMembers: selectedTeamMembers } = useTeam(selectedRootId);
+       const selectedProjectRoot = tasks.find((t: TaskRow) => t.id === selectedRootId);
+       const selectedMembershipRole = useMemo(() => {
+              if (!selectedTask) return undefined;
+              const row = selectedTeamMembers.find((m) => m.user_id === user?.id);
+              if (row?.role) return row.role;
+              if (selectedProjectRoot?.creator && user?.id && selectedProjectRoot.creator === user.id) {
+                     return ROLES.OWNER;
+              }
+              return undefined;
+       }, [selectedTask, selectedTeamMembers, selectedProjectRoot, user?.id]);
+
+       const visibleTasks = useTaskFilters({ tasks, filter, sort, dueDateRange });
+
+       // Wave 33: map of root-task-id → project title, used to reveal each task's
+       // parent-project name in a hover tooltip on the row. Projects live in the
+       // same `tasks` list (roots have `parent_task_id === null`).
+       const projectTitleByRootId = useMemo(() => {
+              const map = new Map<string, string>();
+              for (const t of tasks) {
+                     if (t.parent_task_id === null && typeof t.title === 'string') {
+                            map.set(t.id, t.title);
+                     }
+              }
+              return map;
+       }, [tasks]);
 
        const sensors = useSensors(
               useSensor(PointerSensor, {
@@ -161,6 +216,42 @@ export default function TasksPage() {
                                                                </Select>
                                                         </div>
 
+                                                        <div className="flex flex-col gap-1">
+                                                               <span className="text-xs font-medium text-muted-foreground">
+                                                                      {t('tasks.filters.dateRange.label')}
+                                                               </span>
+                                                               <div className="flex items-center gap-2">
+                                                                      <input
+                                                                             type="date"
+                                                                             value={dueStart}
+                                                                             onChange={(e) => setDueStart(e.target.value)}
+                                                                             aria-label={t('tasks.filters.dateRange.start_aria')}
+                                                                             className="h-10 rounded-md border border-input bg-card px-2 text-sm"
+                                                                             data-testid="tasks-due-range-start"
+                                                                      />
+                                                                      <span className="text-muted-foreground text-sm">–</span>
+                                                                      <input
+                                                                             type="date"
+                                                                             value={dueEnd}
+                                                                             onChange={(e) => setDueEnd(e.target.value)}
+                                                                             aria-label={t('tasks.filters.dateRange.end_aria')}
+                                                                             className="h-10 rounded-md border border-input bg-card px-2 text-sm"
+                                                                             data-testid="tasks-due-range-end"
+                                                                      />
+                                                                      {hasDueRange && (
+                                                                             <button
+                                                                                    type="button"
+                                                                                    onClick={clearDueRange}
+                                                                                    className="h-10 w-10 flex items-center justify-center rounded-md border border-input bg-card text-muted-foreground hover:text-card-foreground"
+                                                                                    aria-label={t('tasks.filters.dateRange.clear')}
+                                                                                    data-testid="tasks-due-range-clear"
+                                                                             >
+                                                                                    <X className="w-4 h-4" />
+                                                                             </button>
+                                                                      )}
+                                                               </div>
+                                                        </div>
+
                                                         <div className="bg-muted p-1 rounded-lg flex items-center space-x-1 self-end">
                                                                <button
                                                                       onClick={() => setViewMode('list')}
@@ -197,19 +288,26 @@ export default function TasksPage() {
                                                         viewMode === 'list' ? (
                                                                <div className="space-y-6 overflow-y-auto h-full pb-20">
                                                                       <div className="flex flex-col gap-2">
-                                                                             {visibleTasks.map(task => (
-                                                                                    <TaskItem
-                                                                                           key={task.id}
-                                                                                           task={task}
-                                                                                           level={0}
-                                                                                           onStatusChange={handleStatusChange}
-                                                                                           hideExpansion={true}
-                                                                                           disableDrag={true}
-                                                                                           onTaskClick={handleNoop}
-                                                                                           onAddChildTask={handleNoop}
-                                                                                           onInviteMember={handleNoop}
-                                                                                    />
-                                                                             ))}
+                                                                             {visibleTasks.map(task => {
+                                                                                    const projectTitle = task.root_id && task.root_id !== task.id
+                                                                                           ? projectTitleByRootId.get(task.root_id) ?? null
+                                                                                           : null;
+                                                                                    return (
+                                                                                           <TaskItem
+                                                                                                  key={task.id}
+                                                                                                  task={task}
+                                                                                                  level={0}
+                                                                                                  onStatusChange={handleStatusChange}
+                                                                                                  hideExpansion={true}
+                                                                                                  disableDrag={true}
+                                                                                                  onTaskClick={handleTaskClick}
+                                                                                                  onAddChildTask={handleNoop}
+                                                                                                  onInviteMember={handleNoop}
+                                                                                                  selectedTaskId={selectedTask?.id ?? null}
+                                                                                                  parentProjectTitle={projectTitle}
+                                                                                           />
+                                                                                    );
+                                                                             })}
                                                                       </div>
                                                                </div>
                                                         ) : (
@@ -217,7 +315,7 @@ export default function TasksPage() {
                                                                       <ProjectBoardView
                                                                              project={{ id: 'my-tasks-root' } as Project}
                                                                              childrenTasks={visibleTasks}
-                                                                             handleTaskClick={() => { }}
+                                                                             handleTaskClick={handleTaskClick}
                                                                       />
                                                                </div>
                                                         )
@@ -226,6 +324,15 @@ export default function TasksPage() {
                                    </div>
                             </div>
                      </DndContext>
+
+                     {selectedTask && (
+                            <TaskDetailsPanel
+                                   showForm={false}
+                                   selectedTask={selectedTask}
+                                   membershipRole={selectedMembershipRole}
+                                   onClose={closeDetailsPanel}
+                            />
+                     )}
               </>
        );
 }
