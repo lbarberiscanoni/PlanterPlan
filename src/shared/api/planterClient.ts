@@ -117,6 +117,14 @@ export interface PlanterClient {
         listUsers: (filter: AdminListUsersFilter, limit?: number, offset?: number) => Promise<AdminListUserRow[]>;
         /** Aggregated analytics snapshot for the /admin/analytics dashboard (Wave 34 Task 3). */
         analyticsSnapshot: () => Promise<AdminAnalyticsSnapshot | null>;
+        /** Grant or revoke platform-admin status for a user. Self-demotion forbidden server-side. */
+        setAdminRole: (targetUid: string, makeAdmin: boolean) => Promise<void>;
+        /** Suspend a user via `auth.admin.updateUserById({ ban_duration })`. Self-suspension forbidden. */
+        suspendUser: (targetUid: string, durationHours?: number) => Promise<void>;
+        /** Clear a user's ban. */
+        unsuspendUser: (targetUid: string) => Promise<void>;
+        /** Generate a password-recovery link the admin can share out-of-band. Returns the URL. */
+        generatePasswordResetLink: (targetUid: string) => Promise<string>;
     };
     /** Wave 35 — third-party integrations (starts with ICS calendar feeds). */
     integrations: {
@@ -259,9 +267,25 @@ interface PushSubscriptionEntityClient {
 // Sub-phase 3.2a — Generic Entity Client (Supabase SDK)
 // ---------------------------------------------------------------------------
 
-// Supabase SDK requires literal table name types; this generic wrapper bridges the type gap.
+/**
+ * Wraps `supabase.from(name)` with a name-literal constraint. The union
+ * includes both public tables AND views (e.g. `tasks_with_primary_resource`)
+ * so read-only view access type-checks too. Catches typos like
+ * `.from('taks')` at compile time — the previous `(name: string) =>
+ * supabase.from(name as any)` bypassed the whole name-literal union.
+ *
+ * The `createEntityClient` generic crosses boundaries across dozens of
+ * (T, TInsert, TUpdate) shapes — Supabase's generated types can't model
+ * that variance, so we erase the query back to a permissive shape inside
+ * the wrapper once the NAME itself is validated. Individual callers that
+ * use `fromTable` directly (outside createEntityClient) still get the
+ * full row-typed return.
+ */
+type PublicTableName =
+    | keyof Database['public']['Tables']
+    | keyof Database['public']['Views'];
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const fromTable = (name: string) => supabase.from(name as any);
+const fromTable = <T extends PublicTableName>(name: T) => supabase.from(name as any);
 
 type WithAbortSignal = { abortSignal(signal: AbortSignal): unknown };
 const applySignal = <Q>(query: Q, signal?: AbortSignal): Q => {
@@ -269,7 +293,7 @@ const applySignal = <Q>(query: Q, signal?: AbortSignal): Q => {
     return query;
 };
 
-const createEntityClient = <T, TInsert, TUpdate>(tableName: string, select = '*'): EntityClient<T, TInsert, TUpdate> => ({
+const createEntityClient = <T, TInsert, TUpdate>(tableName: PublicTableName, select = '*'): EntityClient<T, TInsert, TUpdate> => ({
     list: async (opts) => {
         return retry(async () => {
             const query = fromTable(tableName).select(select);
@@ -1251,7 +1275,52 @@ export const planter: PlanterClient = {
             });
         },
     },
-    admin: {
+    admin: (() => {
+        // Shared helper for the three admin-user-moderation actions. Hoists
+        // the edge-function call + error normalization so each wrapper below
+        // is 2-4 lines.
+        //
+        // Contract with the edge function:
+        //   - HTTP 200 `{ success: true, reset_link? }`  → normal return
+        //   - HTTP 200 `{ success: false, error }`        → product error;
+        //       surfaced to the UI verbatim (e.g. `self_moderation_forbidden`,
+        //       `target_not_found`). Using 200 here on purpose — supabase-js
+        //       wraps non-2xx in `FunctionsHttpError` with a generic message,
+        //       which loses the specific server string.
+        //   - HTTP 401 `{ success: false, error }`        → auth failure; the
+        //       edge function returns 401 for a missing / invalid caller JWT.
+        //       supabase-js surfaces this via `error`, and we fall back to
+        //       its generic message.
+        //   - HTTP 500                                    → infra failure
+        //       (missing env, unhandled exception); same fallback as 401.
+        type ModerationAction = 'suspend' | 'unsuspend' | 'reset_password';
+        const invokeModeration = async (
+            action: ModerationAction,
+            targetUid: string,
+            extras?: Record<string, unknown>,
+        ): Promise<unknown> => {
+            // Spread `extras` BEFORE the authoritative args so a caller can't
+            // accidentally override `action` or `target_uid` by passing a
+            // conflicting key. Defensive — no current caller does this.
+            const { data, error } = await supabase.functions.invoke<{
+                success?: boolean;
+                error?: string;
+                reset_link?: string;
+            }>('admin-user-moderation', {
+                body: { ...(extras ?? {}), action, target_uid: targetUid },
+            });
+            // Non-2xx path (401 / 500): the server's error body is inside
+            // `error.context` and requires async parsing; fall back to the
+            // generic message rather than paying the async cost here.
+            if (error) throw new PlanterError(error.message || 'Moderation failed', 500);
+            // 200-with-success=false — surface the specific server error.
+            if (!data?.success) {
+                throw new PlanterError(data?.error || 'Moderation failed', 400);
+            }
+            return data;
+        };
+
+        return {
         /**
          * Wave 34 — fuzzy search across `auth.users` (email / full_name).
          * Gated server-side by `public.is_admin(auth.uid())`; non-admin callers
@@ -1338,7 +1407,52 @@ export const planter: PlanterClient = {
             if (error) throw error;
             return data ?? null;
         },
-    },
+        /**
+         * Toggle a user's platform-admin flag. Gated server-side by
+         * `public.is_admin(auth.uid())`. Self-demotion raises
+         * `self_demotion_forbidden` (callers should UI-disable the action
+         * when `targetUid === currentUser.id`). Writes an activity_log
+         * entry on success (surfaces in `admin_recent_activity`).
+         *
+         * @param targetUid `auth.users.id` of the user to modify.
+         * @param makeAdmin `true` = grant admin, `false` = revoke.
+         */
+        setAdminRole: async (targetUid: string, makeAdmin: boolean): Promise<void> => {
+            const { error } = await planter.rpc('admin_set_user_admin_role', {
+                p_target_uid: targetUid,
+                p_make_admin: makeAdmin,
+            });
+            if (error) throw error;
+        },
+        /**
+         * Suspend a user via the `admin-user-moderation` edge function.
+         * The edge function does the authorize-then-escalate dance with
+         * `auth.admin.updateUserById({ ban_duration })`. Omit `durationHours`
+         * for effectively-indefinite (100 years); pass a positive number
+         * for a time-bounded suspension.
+         */
+        suspendUser: async (targetUid: string, durationHours?: number): Promise<void> => {
+            await invokeModeration('suspend', targetUid, { duration_hours: durationHours });
+        },
+        unsuspendUser: async (targetUid: string): Promise<void> => {
+            await invokeModeration('unsuspend', targetUid);
+        },
+        /**
+         * Generate a Supabase password-recovery link for a user. Returns the
+         * URL so the admin can copy + share it out-of-band (Slack, email,
+         * etc.) — we don't auto-send. The link expires per the Supabase
+         * project's email-OTP TTL (default 24h at the time of writing).
+         */
+        generatePasswordResetLink: async (targetUid: string): Promise<string> => {
+            const body = await invokeModeration('reset_password', targetUid);
+            const link = (body as { reset_link?: string })?.reset_link;
+            if (typeof link !== 'string' || !link) {
+                throw new PlanterError('Reset link missing from moderation response', 500);
+            }
+            return link;
+        },
+        };
+    })(),
     integrations: {
         /**
          * Wave 35 — list the caller's ICS calendar feed tokens (active +

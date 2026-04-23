@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { planter } from '@/shared/api/planterClient';
 import { useAuth } from '@/shared/contexts/AuthContext';
 import { PROJECT_STATUS } from '@/shared/constants/domain';
+import { STALE_TIMES } from '@/shared/lib/react-query-config';
 import type { Database } from '@/shared/db/database.types';
 import type { Task, Project } from '@/shared/db/app.types';
 
@@ -38,7 +39,8 @@ export function useDashboard() {
  }
  }, [searchParams, setSearchParams]);
 
- // Data Fetching
+ // Data Fetching. `staleTime: STALE_TIMES.medium` across the board so
+ // Dashboard ↔ Tasks ↔ Project toggles don't refetch 3 times per nav.
  const {
  data: projects = [],
  isLoading: loadingProjects,
@@ -48,18 +50,25 @@ export function useDashboard() {
  queryKey: ['projects'],
  queryFn: () => planter.entities.Project.list(),
  enabled: !!user,
+ staleTime: STALE_TIMES.medium,
  });
 
  const { data: allTasks = [] } = useQuery<Task[]>({
- queryKey: ['allTasks'],
+ queryKey: ['allTasks', user?.id],
  queryFn: () => planter.entities.Task.listByCreator(user?.id as string),
  enabled: !!user,
+ staleTime: STALE_TIMES.medium,
  });
 
+ // Scope by caller uid: the previous unfiltered `TeamMember.list()` pulled
+ // every membership the user could see across every project — with N
+ // projects and M average memberships, O(N*M) rows for a card that only
+ // cares about the caller's own memberships.
  const { data: teamMembers = [] } = useQuery<TeamMemberRow[]>({
- queryKey: ['teamMembers'],
- queryFn: () => planter.entities.TeamMember.list(),
+ queryKey: ['teamMembers', user?.id],
+ queryFn: () => planter.entities.TeamMember.filter({ user_id: user?.id }),
  enabled: !!user,
+ staleTime: STALE_TIMES.medium,
  });
 
  // Derived State / Filtering

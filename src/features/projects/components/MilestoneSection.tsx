@@ -1,9 +1,9 @@
-import { useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Button } from '@/shared/ui/button';
 import { Badge } from '@/shared/ui/badge';
 import { Progress } from '@/shared/ui/progress';
 import { ChevronRight, Plus } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
 import { useDroppable } from '@dnd-kit/core';
 import { SortableContext } from '@dnd-kit/sortable';
 import { cn } from '@/shared/lib/utils';
@@ -54,6 +54,7 @@ export default function MilestoneSection({
     presentUsers = [],
     currentUserId = null,
 }: MilestoneSectionProps) {
+    const { t } = useTranslation();
     const [isExpanded, setIsExpanded] = useState(true);
 
     const { setNodeRef, isOver } = useDroppable({
@@ -65,10 +66,30 @@ export default function MilestoneSection({
         },
     });
 
-    const milestoneTasks = tasks.filter((t) => t.parent_task_id === milestone.id);
-    const completedTasks = milestoneTasks.filter((t) => t.status === TASK_STATUS.COMPLETED).length;
+    // Memoize so every parent re-render doesn't re-filter + re-sort the
+    // tasks for each milestone. Combined with React.memo on SortableTaskItem
+    // (added in Phase 2), the tree stops cascading re-renders on realtime
+    // ticks and selection changes.
+    const milestoneTasks = useMemo(
+        () => tasks
+            .filter((t) => t.parent_task_id === milestone.id)
+            .sort((a, b) => (a.position || 0) - (b.position || 0)),
+        [tasks, milestone.id],
+    );
+    const completedTasks = useMemo(
+        () => milestoneTasks.filter((t) => t.status === TASK_STATUS.COMPLETED).length,
+        [milestoneTasks],
+    );
     const totalTasks = milestoneTasks.length;
     const progress = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
+
+    // Hoist the status-update adapter so every row gets the same function
+    // reference across renders — prerequisite for React.memo to actually
+    // short-circuit re-renders on sibling changes.
+    const handleRowStatus = useCallback(
+        (id: string, status: string) => onTaskUpdate?.(id, { status } as Partial<TaskRow>),
+        [onTaskUpdate],
+    );
 
     return (
         <div
@@ -84,9 +105,9 @@ export default function MilestoneSection({
                 className="w-full px-5 py-4 flex items-center justify-between hover:bg-slate-50 transition-colors"
             >
                 <div className="flex items-center gap-4">
-                    <motion.div animate={{ rotate: isExpanded ? 90 : 0 }} transition={{ duration: 0.2 }}>
-                        <ChevronRight className="w-5 h-5 text-slate-400" />
-                    </motion.div>
+                    <div className={cn('transition-transform duration-200', isExpanded && 'rotate-90')}>
+                        <ChevronRight className="w-5 h-5 text-slate-400" aria-hidden="true" />
+                    </div>
 
                     <div className="text-left">
                         <h4 className="font-semibold text-slate-900">{milestone.title}</h4>
@@ -97,12 +118,14 @@ export default function MilestoneSection({
                 </div>
 
                 <div className="flex items-center gap-4">
-                    <div className="hidden sm:flex items-center gap-3">
-                        <div className="w-32">
-                            <Progress value={progress} className="h-2 bg-slate-100" />
+                    {milestone.origin !== 'template' && (
+                        <div className="hidden sm:flex items-center gap-3">
+                            <div className="w-32">
+                                <Progress value={progress} className="h-2 bg-slate-100" />
+                            </div>
+                            <span className="text-sm font-medium text-slate-600 w-12 text-right">{progress}%</span>
                         </div>
-                        <span className="text-sm font-medium text-slate-600 w-12 text-right">{progress}%</span>
-                    </div>
+                    )}
                     {milestone.is_locked && (
                         <Badge
                             variant="outline"
@@ -117,15 +140,9 @@ export default function MilestoneSection({
                 </div>
             </button>
 
-            <AnimatePresence>
-                {isExpanded && (
-                    <motion.div
-                        initial={{ height: 0, opacity: 0 }}
-                        animate={{ height: 'auto', opacity: 1 }}
-                        exit={{ height: 0, opacity: 0 }}
-                        transition={{ duration: 0.2 }}
-                    >
-                        <div className="px-5 pb-4 border-t border-slate-100">
+            {isExpanded && (
+                <div>
+                    <div className="px-5 pb-4 border-t border-slate-100">
                             {milestoneTasks.length === 0 && !isAddingInline ? (
                                 <div className="py-8 text-center">
                                     <p className="text-slate-500 mb-4">No tasks yet</p>
@@ -141,88 +158,66 @@ export default function MilestoneSection({
                                     )}
                                 </div>
                             ) : (
-                                <div className="space-y-2 pt-4">
-                                    <SortableContext
-                                        items={milestoneTasks.map(t => t.id)}
-                                    >
-                                    <AnimatePresence mode="popLayout">
-                                        {milestoneTasks
-                                            .sort((a, b) => (a.position || 0) - (b.position || 0))
-                                            .map((task) => (
-                                                <motion.div
-                                                    key={task.id}
-                                                    layout
-                                                    initial={{ opacity: 0, y: 10 }}
-                                                    animate={{ opacity: 1, y: 0 }}
-                                                    exit={{ opacity: 0, scale: 0.95, transition: { duration: 0.2 } }}
-                                                >
-                                                    {dropIndicator?.beforeTaskId === task.id && dropIndicator?.parentId === milestone.id && (
-                                                        <div className="h-0.5 bg-blue-500 rounded-full mx-4 my-1" />
-                                                    )}
-                                                    <SortableTaskItem
-                                                        task={task}
-                                                        level={0}
-                                                        onTaskClick={onTaskClick}
-                                                        onStatusChange={(id, status) => onTaskUpdate?.(id, { status } as Partial<TaskRow>)}
-                                                        onAddChildTask={onAddChildTask}
-                                                        onToggleExpand={onToggleExpand}
-                                                        isAddingInline={task.isAddingInline}
-                                                        onInlineCommit={onInlineCommit}
-                                                        onInlineCancel={onInlineCancel}
-                                                        dropIndicator={dropIndicator}
-                                                        presentUsers={presentUsers}
-                                                        currentUserId={currentUserId}
-                                                    />
-                                                </motion.div>
-                                            ))}
+                                <div
+                                    role="tree"
+                                    aria-label={t('projects.milestone_tasks_aria', { title: milestone.title ?? '' })}
+                                    className="space-y-2 pt-4"
+                                >
+                                    <SortableContext items={milestoneTasks.map(t => t.id)}>
+                                        {milestoneTasks.map((task) => (
+                                            <div key={task.id}>
+                                                {dropIndicator?.beforeTaskId === task.id && dropIndicator?.parentId === milestone.id && (
+                                                    <div className="h-0.5 bg-blue-500 rounded-full mx-4 my-1" />
+                                                )}
+                                                <SortableTaskItem
+                                                    task={task}
+                                                    level={0}
+                                                    onTaskClick={onTaskClick}
+                                                    onStatusChange={handleRowStatus}
+                                                    onAddChildTask={onAddChildTask}
+                                                    onToggleExpand={onToggleExpand}
+                                                    isAddingInline={task.isAddingInline}
+                                                    onInlineCommit={onInlineCommit}
+                                                    onInlineCancel={onInlineCancel}
+                                                    dropIndicator={dropIndicator}
+                                                    presentUsers={presentUsers}
+                                                    currentUserId={currentUserId}
+                                                />
+                                            </div>
+                                        ))}
 
                                         {dropIndicator?.beforeTaskId === null && dropIndicator?.parentId === milestone.id && (
                                             <div className="h-0.5 bg-blue-500 rounded-full mx-4 my-1" />
                                         )}
 
                                         {isAddingInline && onInlineCommit && onInlineCancel && (
-                                            <motion.div
-                                                layout
-                                                initial={{ opacity: 0, y: -10 }}
-                                                animate={{ opacity: 1, y: 0 }}
-                                                exit={{ opacity: 0, scale: 0.95 }}
-                                                className="mt-2"
-                                            >
+                                            <div className="mt-2 animate-slide-up">
                                                 <InlineTaskInput
                                                     onCommit={(title) => onInlineCommit(milestone.id, title)}
                                                     onCommitFromTemplate={(template) => onInlineCommit(milestone.id, template.title || '', template as Partial<TaskRow>)}
                                                     onCancel={onInlineCancel}
                                                     placeholder="Add a new task..."
                                                 />
-                                            </motion.div>
+                                            </div>
                                         )}
 
                                         {!isAddingInline && canEdit && onAddChildTask && (
-                                            <motion.div
-                                                layout
-                                                initial={{ opacity: 0 }}
-                                                animate={{ opacity: 1 }}
-                                                exit={{ opacity: 0 }}
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                className="w-full text-slate-500 hover:text-slate-700 mt-2"
+                                                onClick={() => onAddChildTask(milestone)}
                                             >
-                                                <Button
-                                                    variant="ghost"
-                                                    size="sm"
-                                                    className="w-full text-slate-500 hover:text-slate-700 mt-2"
-                                                    onClick={() => onAddChildTask(milestone)}
-                                                >
-                                                    <Plus className="w-4 h-4 mr-2" />
-                                                    Add Task
-                                                </Button>
-                                            </motion.div>
+                                                <Plus className="w-4 h-4 mr-2" aria-hidden="true" />
+                                                Add Task
+                                            </Button>
                                         )}
-                                    </AnimatePresence>
                                     </SortableContext>
                                 </div>
                             )}
                         </div>
-                    </motion.div>
-                )}
-            </AnimatePresence>
+                </div>
+            )}
         </div>
     );
 }

@@ -90,4 +90,28 @@ describe('TaskItem due-date badge (Wave 33)', () => {
         const badge = within(row).getByTestId('task-row-due-badge-rightside');
         expect(badge).toBeInTheDocument();
     });
+
+    it('hides the due badge for template tasks even when due_date is set', () => {
+        const task = makeTask({
+            id: 'tmpl-due',
+            title: 'Template Task',
+            origin: 'template',
+            due_date: '2026-04-22',
+        }) as TaskItemData;
+        renderTaskItem(task);
+        expect(screen.queryByTestId('task-row-due-badge-tmpl-due')).not.toBeInTheDocument();
+    });
+
+    it('hides the status select for template tasks', () => {
+        const task = makeTask({
+            id: 'tmpl-status',
+            title: 'Template Task',
+            origin: 'template',
+            due_date: null,
+        }) as TaskItemData;
+        renderTaskItem(task);
+        // Status select renders a combobox / role=combobox per Radix Select
+        const row = screen.getByTestId('task-row-tmpl-status');
+        expect(within(row).queryByRole('combobox')).not.toBeInTheDocument();
+    });
 });

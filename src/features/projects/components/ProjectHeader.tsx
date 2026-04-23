@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Button } from '@/shared/ui/button';
 import { Badge } from '@/shared/ui/badge';
-import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
+import { ProgressRing } from '@/shared/ui/progress-ring';
 import { formatDate } from '@/shared/lib/date-engine';
 import {
     ArrowLeft,
@@ -16,7 +16,6 @@ import {
     Download,
     Search,
 } from 'lucide-react';
-import { motion } from 'framer-motion';
 import { TASK_STATUS, PROJECT_STATUS } from '@/shared/constants';
 import EditProjectModal from './EditProjectModal';
 import { exportProjectToCSV } from '@/features/projects/lib/export-utils';
@@ -57,16 +56,9 @@ export default function ProjectHeader({
     const completedTasks = tasks.filter((t) => t.status === TASK_STATUS.COMPLETED).length;
     const totalTasks = tasks.length;
     const progress = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
-    const donutData = totalTasks === 0
-        ? [{ value: 1 }, { value: 0 }]
-        : [{ value: completedTasks }, { value: totalTasks - completedTasks }];
 
     return (
-        <motion.div
-            initial={{ opacity: 0, y: -20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="bg-card border-b border-border transition-all shadow-sm"
-        >
+        <div className="animate-slide-up bg-card border-b border-border transition-all shadow-sm">
             <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
                 <div className="flex items-center gap-4 mb-6">
                     <Link to="/dashboard">
@@ -148,7 +140,7 @@ export default function ProjectHeader({
                             return (
                                 <div key={member.id} className="relative inline-flex items-center justify-center w-8 h-8 rounded-full border-2 border-background bg-muted text-xs font-medium text-muted-foreground z-10" title={displayName || 'Unknown'}>
                                     {(member as { avatar_url?: string }).avatar_url ? (
-                                        <img src={(member as { avatar_url?: string }).avatar_url} alt={displayName || 'Unknown'} className="w-full h-full rounded-full object-cover" />
+                                        <img src={(member as { avatar_url?: string }).avatar_url} alt={displayName || 'Unknown'} width={32} height={32} loading="lazy" className="w-full h-full rounded-full object-cover" />
                                     ) : (
                                         <span>{initials}</span>
                                     )}
@@ -163,26 +155,14 @@ export default function ProjectHeader({
                     </div>
 
                     <div className="flex items-center gap-2 ml-auto">
-                        <div className="w-12 h-12">
-                            <ResponsiveContainer width="100%" height="100%">
-                                <PieChart>
-                                    <Pie
-                                        data={donutData}
-                                        cx="50%"
-                                        cy="50%"
-                                        innerRadius={14}
-                                        outerRadius={22}
-                                        startAngle={90}
-                                        endAngle={-270}
-                                        dataKey="value"
-                                        strokeWidth={0}
-                                    >
-                                        <Cell fill={totalTasks === 0 ? '#e2e8f0' : '#10b981'} />
-                                        <Cell fill="#e2e8f0" />
-                                    </Pie>
-                                </PieChart>
-                            </ResponsiveContainer>
-                        </div>
+                        <ProgressRing
+                            value={progress}
+                            size={48}
+                            strokeWidth={8}
+                            color={totalTasks === 0 ? '#e2e8f0' : '#10b981'}
+                            trackColor="#e2e8f0"
+                            decorative
+                        />
                         <span className="text-sm font-medium text-card-foreground whitespace-nowrap">
                             {progress}% complete
                         </span>
@@ -197,7 +177,7 @@ export default function ProjectHeader({
                     onClose={() => setIsEditModalOpen(false)}
                 />
             )}
-        </motion.div>
+        </div>
     );
 }
 

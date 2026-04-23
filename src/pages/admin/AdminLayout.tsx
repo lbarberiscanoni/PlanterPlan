@@ -1,19 +1,34 @@
 import { useEffect } from 'react';
 import { NavLink, Navigate, Outlet } from 'react-router-dom';
 import { toast } from 'sonner';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/shared/contexts/AuthContext';
 import { useIsAdmin } from '@/features/admin/hooks/useIsAdmin';
 import { cn } from '@/shared/lib/utils';
 import { LayoutDashboard, Users, BarChart3, FileStack } from 'lucide-react';
 
+type AdminLabelKey =
+    | 'admin.nav_home'
+    | 'admin.nav_users'
+    | 'admin.nav_analytics'
+    | 'admin.nav_templates';
+
+type NavItem = {
+    to: string;
+    labelKey: AdminLabelKey;
+    testIdKey: string;
+    icon: React.ComponentType<{ className?: string }>;
+    end?: boolean;
+};
+
 // Wave 34 scope ships Home / Users / Analytics / Templates under /admin.
 // A dedicated `/admin/projects` surface wasn't scoped; admins browse
 // cross-tenant projects today via `/admin` search + per-project routes.
-const NAV_ITEMS: Array<{ to: string; label: string; icon: React.ComponentType<{ className?: string }>; end?: boolean }> = [
-    { to: '/admin', label: 'Home', icon: LayoutDashboard, end: true },
-    { to: '/admin/users', label: 'Users', icon: Users },
-    { to: '/admin/analytics', label: 'Analytics', icon: BarChart3 },
-    { to: '/admin/templates', label: 'Templates', icon: FileStack },
+const NAV_ITEMS: NavItem[] = [
+    { to: '/admin', labelKey: 'admin.nav_home', testIdKey: 'home', icon: LayoutDashboard, end: true },
+    { to: '/admin/users', labelKey: 'admin.nav_users', testIdKey: 'users', icon: Users },
+    { to: '/admin/analytics', labelKey: 'admin.nav_analytics', testIdKey: 'analytics', icon: BarChart3 },
+    { to: '/admin/templates', labelKey: 'admin.nav_templates', testIdKey: 'templates', icon: FileStack },
 ];
 
 /**
@@ -25,19 +40,20 @@ const NAV_ITEMS: Array<{ to: string; label: string; icon: React.ComponentType<{ 
  * screens — admins navigate there via this shell for discoverability.
  */
 export default function AdminLayout() {
+    const { t } = useTranslation();
     const { loading } = useAuth();
     const isAdmin = useIsAdmin();
 
     useEffect(() => {
         if (!loading && !isAdmin) {
-            toast.error('You need admin access for this page.');
+            toast.error(t('admin.shell_access_required_toast'));
         }
-    }, [loading, isAdmin]);
+    }, [loading, isAdmin, t]);
 
     if (loading) {
         return (
             <div className="p-8 text-sm text-muted-foreground" data-testid="admin-loading">
-                Loading admin shell…
+                {t('admin.shell_loading')}
             </div>
         );
     }
@@ -50,10 +66,10 @@ export default function AdminLayout() {
         <div className="flex h-full w-full" data-testid="admin-layout">
             <aside
                 className="w-64 flex-shrink-0 border-r border-border bg-card px-4 py-6"
-                aria-label="Admin navigation"
+                aria-label={t('admin.nav_aria')}
             >
                 <h2 className="mb-6 px-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                    Admin
+                    {t('admin.shell_title')}
                 </h2>
                 <nav className="flex flex-col gap-1">
                     {NAV_ITEMS.map((item) => {
@@ -71,10 +87,10 @@ export default function AdminLayout() {
                                             : 'text-slate-700 hover:bg-slate-100',
                                     )
                                 }
-                                data-testid={`admin-nav-${item.label.toLowerCase()}`}
+                                data-testid={`admin-nav-${item.testIdKey}`}
                             >
-                                <Icon className="h-4 w-4" />
-                                {item.label}
+                                <Icon className="h-4 w-4" aria-hidden="true" />
+                                {t(item.labelKey)}
                             </NavLink>
                         );
                     })}

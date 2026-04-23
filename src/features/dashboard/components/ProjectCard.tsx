@@ -4,7 +4,6 @@ import { Badge } from '@/shared/ui/badge';
 import { Progress } from '@/shared/ui/progress';
 import { formatDate } from '@/shared/lib/date-engine';
 import { Calendar, Users } from 'lucide-react';
-import { motion } from 'framer-motion';
 import { TASK_STATUS, PROJECT_STATUS } from '@/shared/constants';
 import { PROJECT_STATUS_COLORS } from '@/shared/constants/colors';
 import type { Project, Task, TeamMemberRow } from '@/shared/db/app.types';
@@ -23,7 +22,7 @@ const ProjectCard = ({ project, tasks = [], teamMembers = [] }: ProjectCardProps
  const progressPercent = totalTasks === 0 ? 0 : Math.round((completedTasks / totalTasks) * 100);
 
  return (
- <motion.div data-testid="project-card" whileHover={{ y: -4 }} transition={{ duration: 0.2 }} className="h-full">
+ <div data-testid="project-card" className="h-full transition-transform duration-200 hover:-translate-y-1">
  <Link to={`/project/${project.id}`} className="h-full block">
  <Card className="p-4 sm:p-6 hover:shadow-xl transition-all duration-300 border border-border hover:border-brand-300 cursor-pointer group bg-card h-full flex flex-col justify-between overflow-hidden">
  <div className="mb-4">
@@ -71,7 +70,7 @@ const ProjectCard = ({ project, tasks = [], teamMembers = [] }: ProjectCardProps
  </div>
  </Card>
  </Link>
- </motion.div>
+ </div>
  );
 }
 

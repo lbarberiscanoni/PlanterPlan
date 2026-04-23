@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, act, fireEvent, waitFor } from '@testing-library/react';
 import React from 'react';
+import { ConfirmDialogProvider } from '@/shared/ui/confirm-dialog';
 import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { makeTask } from '@test';
@@ -45,7 +46,9 @@ function renderModal(project: TaskRow) {
   return render(
     <QueryClientProvider client={queryClient}>
       <MemoryRouter>
-        <EditProjectModal project={project} isOpen={true} onClose={vi.fn()} />
+        <ConfirmDialogProvider>
+          <EditProjectModal project={project} isOpen={true} onClose={vi.fn()} />
+        </ConfirmDialogProvider>
       </MemoryRouter>
     </QueryClientProvider>,
   );

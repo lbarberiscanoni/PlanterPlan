@@ -81,12 +81,18 @@ const LoginForm = () => {
  <input
  id="email"
  type="email"
+ autoComplete="username"
+ aria-invalid={!!errors.email}
+ aria-describedby={errors.email ? 'email-error' : undefined}
  className={`mt-1 appearance-none relative block w-full px-3 py-2 border ${errors.email ? 'border-red-500' : 'border-slate-300'} placeholder-slate-400 rounded focus:outline-none focus:ring-brand-500 focus:border-brand-500`}
  placeholder={t('auth.email_placeholder')}
  {...register('email')}
  />
+ {/* Dark red text (#dc2626) instead of #ef4444 to clear 4.5:1 contrast
+  * on white backgrounds for WCAG 1.4.3. role="alert" + aria-live so
+  * SRs announce the error immediately without polling the input. */}
  {errors.email && (
- <p data-testid="email-error" className="mt-1 text-sm text-red-500">{errors.email.message}</p>
+ <p id="email-error" data-testid="email-error" role="alert" aria-live="polite" className="mt-1 text-sm text-red-600">{errors.email.message}</p>
  )}
  </div>
 
@@ -97,12 +103,15 @@ const LoginForm = () => {
  <input
  id="password"
  type="password"
+ autoComplete={isSignUp ? 'new-password' : 'current-password'}
+ aria-invalid={!!errors.password}
+ aria-describedby={errors.password ? 'password-error' : undefined}
  className={`mt-1 appearance-none relative block w-full px-3 py-2 border ${errors.password ? 'border-red-500' : 'border-slate-300'} placeholder-slate-400 rounded focus:outline-none focus:ring-brand-500 focus:border-brand-500`}
  placeholder={t('auth.password_placeholder')}
  {...register('password')}
  />
  {errors.password && (
- <p data-testid="password-error" className="mt-1 text-sm text-red-500">{errors.password.message}</p>
+ <p id="password-error" data-testid="password-error" role="alert" aria-live="polite" className="mt-1 text-sm text-red-600">{errors.password.message}</p>
  )}
  </div>
 
@@ -110,6 +119,7 @@ const LoginForm = () => {
  <button
  type="submit"
  disabled={loading}
+ aria-busy={loading}
  className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-brand-600 hover:bg-brand-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-500/20 disabled:opacity-50 transition-colors shadow-sm"
  >
  {loading ? <Loader2 className="w-5 h-5 animate-spin" data-testid="loading-spinner" aria-label={t('auth.loading_label')} /> : (isSignUp ? t('auth.sign_up') : t('auth.sign_in'))}

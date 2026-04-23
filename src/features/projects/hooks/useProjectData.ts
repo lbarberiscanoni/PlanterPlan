@@ -32,11 +32,15 @@ interface Project {
 interface UseProjectDataReturn {
     project: Project | undefined;
     loadingProject: boolean;
+    /** True iff the primary project-metadata query errored (RLS denial, bad id, network). */
+    projectError: Error | null;
     projectHierarchy: HierarchyTask[];
     phases: HierarchyTask[];
     milestones: HierarchyTask[];
     tasks: HierarchyTask[];
     teamMembers: TeamMember[];
+    /** Manually retry the failed project-metadata query (used by the error-card CTA). */
+    refetchProject: () => void;
 }
 
 /**
@@ -44,7 +48,12 @@ interface UseProjectDataReturn {
  */
 export function useProjectData(projectId: string | null | undefined): UseProjectDataReturn {
     // 1. Fetch Project Metadata & Hierarchy Stats
-    const { data, isLoading: loadingMetadata } = useQuery({
+    const {
+        data,
+        isLoading: loadingMetadata,
+        error: projectError,
+        refetch: refetchProject,
+    } = useQuery({
         queryKey: ['project', projectId],
         queryFn: () => planter.entities.Project.getWithStats(projectId!),
         enabled: !!projectId,
@@ -93,15 +102,18 @@ export function useProjectData(projectId: string | null | undefined): UseProject
         queryKey: ['teamMembers', projectId],
         queryFn: () => planter.entities.TeamMember.filter({ project_id: projectId }),
         enabled: !!projectId,
+        staleTime: STALE_TIMES.medium,
     });
 
     return {
         project,
         loadingProject: loadingMetadata,
+        projectError: (projectError as Error | null) ?? null,
         projectHierarchy,
         phases,
         milestones,
         tasks,
         teamMembers,
+        refetchProject: () => { void refetchProject(); },
     };
 }

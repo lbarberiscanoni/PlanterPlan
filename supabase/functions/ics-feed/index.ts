@@ -1,10 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { renderIcsDocument, type IcsTaskRow } from './ics.ts';
-
-const corsHeaders = {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+import { corsHeaders } from '../_shared/auth.ts';
 
 // @ts-expect-error -- Deno global in edge runtime, not available in browser TS
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';

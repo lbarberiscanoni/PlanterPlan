@@ -33,7 +33,7 @@ vi.mock('@/features/dashboard/components/CreateProjectModal', () => ({
 vi.mock('@/features/dashboard/components/CreateTemplateModal', () => ({
     default: () => null,
 }));
-vi.mock('@/features/mobile/MobileAgenda', () => ({
+vi.mock('@/features/mobile/components/MobileAgenda', () => ({
     default: () => null,
 }));
 vi.mock('@/pages/components/OnboardingWizard', () => ({

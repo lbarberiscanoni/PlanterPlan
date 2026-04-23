@@ -6,14 +6,17 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 // ---- Mocks ----
 const mockProjectList = vi.fn().mockResolvedValue([]);
 const mockTaskListByCreator = vi.fn().mockResolvedValue([]);
-const mockTeamMemberList = vi.fn().mockResolvedValue([]);
+// Phase 2 (perf audit H4): useDashboard now scopes TeamMember by the caller's
+// uid via `.filter({ user_id })` instead of unscoped `.list()` — fewer rows,
+// O(caller-memberships) not O(tenant-memberships).
+const mockTeamMemberFilter = vi.fn().mockResolvedValue([]);
 
 vi.mock('@/shared/api/planterClient', () => ({
   planter: {
     entities: {
       Project: { list: (...args: unknown[]) => mockProjectList(...args) },
       Task: { listByCreator: (...args: unknown[]) => mockTaskListByCreator(...args) },
-      TeamMember: { list: (...args: unknown[]) => mockTeamMemberList(...args) },
+      TeamMember: { filter: (...args: unknown[]) => mockTeamMemberFilter(...args) },
     },
   },
 }));
@@ -47,7 +50,7 @@ describe('useDashboard', () => {
     vi.clearAllMocks();
     mockProjectList.mockResolvedValue([]);
     mockTaskListByCreator.mockResolvedValue([]);
-    mockTeamMemberList.mockResolvedValue([]);
+    mockTeamMemberFilter.mockResolvedValue([]);
     // Reset search params
     mockSearchParams.delete('action');
     localStorage.removeItem('gettingStartedDismissed');
@@ -65,7 +68,7 @@ describe('useDashboard', () => {
 
     mockProjectList.mockResolvedValue(projects);
     mockTaskListByCreator.mockResolvedValue(tasks);
-    mockTeamMemberList.mockResolvedValue(members);
+    mockTeamMemberFilter.mockResolvedValue(members);
 
     const { result } = renderHook(() => useDashboard(), { wrapper: createWrapper() });
 

@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { useQuery, useInfiniteQuery } from '@tanstack/react-query';
 import { useAuth } from '@/shared/contexts/AuthContext';
 import { planter } from '@/shared/api/planterClient';
@@ -64,11 +65,17 @@ export const useTaskQuery = () => {
         staleTime: STALE_TIMES.medium,
     });
 
-    // Combine instances and templates into tasks
-    const tasks: (Project | Task)[] = [
-        ...(projectsData?.pages.flat() || []),
-        ...(templates as Task[] || [])
-    ];
+    // Combine instances and templates into tasks. Memoized so downstream
+    // `useMemo` chains (e.g. `separateTasksByOrigin` in TaskList) don't
+    // re-run every render — React Query returns the same `data` reference
+    // across renders, so memoizing the spread here preserves that identity.
+    const tasks = useMemo<(Project | Task)[]>(
+        () => [
+            ...(projectsData?.pages.flat() || []),
+            ...(templates as Task[] || []),
+        ],
+        [projectsData, templates],
+    );
 
     const findTask = (id: string) => {
         if (!id) return null;

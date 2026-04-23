@@ -223,6 +223,15 @@ export interface AdminUserDetail {
         last_sign_in_at: string | null;
         created_at: string;
         is_admin: boolean;
+        /**
+         * `auth.users.banned_until` — non-null + in-the-future = currently
+         * suspended. Surfaced so the AdminUsers detail-aside can toggle
+         * between "Suspend" and "Unsuspend" buttons. UI formats the raw
+         * timestamp relative to `now()`: either "Suspended until {date}"
+         * or "Suspended indefinitely" (when the ban duration is the
+         * sentinel ~100 years).
+         */
+        banned_until: string | null;
     };
     projects: Array<{ project_id: string; role: string; project_title: string | null }>;
     task_counts: { assigned: number; completed: number; overdue: number };

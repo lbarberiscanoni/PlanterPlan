@@ -1,8 +1,10 @@
-import { useCallback, useRef } from 'react';
+import { useCallback, useMemo, useRef } from 'react';
 import { Gantt as GanttLib, type Task as GanttTaskApiType, ViewMode } from 'gantt-task-react';
 import 'gantt-task-react/dist/index.css';
 import { Calendar, FileDown } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { Button } from '@/shared/ui/button';
+import { diffInCalendarDays, getNow, isBeforeDate } from '@/shared/lib/date-engine';
 import { Switch } from '@/shared/ui/switch';
 import { Label } from '@/shared/ui/label';
 import {
@@ -41,6 +43,7 @@ export function ProjectGantt({
     onIncludeLeafTasksChange,
     onShiftDates,
 }: ProjectGanttProps) {
+    const { t } = useTranslation();
     const containerRef = useRef<HTMLDivElement>(null);
 
     const handleDateChange = useCallback(
@@ -51,35 +54,80 @@ export function ProjectGantt({
         [onShiftDates],
     );
 
+    // Compute once per `rows` change — avoids re-filtering + re-reducing the
+    // whole row set on every render. Uses `Date` comparison directly (rows
+    // carry native `Date` objects from the library) so no raw millisecond
+    // math leaks in.
+    const earliestStart = useMemo<Date | null>(
+        () =>
+            rows
+                .map((r) => r.start)
+                .filter((d): d is Date => d instanceof Date && !Number.isNaN(d.getTime()))
+                .reduce<Date | null>((min, d) => (min === null || d < min ? d : min), null),
+        [rows],
+    );
+
     const handleTodayClick = useCallback(() => {
-        // gantt-task-react doesn't expose a "jump to today" API — the library always
-        // renders around `min(tasks.start)`. The chart scroll position is owned by
-        // the library's internal state; the best we can do is nudge the user back
-        // to the leftmost column. If the library ever gains a ref-based scroll API,
-        // route it here.
-        containerRef.current?.scrollTo({ left: 0, behavior: 'smooth' });
-    }, []);
+        // gantt-task-react doesn't expose a "jump to today" API and renders
+        // starting at `min(rows.start)`. Compute the horizontal offset to
+        // today's column based on zoom-mode column width and the number of
+        // days between the earliest task start and today — then scroll
+        // directly to that offset. Falls back to leftmost scroll if the
+        // container isn't mounted or we can't compute a valid offset. All
+        // date logic routes through date-engine (no raw `new Date()` or
+        // millisecond math at call site).
+        const container = containerRef.current;
+        if (!container) return;
+
+        const today = getNow();
+
+        if (!earliestStart || isBeforeDate(today, earliestStart)) {
+            container.scrollTo({ left: 0, behavior: 'smooth' });
+            return;
+        }
+
+        // gantt-task-react's column widths are set by the library's default
+        // stylesheet (see `gantt-task-react/dist/index.css`). These match
+        // the library's internal defaults at the three zoom levels we use.
+        const columnWidthByZoom: Record<GanttZoom, number> = {
+            [ViewMode.Day]: 65,
+            [ViewMode.Week]: 250,
+            [ViewMode.Month]: 300,
+        };
+        const daysPerColumn: Record<GanttZoom, number> = {
+            [ViewMode.Day]: 1,
+            [ViewMode.Week]: 7,
+            [ViewMode.Month]: 30,
+        };
+        const deltaDays = Math.max(0, diffInCalendarDays(today, earliestStart) ?? 0);
+        const columns = deltaDays / (daysPerColumn[zoom] || 1);
+        const targetLeft = Math.max(
+            0,
+            columns * (columnWidthByZoom[zoom] || 65) - container.clientWidth / 2,
+        );
+        container.scrollTo({ left: targetLeft, behavior: 'smooth' });
+    }, [earliestStart, zoom]);
 
     return (
         <div data-testid="project-gantt" className="flex flex-col gap-4">
             <div className="flex flex-wrap items-center gap-3 border-b border-slate-200 pb-3">
                 <div className="flex items-center gap-2">
-                    <Label htmlFor="gantt-zoom" className="text-sm text-slate-600">Zoom</Label>
+                    <Label htmlFor="gantt-zoom" className="text-sm text-slate-600">{t('gantt.zoom_label')}</Label>
                     <Select value={zoom} onValueChange={(v) => onZoomChange(v as GanttZoom)}>
                         <SelectTrigger id="gantt-zoom" className="w-28">
                             <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                            <SelectItem value={ViewMode.Day}>Day</SelectItem>
-                            <SelectItem value={ViewMode.Week}>Week</SelectItem>
-                            <SelectItem value={ViewMode.Month}>Month</SelectItem>
+                            <SelectItem value={ViewMode.Day}>{t('gantt.zoom_day')}</SelectItem>
+                            <SelectItem value={ViewMode.Week}>{t('gantt.zoom_week')}</SelectItem>
+                            <SelectItem value={ViewMode.Month}>{t('gantt.zoom_month')}</SelectItem>
                         </SelectContent>
                     </Select>
                 </div>
 
                 <Button variant="outline" size="sm" onClick={handleTodayClick}>
                     <Calendar aria-hidden="true" />
-                    Today
+                    {t('gantt.today')}
                 </Button>
 
                 <div className="flex items-center gap-2">
@@ -89,7 +137,7 @@ export function ProjectGantt({
                         onCheckedChange={onIncludeLeafTasksChange}
                     />
                     <Label htmlFor="gantt-include-leaves" className="text-sm text-slate-600">
-                        Include leaf tasks
+                        {t('gantt.include_leaf_tasks')}
                     </Label>
                 </div>
 
@@ -98,23 +146,23 @@ export function ProjectGantt({
                         variant="outline"
                         size="sm"
                         onClick={() => window.print()}
-                        aria-label="Export gantt via browser print dialog (choose 'Save as PDF' as the destination)"
+                        aria-label={t('gantt.export_pdf_aria')}
                     >
                         <FileDown aria-hidden="true" />
-                        Export PDF
+                        {t('gantt.export_pdf')}
                     </Button>
                 </div>
             </div>
 
             {skippedCount > 0 ? (
                 <p className="text-sm text-slate-600" role="status">
-                    {skippedCount} task{skippedCount === 1 ? '' : 's'} excluded (missing dates).
+                    {t('gantt.tasks_excluded', { count: skippedCount })}
                 </p>
             ) : null}
 
             {rows.length === 0 ? (
                 <p className="rounded-xl border border-slate-200 bg-white p-6 text-center text-sm text-slate-600 shadow-sm">
-                    This project has no tasks with scheduled dates yet.
+                    {t('gantt.no_scheduled_tasks')}
                 </p>
             ) : (
                 <div

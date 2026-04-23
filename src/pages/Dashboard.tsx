@@ -7,7 +7,6 @@ import type { Database } from '@/shared/db/database.types';
 import type { CreateProjectPayload } from '@/features/projects/hooks/useProjectMutations';
 import { Button } from '@/shared/ui/button';
 import { Plus, FolderKanban, Loader2, BookTemplate } from 'lucide-react';
-import { motion } from 'framer-motion';
 
 // Hooks
 import { useDashboard } from '@/features/dashboard/hooks/useDashboard';
@@ -21,7 +20,7 @@ import CreateTemplateModal from '@/features/dashboard/components/CreateTemplateM
 import StatsOverview from '@/features/dashboard/components/StatsOverview';
 import ProjectPipelineBoard from '@/features/dashboard/components/ProjectPipelineBoard';
 import OnboardingWizard from '@/pages/components/OnboardingWizard';
-import MobileAgenda from '@/features/mobile/MobileAgenda';
+import MobileAgenda from '@/features/mobile/components/MobileAgenda';
 
 export default function Dashboard() {
     const { t } = useTranslation();
@@ -113,11 +112,7 @@ export default function Dashboard() {
     return (
         <div className="w-full px-4 py-8 h-[calc(100vh-64px)] flex flex-col">
             {/* Header */}
-            <motion.div
-                initial={{ opacity: 0, y: -20 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8 flex-shrink-0"
-            >
+            <div className="animate-slide-up flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8 flex-shrink-0">
                 <div>
                     <h1 className="text-3xl font-bold text-card-foreground">{t('dashboard.title')}</h1>
                     <p className="text-muted-foreground mt-1">{t('dashboard.subtitle')}</p>
@@ -140,7 +135,7 @@ export default function Dashboard() {
                         {t('dashboard.new_project')}
                     </Button>
                 </div>
-            </motion.div>
+            </div>
 
             {/* Stats and Top Widgets */}
             <div className="mb-8 flex-shrink-0">
@@ -151,11 +146,7 @@ export default function Dashboard() {
             {/* Content Area */}
             <div className="flex-1 min-h-0 overflow-y-auto no-scrollbar">
                 {data.projects.length === 0 ? (
-                    <motion.div
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        className="bg-card rounded-2xl border border-border shadow-sm p-12 text-center"
-                    >
+                    <div className="animate-slide-up bg-card rounded-2xl border border-border shadow-sm p-12 text-center">
                         <div className="w-16 h-16 bg-muted rounded-2xl flex items-center justify-center mx-auto mb-6">
                             <FolderKanban className="w-8 h-8 text-muted-foreground" />
                         </div>
@@ -167,7 +158,7 @@ export default function Dashboard() {
                             <Plus className="w-5 h-5 mr-2" />
                             {t('dashboard.create_first_project')}
                         </Button>
-                    </motion.div>
+                    </div>
                 ) : (
                     <ProjectPipelineBoard
                         projects={data.projects}

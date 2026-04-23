@@ -38,14 +38,16 @@ const SidebarNavItem = ({ task, isSelected, onClick, showRole = false, to }: Sid
  <span className="sidebar-nav-item-title truncate">{task.title}</span>
  <div className="flex items-center">
  <button
- className="opacity-0 group-hover:opacity-100 p-1 hover:bg-muted rounded text-muted-foreground hover:text-brand-600 transition-all mr-2"
+ type="button"
+ className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100 p-1 hover:bg-muted rounded text-muted-foreground hover:text-brand-600 transition-all mr-2"
  onClick={(e: MouseEvent) => {
  e.preventDefault();
  e.stopPropagation();
  }}
+ aria-label={`Clone template: ${task.title ?? 'untitled'}`}
  title="Clone Template"
  >
- <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+ <svg aria-hidden="true" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
  <path
  strokeLinecap="round"
  strokeLinejoin="round"

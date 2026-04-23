@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { Search, Users, FolderKanban, FileStack } from 'lucide-react';
 import { planter } from '@/shared/api/planterClient';
 import type { AdminUserSearchRow } from '@/shared/db/app.types';
@@ -20,6 +21,7 @@ const MIN_QUERY_LEN = 2;
  * Clicking a row navigates to the canonical detail surface.
  */
 export default function AdminSearch() {
+    const { t } = useTranslation();
     const navigate = useNavigate();
     const [rawQuery, setRawQuery] = useState('');
     const [debouncedQuery, setDebouncedQuery] = useState('');
@@ -77,14 +79,14 @@ export default function AdminSearch() {
     return (
         <div className="w-full max-w-2xl" data-testid="admin-search">
             <label className="flex items-center gap-3 rounded-lg border border-input bg-card px-4 py-2 shadow-sm focus-within:border-brand-400">
-                <Search className="h-4 w-4 text-muted-foreground" />
+                <Search aria-hidden="true" className="h-4 w-4 text-muted-foreground" />
                 <input
                     type="search"
                     value={rawQuery}
                     onChange={(e) => setRawQuery(e.target.value)}
-                    placeholder="Search users, projects, templates…"
+                    placeholder={t('admin.search_placeholder')}
                     className="flex-1 border-0 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
-                    aria-label="Admin global search"
+                    aria-label={t('admin.search_aria_input')}
                     data-testid="admin-search-input"
                 />
             </label>
@@ -95,7 +97,7 @@ export default function AdminSearch() {
                     data-testid="admin-search-results"
                 >
                     <ResultGroup
-                        heading="Users"
+                        heading={t('admin.search_users_heading')}
                         icon={Users}
                         loading={users.isLoading}
                         error={users.error instanceof Error ? users.error.message : null}
@@ -108,7 +110,7 @@ export default function AdminSearch() {
                         testid="admin-search-users"
                     />
                     <ResultGroup
-                        heading="Projects"
+                        heading={t('admin.search_projects_heading')}
                         icon={FolderKanban}
                         loading={allTasks.isLoading}
                         error={allTasks.error instanceof Error ? allTasks.error.message : null}
@@ -121,15 +123,15 @@ export default function AdminSearch() {
                         testid="admin-search-projects"
                     />
                     <ResultGroup
-                        heading="Templates"
+                        heading={t('admin.search_templates_heading')}
                         icon={FileStack}
                         loading={allTasks.isLoading}
                         error={null}
-                        items={templates.map((t) => ({
-                            key: t.id,
-                            primary: t.title || '(untitled)',
-                            secondary: t.id,
-                            onClick: () => handleNavigateTemplate(t.id),
+                        items={templates.map((tmpl) => ({
+                            key: tmpl.id,
+                            primary: tmpl.title || '(untitled)',
+                            secondary: tmpl.id,
+                            onClick: () => handleNavigateTemplate(tmpl.id),
                         }))}
                         testid="admin-search-templates"
                     />
@@ -156,15 +158,16 @@ interface ResultGroupProps {
 }
 
 function ResultGroup({ heading, icon: Icon, loading, error, items, testid }: ResultGroupProps) {
+    const { t } = useTranslation();
     if (!loading && !error && items.length === 0) return null;
     return (
         <section className="border-b border-border last:border-b-0" data-testid={testid}>
             <h3 className="flex items-center gap-2 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                <Icon className="h-3 w-3" />
+                <Icon aria-hidden="true" className="h-3 w-3" />
                 {heading}
             </h3>
             {loading ? (
-                <p className="px-4 pb-3 text-sm text-muted-foreground">Loading…</p>
+                <p className="px-4 pb-3 text-sm text-muted-foreground">{t('admin.loading')}</p>
             ) : error ? (
                 <p className="px-4 pb-3 text-sm text-red-600">{error}</p>
             ) : (

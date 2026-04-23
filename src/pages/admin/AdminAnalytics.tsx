@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import { useAdminAnalytics } from '@/features/admin/hooks/useAdminAnalytics';
 import {
     BarChart,
@@ -38,12 +39,13 @@ const STATUS_COLORS: Record<string, string> = {
 const CHART_GRID_STROKE = 'var(--color-slate-200)';
 
 export default function AdminAnalytics() {
+    const { t } = useTranslation();
     const { data, isLoading, error } = useAdminAnalytics();
 
     if (isLoading) {
         return (
             <div className="p-8 text-sm text-muted-foreground" data-testid="admin-analytics-loading">
-                Loading analytics…
+                {t('admin.analytics_loading')}
             </div>
         );
     }
@@ -59,7 +61,7 @@ export default function AdminAnalytics() {
     if (!data) {
         return (
             <div className="p-8 text-sm text-muted-foreground" data-testid="admin-analytics-empty">
-                No analytics data yet.
+                {t('admin.analytics_no_data')}
             </div>
         );
     }
@@ -67,22 +69,22 @@ export default function AdminAnalytics() {
     return (
         <div className="p-8" data-testid="admin-analytics">
             <header className="mb-6">
-                <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Analytics</h1>
+                <h1 className="text-2xl font-bold text-slate-900 tracking-tight">{t('admin.analytics_title')}</h1>
                 <p className="mt-1 text-sm text-muted-foreground">
-                    Cross-tenant snapshot. Refreshed every 5 minutes.
+                    {t('admin.analytics_subtitle')}
                 </p>
             </header>
 
             <section className="mb-8 grid grid-cols-2 gap-4 md:grid-cols-4" data-testid="admin-analytics-totals">
-                <StatCard label="Total users" value={data.totals.users} />
-                <StatCard label="Total projects" value={data.totals.projects} />
-                <StatCard label="Active 30d" value={data.totals.active_projects_30d} />
-                <StatCard label="New users 30d" value={data.totals.new_users_30d} />
+                <StatCard label={t('admin.analytics_totals_users')} value={data.totals.users} />
+                <StatCard label={t('admin.analytics_totals_projects')} value={data.totals.projects} />
+                <StatCard label={t('admin.analytics_totals_active_30d')} value={data.totals.active_projects_30d} />
+                <StatCard label={t('admin.analytics_totals_new_users_30d')} value={data.totals.new_users_30d} />
             </section>
 
             <section className="mb-8" data-testid="admin-analytics-projects-chart">
                 <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-                    New projects per week (last 12 weeks)
+                    {t('admin.analytics_new_projects_heading')}
                 </h2>
                 <div className="h-64 w-full rounded-lg border border-border bg-card p-4 shadow-sm">
                     <ResponsiveContainer width="100%" height="100%">
@@ -100,7 +102,7 @@ export default function AdminAnalytics() {
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <section className="rounded-lg border border-border bg-card p-4 shadow-sm" data-testid="admin-analytics-kind-chart">
                     <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-                        Project kind
+                        {t('admin.analytics_project_kind_heading')}
                     </h2>
                     <div className="h-56 w-full">
                         <ResponsiveContainer width="100%" height="100%">
@@ -130,7 +132,7 @@ export default function AdminAnalytics() {
 
                 <section className="rounded-lg border border-border bg-card p-4 shadow-sm" data-testid="admin-analytics-status-chart">
                     <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-                        Task status
+                        {t('admin.analytics_task_status_heading')}
                     </h2>
                     <div className="h-56 w-full">
                         <ResponsiveContainer width="100%" height="100%">
@@ -153,10 +155,10 @@ export default function AdminAnalytics() {
             <div className="mt-8 grid grid-cols-1 gap-4 md:grid-cols-2">
                 <section className="rounded-lg border border-border bg-card p-4 shadow-sm" data-testid="admin-analytics-top-users">
                     <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-                        Most active users (30d)
+                        {t('admin.analytics_top_users_heading')}
                     </h2>
                     {data.most_active_users.length === 0 ? (
-                        <p className="text-sm text-muted-foreground">No data.</p>
+                        <p className="text-sm text-muted-foreground">{t('admin.analytics_no_data')}</p>
                     ) : (
                         <ul className="space-y-1 text-sm">
                             {data.most_active_users.map((u) => (
@@ -171,16 +173,16 @@ export default function AdminAnalytics() {
 
                 <section className="rounded-lg border border-border bg-card p-4 shadow-sm" data-testid="admin-analytics-top-templates">
                     <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-                        Most popular templates
+                        {t('admin.analytics_top_templates_heading')}
                     </h2>
                     {data.most_popular_templates.length === 0 ? (
-                        <p className="text-sm text-muted-foreground">No data.</p>
+                        <p className="text-sm text-muted-foreground">{t('admin.analytics_no_data')}</p>
                     ) : (
                         <ul className="space-y-1 text-sm">
-                            {data.most_popular_templates.map((t) => (
-                                <li key={t.template_id} className="flex items-center justify-between gap-4">
-                                    <span className="truncate">{t.title}</span>
-                                    <span className="tabular-nums text-muted-foreground">{t.clone_count}</span>
+                            {data.most_popular_templates.map((tmpl) => (
+                                <li key={tmpl.template_id} className="flex items-center justify-between gap-4">
+                                    <span className="truncate">{tmpl.title}</span>
+                                    <span className="tabular-nums text-muted-foreground">{tmpl.clone_count}</span>
                                 </li>
                             ))}
                         </ul>

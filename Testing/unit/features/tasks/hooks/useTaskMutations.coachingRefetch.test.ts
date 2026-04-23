@@ -77,7 +77,11 @@ describe('useUpdateTask — coaching flag refetch (Wave 23 Task 1)', () => {
     );
   });
 
-  it('invalidates tasks/root fallback when no root_id is supplied', async () => {
+  it('only invalidates the per-task key when no root_id is supplied', async () => {
+    // Post-follow-up cleanup: the dead `['tasks', 'root']` fallback key was
+    // removed from useUpdateTask.onSettled (no consumer reads it). With no
+    // rootId, only the per-task cache is invalidated; hierarchy/projects
+    // refetches don't fire until a rootId is in play.
     const updated = makeTask({ id: 't2', settings: { is_coaching_task: true } });
     mockUpdate.mockResolvedValueOnce(updated);
 
@@ -93,8 +97,10 @@ describe('useUpdateTask — coaching flag refetch (Wave 23 Task 1)', () => {
       });
     });
 
-    expect(invalidateSpy).toHaveBeenCalledWith(
-      expect.objectContaining({ queryKey: ['tasks', 'root'] }),
+    const invalidatedKeys = invalidateSpy.mock.calls.map(
+      (call) => (call[0] as { queryKey: unknown[] }).queryKey,
     );
+    expect(invalidatedKeys).toContainEqual(['task', 't2']);
+    expect(invalidatedKeys).not.toContainEqual(['tasks', 'root']);
   });
 });

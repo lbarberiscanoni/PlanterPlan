@@ -16,7 +16,8 @@ import { planter } from '@/shared/api/planterClient';
 import { ProjectDndShell } from '@/pages/components/ProjectDndShell';
 
 import { Loader2, Plus } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { Button } from '@/shared/ui/button';
 import { useCreateTask, useUpdateTask } from '@/features/tasks/hooks/useTaskMutations';
 import { toast } from 'sonner';
@@ -42,14 +43,17 @@ export default function Project() {
     // empty state, which is acceptable for a handful of cases.
     const { projectId } = useParams<{ projectId: string }>();
     const { user } = useAuth();
+    const { t } = useTranslation();
 
     const {
         project,
         loadingProject,
+        projectError,
         phases,
         milestones,
         tasks,
         teamMembers,
+        refetchProject,
     } = useProjectData(projectId);
 
     // Wave 27: open the per-project presence channel. No-op outside /Project/:id
@@ -143,11 +147,11 @@ export default function Project() {
                 }
                 setTaskFormState(null);
                 actions.setInlineAddingParentId(null);
-                toast.success('Task created successfully');
+                toast.success(t('projects.task_created_toast'));
             }
         } catch (error: unknown) {
-            const message = error instanceof Error ? error.message : 'Unknown error occurred';
-            toast.error('Failed to save task', { description: message });
+            const message = error instanceof Error ? error.message : t('errors.unknown');
+            toast.error(t('projects.task_save_failed_toast'), { description: message });
             throw error;
         }
     };
@@ -235,13 +239,34 @@ export default function Project() {
         })
         .sort((a: TaskRow, b: TaskRow) => (a.position || 0) - (b.position || 0));
 
-    if (loadingProject || !project) {
+    if (loadingProject) {
         return (
-            <>
-                <div className="flex justify-center py-20">
-                    <Loader2 data-testid="loading-spinner" className="w-8 h-8 animate-spin text-orange-500" />
+            <div className="flex justify-center py-20">
+                <Loader2 data-testid="loading-spinner" className="w-8 h-8 animate-spin text-orange-500" />
+            </div>
+        );
+    }
+
+    // The primary project-metadata query either errored (network / RLS denial
+    // / bad id) or returned null. Render a recoverable error card instead of
+    // an infinite spinner — user can retry or bail to the dashboard. Before
+    // this change, an expired membership or a mistyped UUID froze the route.
+    if (projectError || !project) {
+        return (
+            <div className="flex flex-col items-center justify-center py-20 gap-4 text-center px-6">
+                <p className="text-destructive font-medium">{t('errors.failed_load_project')}</p>
+                <p className="text-muted-foreground text-sm max-w-md">
+                    {projectError?.message ?? t('errors.project_not_found_or_no_access')}
+                </p>
+                <div className="flex gap-2">
+                    <Button variant="outline" onClick={() => refetchProject()}>
+                        {t('common.retry')}
+                    </Button>
+                    <Button asChild variant="ghost">
+                        <Link to="/dashboard">{t('errors.back_to_dashboard')}</Link>
+                    </Button>
                 </div>
-            </>
+            </div>
         );
     }
 
@@ -276,8 +301,8 @@ export default function Project() {
                                     onClick={() => setTaskFormState({ mode: 'create', origin: projectOrigin, isPhase: true })}
                                     className="bg-brand-500 hover:bg-brand-600 text-white"
                                 >
-                                    <Plus className="w-4 h-4 mr-2" />
-                                    Add Phase
+                                    <Plus aria-hidden="true" className="w-4 h-4 mr-2" />
+                                    {t('projects.add_phase_button')}
                                 </Button>
                             )}
                         </div>
@@ -285,7 +310,7 @@ export default function Project() {
                         {state.activeTab === 'board' && (
                             <>
                                 <div className="mb-8">
-                                    <h2 className="text-lg font-semibold text-slate-900 mb-4">Phases</h2>
+                                    <h2 className="text-lg font-semibold text-slate-900 mb-4">{t('projects.phases_heading')}</h2>
                                     <div className="flex gap-4 overflow-x-auto pb-2">
                                         {sortedPhases.map((phase) => (
                                             <div key={phase.id} className="min-w-[200px] flex-1">
@@ -302,15 +327,14 @@ export default function Project() {
                                 </div>
 
                                 {activePhase && (
-                                    <motion.div
-                                        initial={{ opacity: 0, y: 20 }}
-                                        animate={{ opacity: 1, y: 0 }}
-                                        transition={{ duration: 0.3 }}
-                                    >
+                                    <div className="animate-slide-up">
                                         <div className="flex items-center justify-between mb-6">
                                             <div>
                                                 <h2 className="text-xl font-semibold text-slate-900">
-                                                    Phase {(activePhase as { position?: number }).position}: {(activePhase as { title?: string }).title}
+                                                    {t('projects.phase_heading_title', {
+                                                        position: (activePhase as { position?: number }).position,
+                                                        title: (activePhase as { title?: string }).title,
+                                                    })}
                                                 </h2>
                                                 {(activePhase as { description?: string }).description && (
                                                     <p className="text-slate-600 mt-1">{(activePhase as { description?: string }).description}</p>
@@ -321,7 +345,7 @@ export default function Project() {
                                         <div className="space-y-4">
                                             {phaseMilestones.length === 0 ? (
                                                 <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-12 text-center">
-                                                    <p className="text-slate-500 mb-4">No milestones in this phase yet</p>
+                                                    <p className="text-slate-500 mb-4">{t('projects.no_milestones_in_phase')}</p>
                                                     {canEdit && (
                                                         <Button
                                                             variant="outline"
@@ -331,8 +355,8 @@ export default function Project() {
                                                             }}
                                                             className="text-brand-600 border-brand-200 hover:bg-brand-50"
                                                         >
-                                                            <Plus className="w-4 h-4 mr-2" />
-                                                            Add Milestone
+                                                            <Plus aria-hidden="true" className="w-4 h-4 mr-2" />
+                                                            {t('projects.add_milestone_button')}
                                                         </Button>
                                                     )}
                                                 </div>
@@ -369,12 +393,12 @@ export default function Project() {
                                                         setTaskFormState({ mode: 'create', origin: projectOrigin });
                                                     }}
                                                 >
-                                                    <Plus className="w-4 h-4 mr-2" />
-                                                    Add Milestone
+                                                    <Plus aria-hidden="true" className="w-4 h-4 mr-2" />
+                                                    {t('projects.add_milestone_button')}
                                                 </Button>
                                             )}
                                         </div>
-                                    </motion.div>
+                                    </div>
                                 )}
                             </>
                         )}

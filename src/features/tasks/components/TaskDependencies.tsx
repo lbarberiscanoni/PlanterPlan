@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 import { planter } from '@/shared/api/planterClient';
 import { Button } from '@/shared/ui/button';
 import { Link2, Trash2, Check } from 'lucide-react';
@@ -34,6 +35,7 @@ interface TaskDependenciesProps {
 }
 
 export default function TaskDependencies({ task, allProjectTasks }: TaskDependenciesProps) {
+ const { t } = useTranslation();
  const queryClient = useQueryClient();
  const [open, setOpen] = useState(false);
  const [selectedType] = useState('relates_to');
@@ -76,12 +78,12 @@ export default function TaskDependencies({ task, allProjectTasks }: TaskDependen
  return (
  <div data-testid="task-dependencies" className="detail-section mb-6">
  <div className="flex items-center justify-between mb-3">
- <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wide">Related Tasks</h3>
+ <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wide">{t('tasks.dependencies.heading')}</h3>
  </div>
 
  <div className="space-y-2 mb-3">
  {validRelationships.length === 0 && (
- <p className="text-sm text-slate-500 italic">No dependencies linked.</p>
+ <p className="text-sm text-slate-500 italic">{t('tasks.dependencies.empty')}</p>
  )}
  {validRelationships.map(rel => {
  const isOutgoing = rel.from_task_id === task.id;
@@ -89,12 +91,16 @@ export default function TaskDependencies({ task, allProjectTasks }: TaskDependen
  // Safety check if join failed
  if (!otherTask) return null;
 
+ const relLabel = rel.type === 'blocks'
+  ? (isOutgoing ? t('tasks.dependencies.type_blocks') : t('tasks.dependencies.type_blocked_by'))
+  : t('tasks.dependencies.type_relates');
+
  return (
  <div key={rel.id} className="flex items-center justify-between p-2 bg-slate-50 border border-slate-200 rounded-md">
  <div className="flex items-center gap-2 overflow-hidden">
  <span className={`text-[10px] uppercase font-bold px-1.5 py-0.5 rounded ${rel.type === 'blocks' ? 'bg-rose-100 text-rose-700' : 'bg-blue-100 text-blue-700'
  }`}>
- {rel.type === 'blocks' ? (isOutgoing ? 'Blocks' : 'Blocked By') : 'Relates'}
+ {relLabel}
  </span>
  <span className="text-sm text-slate-700 truncate">{otherTask.title}</span>
  </div>
@@ -103,8 +109,9 @@ export default function TaskDependencies({ task, allProjectTasks }: TaskDependen
  size="sm"
  onClick={() => removeMutation.mutate(rel.id)}
  className="h-6 w-6 p-0 text-slate-400 hover:text-rose-500"
+ aria-label={t('tasks.dependencies.remove_aria', { title: otherTask.title })}
  >
- <Trash2 className="w-3 h-3" />
+ <Trash2 aria-hidden="true" className="w-3 h-3" />
  </Button>
  </div>
  );
@@ -114,16 +121,16 @@ export default function TaskDependencies({ task, allProjectTasks }: TaskDependen
  <Popover open={open} onOpenChange={setOpen}>
  <PopoverTrigger asChild>
  <Button variant="outline" size="sm" className="w-full border-dashed text-slate-500 hover:text-brand-600 hover:border-brand-300">
- <Link2 className="w-3 h-3 mr-2" />
- Add Dependency
+ <Link2 aria-hidden="true" className="w-3 h-3 mr-2" />
+ {t('tasks.dependencies.add_button')}
  </Button>
  </PopoverTrigger>
  <PopoverContent className="p-0 w-[300px]" align="start">
  <Command>
- <CommandInput placeholder="Search tasks..." />
+ <CommandInput placeholder={t('tasks.dependencies.search_placeholder')} />
  <CommandList>
- <CommandEmpty>No tasks found.</CommandEmpty>
- <CommandGroup heading="Available Tasks">
+ <CommandEmpty>{t('tasks.dependencies.no_results')}</CommandEmpty>
+ <CommandGroup heading={t('tasks.dependencies.available_heading')}>
  {availableTasks.map((t) => (
  <CommandItem
  key={t.id}
@@ -131,6 +138,7 @@ export default function TaskDependencies({ task, allProjectTasks }: TaskDependen
  onSelect={() => addMutation.mutate(t.id)}
  >
  <Check
+ aria-hidden="true"
  className={cn(
  "mr-2 h-4 w-4 opacity-0"
  )}

@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 import { planter } from '@/shared/api/planterClient';
 import type { Task } from '@/shared/db/app.types';
 import { formatDisplayDate } from '@/shared/lib/date-engine';
@@ -11,6 +12,7 @@ import { formatDisplayDate } from '@/shared/lib/date-engine';
  * `settings.cloned_from_template_version`.
  */
 export default function AdminTemplates() {
+    const { t } = useTranslation();
     const tasks = useQuery<Task[]>({
         queryKey: ['adminTemplates'],
         queryFn: () => planter.entities.Task.list(),
@@ -37,15 +39,12 @@ export default function AdminTemplates() {
     return (
         <div className="p-8" data-testid="admin-templates">
             <header className="mb-6">
-                <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Templates</h1>
-                <p className="mt-1 text-sm text-muted-foreground">
-                    Cross-tenant template roll-up. Click a template to see the instances cloned from it, with each
-                    instance's stamped `cloned_from_template_version` for drift inspection.
-                </p>
+                <h1 className="text-2xl font-bold text-slate-900 tracking-tight">{t('admin.templates_title')}</h1>
+                <p className="mt-1 text-sm text-muted-foreground">{t('admin.templates_subtitle')}</p>
             </header>
 
             {tasks.isLoading ? (
-                <p className="text-sm text-muted-foreground">Loading templates…</p>
+                <p className="text-sm text-muted-foreground">{t('admin.loading')}</p>
             ) : tasks.error instanceof Error ? (
                 <p className="text-sm text-red-600">{tasks.error.message}</p>
             ) : (
@@ -54,16 +53,16 @@ export default function AdminTemplates() {
                         <table className="w-full text-sm" data-testid="admin-templates-table">
                             <thead className="bg-slate-50 text-xs uppercase tracking-wide text-muted-foreground">
                                 <tr>
-                                    <th className="px-4 py-2 text-left font-semibold">Title</th>
-                                    <th className="px-4 py-2 text-right font-semibold">Version</th>
-                                    <th className="px-4 py-2 text-left font-semibold">Updated</th>
+                                    <th scope="col" className="px-4 py-2 text-left font-semibold">{t('admin.templates_col_title')}</th>
+                                    <th scope="col" className="px-4 py-2 text-right font-semibold">{t('admin.templates_col_version')}</th>
+                                    <th scope="col" className="px-4 py-2 text-left font-semibold">{t('admin.templates_col_updated')}</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {templateRoots.length === 0 ? (
                                     <tr>
                                         <td colSpan={3} className="px-4 py-6 text-center text-muted-foreground">
-                                            No templates yet.
+                                            {t('admin.templates_empty')}
                                         </td>
                                     </tr>
                                 ) : (
@@ -77,9 +76,9 @@ export default function AdminTemplates() {
                                             onClick={() => setSelectedTemplateId(tpl.id)}
                                             data-testid={`admin-templates-row-${tpl.id}`}
                                         >
-                                            <td className="px-4 py-2">{tpl.title ?? '(untitled)'}</td>
+                                            <td className="px-4 py-2">{tpl.title ?? t('admin.untitled')}</td>
                                             <td className="px-4 py-2 text-right tabular-nums">
-                                                v{tpl.template_version ?? 1}
+                                                {t('admin.templates_version_prefix', { version: tpl.template_version ?? 1 })}
                                             </td>
                                             <td className="px-4 py-2">{tpl.updated_at ? formatDisplayDate(tpl.updated_at) : '—'}</td>
                                         </tr>
@@ -94,9 +93,9 @@ export default function AdminTemplates() {
                             className="w-96 flex-shrink-0 rounded-lg border border-border bg-card p-5 shadow-sm"
                             data-testid="admin-templates-clones"
                         >
-                            <h2 className="text-lg font-semibold text-slate-900">Cloned instances</h2>
+                            <h2 className="text-lg font-semibold text-slate-900">{t('admin.templates_clones_heading')}</h2>
                             {clonedInstances.length === 0 ? (
-                                <p className="mt-3 text-sm text-muted-foreground">No instances cloned from this template.</p>
+                                <p className="mt-3 text-sm text-muted-foreground">{t('admin.templates_clones_empty')}</p>
                             ) : (
                                 <ul className="mt-3 divide-y divide-border">
                                     {clonedInstances.map((inst) => {
@@ -111,11 +110,11 @@ export default function AdminTemplates() {
                                             <li key={inst.id} className="flex items-start justify-between gap-3 py-3">
                                                 <div className="min-w-0">
                                                     <p className="truncate text-sm font-medium text-slate-900">
-                                                        {inst.title ?? '(untitled)'}
+                                                        {inst.title ?? t('admin.untitled')}
                                                     </p>
                                                     <p className="text-xs text-muted-foreground">
-                                                        Cloned from v{stampedVersion ?? '—'}
-                                                        {stale ? <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-amber-800">stale</span> : null}
+                                                        {t('admin.templates_cloned_from', { version: stampedVersion ?? '—' })}
+                                                        {stale ? <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-amber-800">{t('admin.templates_stale_badge')}</span> : null}
                                                     </p>
                                                 </div>
                                             </li>

@@ -1,8 +1,27 @@
 import React, { useState } from 'react';
-import ReactDOM from 'react-dom';
+import { useTranslation } from 'react-i18next';
 import { planter } from '@/shared/api/planterClient';
 import { ROLES } from '@/shared/constants';
 import { Loader2 } from 'lucide-react';
+import { useDirtyCloseGuard } from '@/shared/lib/use-dirty-close-guard';
+import { Button } from '@/shared/ui/button';
+import { Input } from '@/shared/ui/input';
+import { Label } from '@/shared/ui/label';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from '@/shared/ui/dialog';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/shared/ui/select';
 
 interface InviteMemberModalProps {
     project: { id: string; title: string };
@@ -10,18 +29,32 @@ interface InviteMemberModalProps {
     onInviteSuccess?: () => void;
 }
 
+/**
+ * Migrated from a hand-rolled `ReactDOM.createPortal` to Radix `Dialog`. The
+ * previous implementation had no focus trap, no Escape handler, no
+ * `aria-modal` / `role="dialog"`, and inconsistent styling vs. the rest of
+ * the app (see UX audit ship-blocker #10). This rewrite inherits all of
+ * those a11y properties from Radix Dialog + Select for free.
+ */
 const InviteMemberModal: React.FC<InviteMemberModalProps> = ({ project, onClose, onInviteSuccess }) => {
+    const { t } = useTranslation();
     const [userId, setUserId] = useState('');
     const [role, setRole] = useState<string>(ROLES.VIEWER);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [success, setSuccess] = useState(false);
 
+    // Guard the close path — a mis-click on the backdrop after the user typed
+    // an email prompts for Discard. `success === true` short-circuits the
+    // guard because we auto-close 1.5s after a successful invite; prompting
+    // there would be jarring.
+    const isDirty = !success && (userId.trim().length > 0 || role !== ROLES.VIEWER);
+    const guardedClose = useDirtyCloseGuard(isDirty, onClose);
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
 
         if (!userId.trim()) {
-            console.warn('[InviteMemberModal] User ID empty');
             return;
         }
 
@@ -29,7 +62,7 @@ const InviteMemberModal: React.FC<InviteMemberModalProps> = ({ project, onClose,
         const UUID_REGEX = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
 
         if (!EMAIL_REGEX.test(userId) && !UUID_REGEX.test(userId)) {
-            setError('Please enter a valid Email Address or UUID.');
+            setError(t('projects.invite_modal.invalid_identifier'));
             return;
         }
 
@@ -53,7 +86,7 @@ const InviteMemberModal: React.FC<InviteMemberModalProps> = ({ project, onClose,
                 (typeof err === 'object' && err !== null && 'code' in err && (err as { code: string }).code === '42501') ||
                 (typeof err === 'object' && err !== null && 'message' in err && typeof (err as { message: string }).message === 'string' && (err as { message: string }).message.includes('policy'))
             ) {
-                result = { error: 'Access denied: You must be an Owner to manage members.' };
+                result = { error: t('projects.invite_modal.access_denied_owner') };
             } else {
                 result = { error: err };
             }
@@ -67,100 +100,93 @@ const InviteMemberModal: React.FC<InviteMemberModalProps> = ({ project, onClose,
                     ? (inviteError as { message: string }).message
                     : (typeof inviteError === 'string' ? inviteError : JSON.stringify(inviteError));
             console.error('[InviteMemberModal] Invite Failed:', msg);
-            setError(msg || 'Failed to invite member (Unknown Error)');
+            setError(msg || t('projects.invite_modal.invite_failed_unknown'));
             setIsSubmitting(false);
         } else {
             setIsSubmitting(false);
             setSuccess(true);
             if (onInviteSuccess) onInviteSuccess();
-
-            // Fix UX-04: Delay closure to show success state
+            // Delay close so the success state is visible (~1.5s is the
+            // smallest span where a typical reader registers the emerald
+            // banner without feeling blocked).
             setTimeout(() => {
                 onClose();
             }, 1500);
         }
     };
 
-    return ReactDOM.createPortal(
-        <div data-testid="invite-member-modal" className="fixed inset-0 z-50 flex items-center justify-center">
-            {/* Backdrop */}
-            <div
-                className="absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity"
-                onClick={onClose}
-            />
-
-            {/* Modal Content */}
-            <div className="relative w-full max-w-md rounded-lg bg-white p-6 shadow-xl transform transition-all">
-                <h2 className="text-lg font-semibold text-slate-900">Invite Member</h2>
-                <p className="mt-1 text-sm text-slate-500">
-                    Invite a user to <strong>{project.title}</strong>
-                </p>
+    return (
+        <Dialog open onOpenChange={(open) => { if (!open) void guardedClose(); }}>
+            <DialogContent data-testid="invite-member-modal" className="sm:max-w-md">
+                <DialogHeader>
+                    <DialogTitle>{t('projects.invite_modal.title')}</DialogTitle>
+                    <DialogDescription>
+                        {t('projects.invite_modal.description', { project: project.title })}
+                    </DialogDescription>
+                </DialogHeader>
 
                 {error && (
-                    <div className="mt-4 rounded-md bg-rose-50 p-3 text-sm text-rose-600">{error}</div>
+                    <div role="alert" className="rounded-md bg-rose-50 p-3 text-sm text-rose-700 border border-rose-200">
+                        {error}
+                    </div>
                 )}
                 {success && (
-                    <div className="mt-4 rounded-md bg-emerald-50 p-3 text-sm text-emerald-600">
-                        Invitation sent successfully!
+                    <div role="status" aria-live="polite" className="rounded-md bg-emerald-50 p-3 text-sm text-emerald-700 border border-emerald-200">
+                        {t('projects.invite_modal.success')}
                     </div>
                 )}
 
-                <form onSubmit={handleSubmit} className="mt-4 space-y-4">
-                    <div>
-                        <label htmlFor="userId" className="block text-sm font-medium text-slate-700">
-                            User Email or UUID
-                        </label>
-                        <input
+                <form onSubmit={handleSubmit} className="space-y-4">
+                    <div className="space-y-2">
+                        <Label htmlFor="invite-userId">{t('projects.invite_modal.identifier_label')}</Label>
+                        <Input
                             type="text"
-                            id="userId"
+                            id="invite-userId"
                             value={userId}
                             onChange={(e) => setUserId(e.target.value)}
-                            className="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 sm:text-sm form-input p-2 border"
-                            placeholder="user@example.com or UUID"
+                            placeholder={t('projects.invite_modal.identifier_placeholder')}
                             required
+                            autoFocus
+                            aria-describedby="invite-userId-hint"
+                            autoComplete="email"
                         />
-                        <p className="mt-1 text-xs text-slate-400">Enter the email of an existing user.</p>
+                        <p id="invite-userId-hint" className="text-xs text-muted-foreground">
+                            {t('projects.invite_modal.identifier_hint')}
+                        </p>
                     </div>
 
-                    <div>
-                        <label htmlFor="role" className="block text-sm font-medium text-slate-700">
-                            Role
-                        </label>
-                        <select
-                            id="role"
-                            value={role}
-                            onChange={(e) => setRole(e.target.value)}
-                            className="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-brand-500 focus:ring-brand-500 sm:text-sm form-select p-2 border"
-                        >
-                            <option value={ROLES.VIEWER}>Viewer (Read-only)</option>
-                            <option value={ROLES.COACH}>Coach (Comment & Review)</option>
-                            <option value={ROLES.EDITOR}>Editor (Can edit tasks)</option>
-                            <option value={ROLES.LIMITED}>Limited (Assigned tasks only)</option>
-                        </select>
+                    <div className="space-y-2">
+                        <Label htmlFor="invite-role">{t('common.role')}</Label>
+                        <Select value={role} onValueChange={setRole}>
+                            <SelectTrigger id="invite-role">
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value={ROLES.VIEWER}>{t('projects.invite_modal.role_viewer')}</SelectItem>
+                                <SelectItem value={ROLES.COACH}>{t('projects.invite_modal.role_coach')}</SelectItem>
+                                <SelectItem value={ROLES.EDITOR}>{t('projects.invite_modal.role_editor')}</SelectItem>
+                                <SelectItem value={ROLES.LIMITED}>{t('projects.invite_modal.role_limited')}</SelectItem>
+                            </SelectContent>
+                        </Select>
                     </div>
 
-                    <div className="mt-6 flex justify-end space-x-3">
-                        <button
+                    <DialogFooter className="pt-2">
+                        <Button
                             type="button"
-                            onClick={onClose}
-                            className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2"
+                            variant="outline"
+                            onClick={() => void guardedClose()}
                             disabled={isSubmitting}
                         >
-                            Cancel
-                        </button>
-                        <button
-                            type="submit"
-                            className="rounded-md border border-transparent bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2 flex items-center"
-                            disabled={isSubmitting}
-                        >
-                            {isSubmitting && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                            {isSubmitting ? 'Inviting...' : 'Send Invite'}
-                        </button>
-                    </div>
+                            {t('common.cancel')}
+                        </Button>
+                        <Button type="submit" disabled={isSubmitting} aria-busy={isSubmitting}>
+                            {isSubmitting && <Loader2 className="w-4 h-4 mr-2 animate-spin" aria-hidden="true" />}
+                            {isSubmitting ? t('projects.invite_modal.inviting') : t('projects.invite_modal.send_invite')}
+                        </Button>
+                    </DialogFooter>
                 </form>
-            </div>
-        </div>,
-        document.body
+            </DialogContent>
+        </Dialog>
     );
 };
 

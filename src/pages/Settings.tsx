@@ -11,7 +11,6 @@ import {
  Loader2,
  Calendar,
 } from 'lucide-react';
-import { motion } from 'framer-motion';
 import { useSettings } from '@/features/settings/hooks/useSettings';
 import SettingsNotificationsTab from '@/pages/components/SettingsNotificationsTab';
 import { LocaleSwitcher } from '@/features/settings/components/LocaleSwitcher';
@@ -64,7 +63,7 @@ export default function Settings() {
 
  {/* Content Area */}
  <div className="md:col-span-3">
- <motion.div key={activeTab} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
+ <div key={activeTab} className="animate-slide-up">
 
  {/* Profile Tab */}
  {activeTab === 'profile' && (
@@ -73,7 +72,7 @@ export default function Settings() {
  <div className="relative">
  <div className="w-24 h-24 bg-secondary rounded-2xl flex items-center justify-center border-2 border-background shadow-md overflow-hidden">
  {profile.avatar_url ? (
- <img src={profile.avatar_url} alt={t('settings.profile.avatar_alt')} className="w-full h-full object-cover" />
+ <img src={profile.avatar_url} alt={t('settings.profile.avatar_alt')} width={96} height={96} loading="lazy" className="w-full h-full object-cover" />
  ) : (
  <User className="w-10 h-10 text-muted-foreground" />
  )}
@@ -250,7 +249,7 @@ export default function Settings() {
  </div>
  )}
 
- </motion.div>
+ </div>
  </div>
  </div>
  </div >

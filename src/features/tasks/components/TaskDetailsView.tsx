@@ -227,7 +227,8 @@ const TaskDetailsView = ({
                 </>
             )}
 
-            {/* Schedule */}
+            {/* Schedule — hidden for template tasks */}
+            {task.origin !== 'template' && (
             <div className="detail-section mb-6">
                 <h3 className="text-sm font-bold text-slate-900 mb-3 uppercase tracking-wide">Schedule</h3>
                 <div className="grid grid-cols-2 gap-3">
@@ -249,6 +250,7 @@ const TaskDetailsView = ({
                     </div>
                 </div>
             </div>
+            )}
 
             {/* Status Badges */}
             <div className="detail-section mb-6">

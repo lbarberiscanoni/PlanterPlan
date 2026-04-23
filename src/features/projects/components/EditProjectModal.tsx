@@ -4,7 +4,7 @@ import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { useTranslation } from 'react-i18next';
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/shared/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/shared/ui/dialog';
 import { Button } from '@/shared/ui/button';
 import { Label } from '@/shared/ui/label';
 import { Input } from '@/shared/ui/input';
@@ -14,6 +14,7 @@ import { RadioGroup, RadioGroupItem } from '@/shared/ui/radio-group';
 import { useUpdateProject, useDeleteProject, useUpdateProjectStatus } from '@/features/projects/hooks/useProjectMutations';
 import { applyProjectKind, extractProjectKind, type ProjectKind } from '@/features/projects/lib/project-kind';
 import { toIsoDate } from '@/shared/lib/date-engine';
+import { useDirtyCloseGuard } from '@/shared/lib/use-dirty-close-guard';
 import { PROJECT_STATUS } from '@/shared/constants/domain';
 import type { TaskRow } from '@/shared/db/app.types';
 import { toast } from 'sonner';
@@ -48,14 +49,16 @@ export default function EditProjectModal({ project, isOpen, onClose }: EditProje
    z.object({
     title: z.string().min(1, t('projects.form.title_required_short')),
     description: z.string().optional(),
-    start_date: z.string().min(1, t('projects.form.start_date_required')),
+    start_date: isTemplate
+     ? z.string().optional()
+     : z.string().min(1, t('projects.form.start_date_required')),
     due_date: z.string().optional(),
     due_soon_threshold: z.coerce.number()
      .min(1, t('projects.edit_modal.due_soon_threshold_min'))
      .max(30, t('projects.edit_modal.due_soon_threshold_max')),
     supervisor_email: z.string().email(t('projects.edit_modal.supervisor_email_invalid')).optional().or(z.literal('')),
    }),
-  [t],
+  [t, isTemplate],
  );
 
  type EditProjectFormData = z.infer<typeof editProjectSchema>;
@@ -85,7 +88,7 @@ export default function EditProjectModal({ project, isOpen, onClose }: EditProje
   register,
   handleSubmit,
   control,
-  formState: { errors, isSubmitting },
+  formState: { errors, isSubmitting, isDirty: formIsDirty },
  } = useForm<EditProjectFormData>({
   // @ts-expect-error Zod schema mismatches slightly with final form data type
   resolver: zodResolver(editProjectSchema),
@@ -106,6 +109,19 @@ export default function EditProjectModal({ project, isOpen, onClose }: EditProje
  const trimmedSupervisorEmail = watchedSupervisorEmail.trim();
  const isSupervisorEmailValid = emailSchema.safeParse(trimmedSupervisorEmail).success;
  const canSendTestReport = Boolean(project.id) && isSupervisorEmailValid && !isSendingTest;
+
+ // Dirty detection: RHF's `formState.isDirty` tracks the 6 form fields.
+ // `isPublished` (template) and `projectKind` (instance root) are managed
+ // outside RHF via useState, so they need separate comparisons against
+ // the values loaded from the project at mount. `pendingKindRevert` is
+ // an internal UI flag (not user data), not tracked.
+ const initialPublished = useMemo(() => currentSettings.published === true, [currentSettings.published]);
+ const initialKind = useMemo(() => extractProjectKind(project), [project]);
+ const isDirty =
+  formIsDirty ||
+  (isTemplate && isPublished !== initialPublished) ||
+  (isRoot && isInstance && projectKind !== initialKind);
+ const guardedClose = useDirtyCloseGuard(isDirty, onClose);
 
  const handleSendTestReport = async () => {
   if (!canSendTestReport) return;
@@ -167,10 +183,11 @@ export default function EditProjectModal({ project, isOpen, onClose }: EditProje
 
  return (
   <>
-  <Dialog open={isOpen} onOpenChange={onClose}>
+  <Dialog open={isOpen} onOpenChange={(o) => { if (!o) void guardedClose(); }}>
    <DialogContent data-testid="edit-project-modal" className="sm:max-w-[500px]">
     <DialogHeader>
      <DialogTitle>{t('projects.edit_modal.title')}</DialogTitle>
+     <DialogDescription>{t('projects.edit_modal.description')}</DialogDescription>
     </DialogHeader>
 
     <div className="space-y-6 py-4">
@@ -285,6 +302,7 @@ export default function EditProjectModal({ project, isOpen, onClose }: EditProje
       )}
      </div>
 
+     {!isTemplate && (
      <div className="bg-amber-50 p-4 rounded-lg border border-amber-200 space-y-4">
       <div>
        <Label htmlFor="start_date" className="block mb-1 font-semibold text-amber-800">
@@ -309,9 +327,10 @@ export default function EditProjectModal({ project, isOpen, onClose }: EditProje
        <Input type="date" id="due_date" {...register('due_date')} />
       </div>
      </div>
+     )}
 
      <div className="flex justify-end gap-3 pt-2">
-      <Button variant="outline" onClick={onClose} type="button">
+      <Button variant="outline" onClick={() => void guardedClose()} type="button">
        {t('common.cancel')}
       </Button>
       <Button onClick={handleSubmit(onSubmit as (data: unknown) => void)} disabled={isSubmitting}>
@@ -398,13 +417,13 @@ export default function EditProjectModal({ project, isOpen, onClose }: EditProje
   </Dialog>
 
   <Dialog open={pendingKindRevert} onOpenChange={setPendingKindRevert}>
-   <DialogContent data-testid="project-kind-revert-dialog" className="sm:max-w-[440px]">
+   <DialogContent role="alertdialog" data-testid="project-kind-revert-dialog" className="sm:max-w-md">
     <DialogHeader>
      <DialogTitle>{t('projects.edit_modal.revert_kind_title')}</DialogTitle>
+     <DialogDescription>
+      {t('projects.edit_modal.revert_kind_description')}
+     </DialogDescription>
     </DialogHeader>
-    <p className="text-sm text-slate-600">
-     {t('projects.edit_modal.revert_kind_description')}
-    </p>
     <DialogFooter className="gap-2 sm:justify-end">
      <Button variant="outline" onClick={() => setPendingKindRevert(false)}>
       {t('common.cancel')}

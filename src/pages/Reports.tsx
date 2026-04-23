@@ -7,7 +7,7 @@ import { Button } from '@/shared/ui/button';
 import { Card } from '@/shared/ui/card';
 import { Progress } from '@/shared/ui/progress';
 import { ArrowLeft, Loader2, BarChart, TrendingUp, CheckCircle2, AlertTriangle, Clock } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { STALE_TIMES } from '@/shared/lib/react-query-config';
 import { toMonthKey } from '@/shared/lib/date-engine';
 import { useAuth } from '@/shared/contexts/AuthContext';
 import {
@@ -43,18 +43,26 @@ export default function Reports() {
         queryKey: ['reportProject', projectId],
         queryFn: () => planter.entities.Project.filter({ id: projectId }).then((res: TaskRow[]) => res[0]),
         enabled: !!projectId,
+        staleTime: STALE_TIMES.medium,
     });
 
     const { data: allProjects = [] } = useQuery({
         queryKey: ['projects', user?.id],
         queryFn: async () => planter.entities.Project.filter({}),
         enabled: !!user,
+        staleTime: STALE_TIMES.medium,
     });
 
-    const { data: allTasks = [], isLoading } = useQuery<TaskRow[]>({
-        queryKey: ['tasks', projectId],
+    // Share the `['projectHierarchy', projectId]` cache key with the rest of
+    // the app so task mutations performed elsewhere (Project.tsx, TaskList)
+    // invalidate this report view too. Prior key `['tasks', projectId]` was
+    // orphaned — reports showed stale data after any task edit until the
+    // user hard-reloaded.
+    const { data: allTasks = [], isLoading, isError, error, refetch } = useQuery<TaskRow[]>({
+        queryKey: ['projectHierarchy', projectId],
         queryFn: () => planter.entities.Task.filter({ root_id: projectId }),
         enabled: !!projectId,
+        staleTime: STALE_TIMES.medium,
     });
 
     const phases = allTasks.filter((t) => t.parent_task_id === projectId);
@@ -76,11 +84,23 @@ export default function Reports() {
 
     if (isLoading) {
         return (
-            <>
-                <div className="flex justify-center py-20">
-                    <Loader2 data-testid="loading-spinner" className="w-8 h-8 animate-spin text-orange-500" />
-                </div>
-            </>
+            <div className="flex justify-center py-20">
+                <Loader2 data-testid="loading-spinner" className="w-8 h-8 animate-spin text-orange-500" />
+            </div>
+        );
+    }
+
+    if (isError) {
+        return (
+            <div className="flex flex-col items-center justify-center py-20 gap-4 text-center px-6">
+                <p className="text-destructive font-medium">{t('errors.failed_load_reports')}</p>
+                <p className="text-muted-foreground text-sm max-w-md">
+                    {(error as Error)?.message ?? t('errors.unknown')}
+                </p>
+                <Button variant="outline" onClick={() => refetch()}>
+                    {t('common.retry')}
+                </Button>
+            </div>
         );
     }
 
@@ -143,13 +163,8 @@ export default function Reports() {
                     ) : (
                         <>
                             <div className="grid grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
-                                {statsConfig.map((stat, index) => (
-                                    <motion.div
-                                        key={stat.label}
-                                        initial={{ opacity: 0, y: 20 }}
-                                        animate={{ opacity: 1, y: 0 }}
-                                        transition={{ delay: index * 0.1 }}
-                                    >
+                                {statsConfig.map((stat) => (
+                                    <div key={stat.label} className="animate-slide-up">
                                         <Card className={`p-6 border border-slate-200 bg-white shadow-sm hover:shadow-lg transition-all duration-300 group hover:${stat.borderClass}`}>
                                             <div className="flex items-center justify-between">
                                                 <div>
@@ -163,15 +178,11 @@ export default function Reports() {
                                                 </div>
                                             </div>
                                         </Card>
-                                    </motion.div>
+                                    </div>
                                 ))}
                             </div>
 
-                            <motion.div
-                                initial={{ opacity: 0, y: 20 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                transition={{ delay: 0.4 }}
-                            >
+                            <div className="animate-slide-up">
                                 <Card className="p-8 mb-10 border border-slate-200 bg-slate-50/50 shadow-md hover:shadow-xl transition-all duration-300">
                                     <div className="flex items-center justify-between mb-6">
                                         <div>
@@ -187,7 +198,7 @@ export default function Reports() {
                                     </div>
                                     <Progress value={overallProgress} className="h-3 bg-border" />
                                 </Card>
-                            </motion.div>
+                            </div>
 
                             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                                 <div className="bg-card rounded-xl shadow-sm border border-border p-6">
@@ -263,12 +274,7 @@ export default function Reports() {
                                 </div>
                             </div>
 
-                            <motion.div
-                                initial={{ opacity: 0, y: 20 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                transition={{ delay: 0.7 }}
-                                className="mt-8"
-                            >
+                            <div className="animate-slide-up mt-8">
                                 <Card className="p-8 border border-border bg-card shadow-lg">
                                     <h3 className="text-xl font-bold text-foreground mb-8">{t('projects.reports.phase_details_heading')}</h3>
                                     <div className="space-y-6">
@@ -297,7 +303,7 @@ export default function Reports() {
                                         ))}
                                     </div>
                                 </Card>
-                            </motion.div>
+                            </div>
                         </>
                     )}
                 </div>

@@ -62,6 +62,13 @@ export interface DateUpdateRecord {
 export const nowUtcIso = (): string => new Date().toISOString();
 
 /**
+ * Returns the current time as a `Date`. Centralized so consumers don't hand-roll
+ * `new Date()` at call sites (which would bypass date-engine and make it harder
+ * to override for testing / time-travel).
+ */
+export const getNow = (): Date => new Date();
+
+/**
  * Safely resolves a {@link DateInput} to a `Date` object using `parseISO`
  * for strings. Returns `null` if the input is falsy or invalid.
  */

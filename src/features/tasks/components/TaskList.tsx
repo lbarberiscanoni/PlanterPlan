@@ -19,6 +19,8 @@ import MasterLibrarySearch from '@/features/library/components/MasterLibrarySear
 import EmptyProjectState from '@/features/tasks/components/EmptyProjectState';
 import StatusCard from '@/shared/ui/StatusCard';
 import { toast } from 'sonner';
+import { useTranslation } from 'react-i18next';
+import { useConfirm } from '@/shared/ui/confirm-dialog';
 
 export interface TaskFormState {
   mode: 'create' | 'edit';
@@ -29,6 +31,8 @@ export interface TaskFormState {
 
 const TaskList = () => {
   const navigate = useNavigate();
+  const { t } = useTranslation();
+  const confirm = useConfirm();
   const { projectId: urlProjectId } = useParams<{ projectId: string }>();
 
   // --- Data Fetching ---
@@ -176,9 +180,12 @@ const TaskList = () => {
 
   const onDeleteTaskWrapper = useCallback(
     async (task: TaskRow) => {
-      const confirmed = window.confirm(
-        `Delete "${task.title}" and its subtasks? This action cannot be undone.`
-      );
+      const confirmed = await confirm({
+        title: t('tasks.delete_confirm_title', { title: task.title }),
+        description: t('tasks.delete_confirm_description'),
+        confirmText: t('common.delete'),
+        destructive: true,
+      });
       if (!confirmed) return;
 
       try {
@@ -188,13 +195,13 @@ const TaskList = () => {
         }
         if (selectedTask?.id === task.id) setSelectedTask(null);
         if (taskFormState?.taskId === task.id) setTaskFormState(null);
-        toast.success('Task deleted successfully');
+        toast.success(t('tasks.delete_success'));
       } catch (err) {
         console.error('Failed to delete task:', err);
-        toast.error('Failed to delete task');
+        toast.error(t('tasks.delete_failure'));
       }
     },
-    [deleteTaskAsync, selectedTask, taskFormState, refetchProjects]
+    [deleteTaskAsync, selectedTask, taskFormState, refetchProjects, confirm, t]
   );
 
   const handleDeleteById = useCallback(

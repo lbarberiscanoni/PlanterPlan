@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, act, fireEvent, waitFor } from '@testing-library/react';
 import React from 'react';
+import { ConfirmDialogProvider } from '@/shared/ui/confirm-dialog';
 import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { makeTask } from '@test';
@@ -43,7 +44,9 @@ function renderModal(project: TaskRow) {
   return render(
     <QueryClientProvider client={queryClient}>
       <MemoryRouter>
-        <EditProjectModal project={project} isOpen={true} onClose={vi.fn()} />
+        <ConfirmDialogProvider>
+          <EditProjectModal project={project} isOpen={true} onClose={vi.fn()} />
+        </ConfirmDialogProvider>
       </MemoryRouter>
     </QueryClientProvider>,
   );
@@ -342,5 +345,31 @@ describe('EditProjectModal — shiftedCount toast feedback', () => {
 
     const message = mockToastSuccess.mock.calls[0][0] as string;
     expect(message).toContain('2 tasks rescheduled');
+  });
+});
+
+describe('EditProjectModal — start/end date visibility (Wave 37)', () => {
+  it('hides the date section for template projects', () => {
+    const template = makeTask({
+      id: 'tmpl-1',
+      title: 'A Template',
+      origin: 'template',
+      start_date: '2026-01-01',
+      settings: null,
+    });
+    renderModal(template);
+    expect(screen.queryByLabelText(/launch date/i)).toBeNull();
+    expect(screen.queryByLabelText(/due date/i)).toBeNull();
+  });
+
+  it('shows the date section for instance projects', () => {
+    const instance = makeTask({
+      id: 'proj-1',
+      title: 'A Project',
+      origin: 'instance',
+      start_date: '2026-01-01',
+    });
+    renderModal(instance);
+    expect(screen.getByLabelText(/launch date/i)).toBeInTheDocument();
   });
 });

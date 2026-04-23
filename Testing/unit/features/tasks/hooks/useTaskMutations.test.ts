@@ -73,8 +73,14 @@ describe('useCreateTask', () => {
     );
   });
 
-  it('invalidates tasks/root when no root_id', async () => {
-    mockCreate.mockResolvedValueOnce(makeTask());
+  it('falls back to the returned row\'s root_id when the input lacks one', async () => {
+    // Root-task creation: input has no root_id (the DB trigger sets it to
+    // the new row's id). The hook should resolve rootId from the returned
+    // row and invalidate `['projectHierarchy', <id>]`. The Phase 5 hook
+    // change dropped the `['tasks', 'root']` fallback key — no consumer
+    // reads that key, so writing to it was dead code (arch audit H5).
+    const created = makeTask({ id: 'created-root', root_id: 'created-root' });
+    mockCreate.mockResolvedValueOnce(created);
     const { Wrapper, queryClient } = createWrapper();
     const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries');
 
@@ -85,7 +91,7 @@ describe('useCreateTask', () => {
     });
 
     expect(invalidateSpy).toHaveBeenCalledWith(
-      expect.objectContaining({ queryKey: ['tasks', 'root'] }),
+      expect.objectContaining({ queryKey: ['projectHierarchy', 'created-root'] }),
     );
   });
 });
@@ -250,22 +256,27 @@ describe('useDeleteTask', () => {
     );
   });
 
-  it('uses ["tasks", "root"] cache key when root_id is null', async () => {
+  it('skips the optimistic cache write when root_id is null', async () => {
+    // Post-follow-up cleanup: the dead `['tasks', 'root']` fallback key
+    // was removed from useDeleteTask.onMutate; we now warn in dev and
+    // skip the optimistic remove (the server-side delete still fires).
+    // Any cache the caller seeds under the old dead key is left untouched.
     const existing = [makeTask({ id: 't1', root_id: null })];
-    mockDelete.mockImplementation(() => new Promise(resolve => setTimeout(() => resolve(true), 50)));
+    mockDelete.mockResolvedValue(true);
 
     const { Wrapper, queryClient } = createWrapper();
     queryClient.setQueryData(['tasks', 'root'], existing);
 
     const { result } = renderHook(() => useDeleteTask(), { wrapper: Wrapper });
 
-    act(() => {
-      result.current.mutate({ id: 't1', root_id: null as unknown as string });
+    await act(async () => {
+      await result.current.mutateAsync({ id: 't1', root_id: null as unknown as string });
     });
 
-    await waitFor(() => {
-      const cached = queryClient.getQueryData<TaskRow[]>(['tasks', 'root']);
-      expect(cached).toHaveLength(0);
-    });
+    // Dead cache key is untouched by the hook — no optimistic remove.
+    const cached = queryClient.getQueryData<TaskRow[]>(['tasks', 'root']);
+    expect(cached).toEqual(existing);
+    // Server-side delete still invoked.
+    expect(mockDelete).toHaveBeenCalledWith('t1');
   });
 });

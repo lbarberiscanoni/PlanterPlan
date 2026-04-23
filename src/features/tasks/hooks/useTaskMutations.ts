@@ -14,11 +14,17 @@ export function useCreateTask() {
  mutationFn: (data) => planterClient.entities.Task.create(data),
  onSettled: async (data, _error, variables) => {
  const firstVar = Array.isArray(variables) ? variables[0] : variables;
- const rootId = typeof firstVar === 'object' && firstVar && 'root_id' in firstVar ? firstVar.root_id : undefined;
+ const inputRootId = typeof firstVar === 'object' && firstVar && 'root_id' in firstVar ? firstVar.root_id : undefined;
+ // Fall back to the returned row's root_id (root-task creation sets
+ // root_id = id via the DB trigger, so the input is usually null there).
+ const rootId = inputRootId ?? data?.root_id ?? data?.id;
  if (rootId) {
  queryClient.invalidateQueries({ queryKey: ['projectHierarchy', rootId] })
- } else {
- queryClient.invalidateQueries({ queryKey: ['tasks', 'root'] })
+ } else if (import.meta.env.DEV) {
+ // Dropped the ['tasks', 'root'] fallback — no consumer reads it.
+ // A task with no resolvable root_id shouldn't happen under the
+ // current data model; warn loudly in dev so we notice.
+ console.warn('[useCreateTask] cannot resolve rootId for invalidation; cache may be stale', { variables, data });
  }
 
  // §3.3 Date Engine: bubble-up dates to parent after task creation
@@ -55,8 +61,25 @@ export function useUpdateTask() {
  },
  onMutate: async (updatedTask) => {
  const rootId = updatedTask.root_id;
- const targetKey = rootId ? ['projectHierarchy', rootId] : ['tasks', 'root'];
+ // Skip the optimistic-update path entirely when `rootId` is missing:
+ // the previous fallback `['tasks', 'root']` cache key has no
+ // consumer in the app, so writing to it is dead work. If a caller
+ // ever hits this path under a real rootId-less mutation, React Query
+ // will still refetch `['task', id]` on settle and the UI reflects
+ // the server state — just without the snapshot-rollback affordance.
+ if (!rootId) {
+ if (import.meta.env.DEV) {
+ console.warn('[useUpdateTask] mutation missing root_id; skipping optimistic update', { updatedTask });
+ }
+ await queryClient.cancelQueries({ queryKey: ['task', updatedTask.id] });
+ const previousTaskInfo = queryClient.getQueryData<TaskRow>(['task', updatedTask.id]);
+ if (previousTaskInfo) {
+ queryClient.setQueryData<TaskRow>(['task', updatedTask.id], (old) => (old ? { ...old, ...updatedTask } : undefined));
+ }
+ return { previousTasks: undefined, previousTaskInfo, rootId: null, updatedTaskId: updatedTask.id };
+ }
 
+ const targetKey = ['projectHierarchy', rootId];
  await queryClient.cancelQueries({ queryKey: targetKey });
  await queryClient.cancelQueries({ queryKey: ['task', updatedTask.id] });
 
@@ -82,11 +105,11 @@ export function useUpdateTask() {
  onError: (_err, _newTodo, context) => {
  if (!context) return;
  const ctx = context;
- const targetKey = ctx.rootId ? ['projectHierarchy', ctx.rootId] : ['tasks', 'root'];
- if (ctx?.previousTasks) {
- queryClient.setQueryData(targetKey, ctx.previousTasks);
+ // Only roll back the tree cache if we actually snapshotted it.
+ if (ctx.rootId && ctx.previousTasks) {
+ queryClient.setQueryData(['projectHierarchy', ctx.rootId], ctx.previousTasks);
  }
- if (ctx?.previousTaskInfo) {
+ if (ctx.previousTaskInfo) {
  queryClient.setQueryData(['task', ctx.updatedTaskId], ctx.previousTaskInfo);
  }
  },
@@ -94,8 +117,6 @@ export function useUpdateTask() {
  const rootId = variables.root_id;
  if (rootId) {
  queryClient.invalidateQueries({ queryKey: ['projectHierarchy', rootId] })
- } else {
- queryClient.invalidateQueries({ queryKey: ['tasks', 'root'] })
  }
  queryClient.invalidateQueries({ queryKey: ['task', variables.id] })
 
@@ -118,8 +139,19 @@ export function useDeleteTask() {
  mutationFn: (data) => planterClient.entities.Task.delete(data.id),
  onMutate: async (variables) => {
  const { id, root_id: rootId } = variables;
- const targetKey = rootId ? ['projectHierarchy', rootId] : ['tasks', 'root'];
 
+ // Same dead-key cleanup as useUpdateTask: when rootId is missing,
+ // skip the optimistic remove — no consumer reads the fallback
+ // `['tasks', 'root']` cache key, so the filter was writing to
+ // nothing.
+ if (!rootId) {
+ if (import.meta.env.DEV) {
+ console.warn('[useDeleteTask] mutation missing root_id; skipping optimistic remove', { id });
+ }
+ return { previousTasks: undefined, rootId: null, parentId: null };
+ }
+
+ const targetKey = ['projectHierarchy', rootId];
  await queryClient.cancelQueries({ queryKey: targetKey });
 
  const previousTasks = queryClient.getQueryData<TaskRow[]>(targetKey);
@@ -140,17 +172,14 @@ export function useDeleteTask() {
  onError: (_err, _variables, context) => {
  if (!context) return;
  const ctx = context;
- const targetKey = ctx.rootId ? ['projectHierarchy', ctx.rootId] : ['tasks', 'root'];
- if (ctx?.previousTasks) {
- queryClient.setQueryData(targetKey, ctx.previousTasks);
+ if (ctx.rootId && ctx.previousTasks) {
+ queryClient.setQueryData(['projectHierarchy', ctx.rootId], ctx.previousTasks);
  }
  },
  onSettled: async (_, _error, variables, context) => {
  const rootId = variables.root_id;
  if (rootId) {
  queryClient.invalidateQueries({ queryKey: ['projectHierarchy', rootId] })
- } else {
- queryClient.invalidateQueries({ queryKey: ['tasks', 'root'] })
  }
  queryClient.removeQueries({ queryKey: ['task', variables.id] })
 

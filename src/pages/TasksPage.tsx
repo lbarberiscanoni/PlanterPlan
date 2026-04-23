@@ -6,9 +6,11 @@ import { sortableKeyboardCoordinates } from '@dnd-kit/sortable';
 import type { DragEndEvent } from '@dnd-kit/core';
 import type { TaskRow, TaskUpdate, Project } from '@/shared/db/app.types';
 import { planter } from '@/shared/api/planterClient';
+import { STALE_TIMES } from '@/shared/lib/react-query-config';
 import TaskItem from '@/features/tasks/components/TaskItem';
 import TaskDetailsPanel from '@/features/tasks/components/TaskDetailsPanel';
 import { Loader2, List, LayoutGrid, X } from 'lucide-react';
+import { Button } from '@/shared/ui/button';
 import ProjectBoardView from '@/features/tasks/components/board/ProjectBoardView';
 import { useAuth } from '@/shared/contexts/AuthContext';
 import { useTeam } from '@/features/people/hooks/useTeam';
@@ -34,9 +36,10 @@ const FILTER_KEYS: TaskFilterKey[] = [
 export default function TasksPage() {
        const { t } = useTranslation();
        const queryClient = useQueryClient();
-       const { data: tasks = [], isLoading: loading } = useQuery({
+       const { data: tasks = [], isLoading: loading, isError, error, refetch } = useQuery({
               queryKey: ['tasks'],
               queryFn: () => planter.entities.Task.list(),
+              staleTime: STALE_TIMES.medium,
        });
 
        const findTask = useCallback((id: string) => tasks.find((t: TaskRow) => t.id === id), [tasks]);
@@ -165,11 +168,26 @@ export default function TasksPage() {
 
        if (loading) {
               return (
-                     <>
-                            <div className="flex justify-center py-20">
-                                   <Loader2 data-testid="loading-spinner" className="w-8 h-8 animate-spin text-orange-500" />
-                            </div>
-                     </>
+                     <div className="flex justify-center py-20">
+                            <Loader2 data-testid="loading-spinner" className="w-8 h-8 animate-spin text-orange-500" />
+                     </div>
+              );
+       }
+
+       // Error branch (previously silently swallowed — page looked like a
+       // successful empty account). Differentiate between "you have no tasks"
+       // and "the query failed" so users with broken access can retry.
+       if (isError) {
+              return (
+                     <div className="flex flex-col items-center justify-center py-20 gap-4 text-center px-6">
+                            <p className="text-destructive font-medium">{t('errors.failed_load_tasks')}</p>
+                            <p className="text-muted-foreground text-sm max-w-md">
+                                   {(error as Error)?.message ?? t('errors.unknown')}
+                            </p>
+                            <Button variant="outline" onClick={() => refetch()}>
+                                   {t('common.retry')}
+                            </Button>
+                     </div>
               );
        }
 

@@ -37,10 +37,6 @@ export const PROJECT_STATUS = {
 
 export type ProjectStatus = (typeof PROJECT_STATUS)[keyof typeof PROJECT_STATUS];
 
-export const STORAGE_BUCKETS = {
- RESOURCES: 'resources',
-} as const;
-
 export const PROJECT_TABS = {
  BOARD: 'board',
  PEOPLE: 'people',

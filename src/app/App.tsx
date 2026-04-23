@@ -6,14 +6,18 @@ import { I18nextProvider } from 'react-i18next';
 import { i18n } from '@/shared/i18n';
 import { AuthProvider, useAuth } from '@/shared/contexts/AuthContext';
 import { TooltipProvider } from '@/shared/ui/tooltip';
+import { ConfirmDialogProvider } from '@/shared/ui/confirm-dialog';
 import DashboardLayout from '../layouts/DashboardLayout';
 import Dashboard from '../pages/Dashboard';
-import Reports from '../pages/Reports';
 import Project from '../pages/Project';
 import Settings from '../pages/Settings';
 import TasksPage from '../pages/TasksPage';
 import LoginForm from '@/pages/components/LoginForm';
 
+// Reports uses recharts (~524 KB gzipped as `charts-*.js`) — lazy so the
+// Dashboard / Tasks / Project routes don't pay the cost. Gantt + Admin
+// already lazy for the same reason.
+const Reports = lazy(() => import('../pages/Reports'));
 const Gantt = lazy(() => import('@/pages/Gantt'));
 const AdminLayout = lazy(() => import('@/pages/admin/AdminLayout'));
 const AdminHome = lazy(() => import('@/pages/admin/AdminHome'));
@@ -35,13 +39,17 @@ export default function App() {
  <I18nextProvider i18n={i18n}>
  <AuthProvider>
  <TooltipProvider delayDuration={300}>
+ <ConfirmDialogProvider>
  <Router>
  <Routes>
  <Route path="/login" element={<LoginForm />} />
  <Route path="/" element={<PrivateRoute><DashboardLayout /></PrivateRoute>}>
  <Route index element={<Navigate to="/tasks" replace />} />
  <Route path="dashboard" element={<Dashboard />} />
- <Route path="reports" element={<Reports />} />
+ <Route
+ path="reports"
+ element={<Suspense fallback={<div className="p-6 text-sm text-slate-600">Loading reports…</div>}><Reports /></Suspense>}
+ />
  <Route path="Project/:projectId" element={<Project />} />
  <Route path="Project" element={<Project />} />
  <Route path="tasks" element={<TasksPage />} />
@@ -65,6 +73,7 @@ export default function App() {
  </Routes>
  </Router>
  <Toaster richColors position="top-right" />
+ </ConfirmDialogProvider>
  </TooltipProvider>
  </AuthProvider>
  </I18nextProvider>

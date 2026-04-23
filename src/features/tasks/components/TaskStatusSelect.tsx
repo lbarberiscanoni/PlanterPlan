@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import { TASK_STATUS } from '@/shared/constants';
 
 const getStatusStyle = (status?: string | null) => {
@@ -17,13 +18,28 @@ const getStatusStyle = (status?: string | null) => {
 interface TaskStatusSelectProps {
   status?: string | null;
   taskId: string;
+  /** Task title — required for a per-row accessible name. Falls back to a
+   *  generic "Task status" label if omitted for legacy callers. */
+  taskTitle?: string | null;
   onStatusChange?: (taskId: string, status: string) => void;
 }
 
-export default function TaskStatusSelect({ status, taskId, onStatusChange }: TaskStatusSelectProps) {
+/**
+ * Pill-shaped status dropdown rendered on every task row. Each row shows the
+ * same four options, so without a task-scoped accessible name a screen reader
+ * user hearing "combobox, To Do" has no way to tell which task they're on. We
+ * use `aria-label` (rather than a visible label) because the pill styling is
+ * the design language — a floating visible label would clutter the row.
+ */
+export default function TaskStatusSelect({ status, taskId, taskTitle, onStatusChange }: TaskStatusSelectProps) {
+  const { t } = useTranslation();
+  const label = taskTitle
+    ? t('tasks.status_for_aria', { title: taskTitle })
+    : t('tasks.status_label', { defaultValue: 'Task status' });
   return (
     <div data-testid="status-select" className="relative group">
       <select
+        aria-label={label}
         className={`appearance-none cursor-pointer pl-4 pr-9 py-1.5 text-xs font-semibold rounded-full border transition-all ${getStatusStyle(status)} focus:ring-2 focus:ring-offset-1 focus:ring-brand-500 focus:outline-none`}
         value={status || TASK_STATUS.TODO}
         onClick={(e) => e.stopPropagation()}

@@ -4,6 +4,7 @@ import { render, type RenderOptions, type RenderResult } from '@testing-library/
 import { I18nextProvider } from 'react-i18next';
 import { i18n } from '@/shared/i18n';
 import { TooltipProvider } from '@/shared/ui/tooltip';
+import { ConfirmDialogProvider } from '@/shared/ui/confirm-dialog';
 import { createTestQueryClient } from './query-wrapper';
 
 export interface RenderWithProvidersOptions extends Omit<RenderOptions, 'wrapper'> {
@@ -29,7 +30,9 @@ export function renderWithProviders(
   const Wrapper = ({ children }: { children: React.ReactNode }) => (
     <QueryClientProvider client={queryClient}>
       <I18nextProvider i18n={i18n}>
-        <TooltipProvider delayDuration={0}>{children}</TooltipProvider>
+        <TooltipProvider delayDuration={0}>
+          <ConfirmDialogProvider>{children}</ConfirmDialogProvider>
+        </TooltipProvider>
       </I18nextProvider>
     </QueryClientProvider>
   );

@@ -1,9 +1,9 @@
 import { Card } from '@/shared/ui/card';
 import { Progress } from '@/shared/ui/progress';
-import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
+import { ProgressRing } from '@/shared/ui/progress-ring';
 
+import { useTranslation } from 'react-i18next';
 import { ChevronRight, CheckCircle2, Lock } from 'lucide-react';
-import { motion } from 'framer-motion';
 import { cn } from '@/shared/lib/utils';
 import { TASK_STATUS } from '@/shared/constants';
 import { PHASE_STATUS_COLORS } from '@/shared/constants/colors';
@@ -38,6 +38,7 @@ interface PhaseCardProps {
 }
 
 export default function PhaseCard({ phase, tasks = [], milestones = [], isActive, onClick, rootTask }: PhaseCardProps) {
+ const { t } = useTranslation();
  const order = phase.position || 1;
  const isLocked = phase.is_locked;
 
@@ -53,13 +54,9 @@ export default function PhaseCard({ phase, tasks = [], milestones = [], isActive
  const phaseStatus = getPhaseStatus(progress, totalTasks, phaseTasks);
  const colors = PHASE_STATUS_COLORS[phaseStatus] || PHASE_STATUS_COLORS.not_started;
  const isCheckpoint = extractProjectKind(rootTask) === 'checkpoint';
- const donutData = [
-  { name: 'Completed', value: completedTasks },
-  { name: 'Remaining', value: Math.max(0, totalTasks - completedTasks) },
- ];
 
  return (
- <motion.div whileHover={{ scale: isLocked ? 1 : 1.02 }} whileTap={{ scale: isLocked ? 1 : 0.98 }} className="h-full">
+ <div className={cn('h-full transition-transform duration-150', !isLocked && 'hover:scale-105 active:scale-95')}>
  <Card
  onClick={isLocked ? undefined : onClick}
  data-testid={`phase-card-${phase.id}`}
@@ -115,27 +112,19 @@ export default function PhaseCard({ phase, tasks = [], milestones = [], isActive
  </div>
 
  <div className="space-y-2">
- {isCheckpoint ? (
+ {phase.origin === 'template' ? (
+ <p className="text-xs text-muted-foreground">{t('projects.phase_template_task_count', { count: totalTasks })}</p>
+ ) : isCheckpoint ? (
  <div className="flex items-center justify-between gap-3" data-testid="phase-donut">
  <div className="relative h-16 w-16">
- <ResponsiveContainer width="100%" height="100%">
- <PieChart>
- <Pie
- data={donutData}
- cx="50%"
- cy="50%"
- innerRadius={18}
- outerRadius={30}
- startAngle={90}
- endAngle={-270}
- dataKey="value"
- strokeWidth={0}
- >
- <Cell fill={totalTasks === 0 || isLocked ? 'var(--color-slate-200)' : 'var(--color-brand-600)'} />
- <Cell fill="var(--color-slate-200)" />
- </Pie>
- </PieChart>
- </ResponsiveContainer>
+ <ProgressRing
+ value={isLocked || totalTasks === 0 ? 0 : progress}
+ size={64}
+ strokeWidth={10}
+ color={isLocked ? 'rgb(226 232 240)' : 'var(--color-brand-600, rgb(234 88 12))'}
+ trackColor="rgb(226 232 240)"
+ decorative
+ />
  <div className="pointer-events-none absolute inset-0 flex items-center justify-center text-xs font-medium text-slate-900">
  {isLocked ? 'Locked' : `${progress}%`}
  </div>
@@ -165,6 +154,6 @@ export default function PhaseCard({ phase, tasks = [], milestones = [], isActive
  )}
  </div>
  </Card>
- </motion.div>
+ </div>
  );
 }

@@ -91,6 +91,21 @@
  @apply border-border;
  }
 
+ /* WCAG 2.2 — 2.4.11 Focus Not Obscured (Minimum).
+  * The app's `<Header>` is `sticky top-0 z-50 h-16` (4rem). Without
+  * scroll-padding-top, tabbing to an element near the top of a scroll
+  * container puts focus directly behind the sticky header. The 4rem
+  * padding forces the browser's scroll-into-view behavior to leave the
+  * header's height clear. Affects both anchor-link and keyboard-tab
+  * scrolls. `:focus-visible` mirror uses scroll-margin-top so focused
+  * elements reserve the same clearance when programmatically focused. */
+ html {
+ scroll-padding-top: 4rem;
+ }
+ :focus-visible {
+ scroll-margin-top: 4rem;
+ }
+
  body {
  @apply bg-background text-foreground antialiased font-sans transition-colors duration-300;
  margin: 0;

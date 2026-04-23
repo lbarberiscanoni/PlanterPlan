@@ -1,8 +1,9 @@
-import { memo } from 'react';
+import { memo, type KeyboardEvent } from 'react';
 import type { CSSProperties } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { GripVertical, Calendar, Link as LinkIcon } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import RoleIndicator from '@/shared/ui/RoleIndicator';
 import { formatDate, isPastDate, isTodayDate, isDateValid } from '@/shared/lib/date-engine';
 
@@ -50,27 +51,54 @@ interface BoardTaskCardProps {
 }
 
 const BoardTaskCard = memo(({ task, onClick, dragHandleProps, style, isDragging }: BoardTaskCardProps) => {
+ const { t } = useTranslation();
  const formattedDate = formatDueDate(task.due_date);
  const dateColor = getDateColor(task.due_date);
 
+ // Keyboard activation: `role="button"` + Enter/Space is the WAI-ARIA
+ // pattern for making a div-shaped card act like a button. Previously the
+ // card was `<div onClick>` — unreachable from the keyboard, so the entire
+ // board view was keyboard-unusable (can't open task details). Can't use a
+ // real `<button>` here because the card contains nested interactive
+ // elements (the drag handle), which is invalid HTML inside a button.
+ //
+ // Guard: only handle the key when the card itself has focus. Otherwise a
+ // Space/Enter on the nested drag-handle button (for dnd-kit's keyboard
+ // sensor "pick up item" gesture) would bubble into this handler and
+ // hijack the event — opening the details panel mid-drag.
+ const handleKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
+ if (e.target !== e.currentTarget) return;
+ if (e.key === 'Enter' || e.key === ' ') {
+ e.preventDefault();
+ onClick(task);
+ }
+ };
+
  return (
  <div
-      data-testid="board-task-card"
- className={`bg-white p-3 rounded-lg border border-slate-200 shadow-sm hover:shadow-md transition-shadow cursor-pointer group mb-2 ${isDragging ? 'opacity-50 ring-2 ring-brand-500' : ''}`}
+ data-testid="board-task-card"
+ role="button"
+ tabIndex={0}
+ aria-label={t('tasks.open_task_details_aria', { title: task.title ?? t('common.untitled_task') })}
+ className={`bg-white p-3 rounded-lg border border-slate-200 shadow-sm hover:shadow-md transition-shadow cursor-pointer group mb-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 ${isDragging ? 'opacity-50 ring-2 ring-brand-500' : ''}`}
  style={style}
  onClick={() => onClick(task)}
+ onKeyDown={handleKeyDown}
  >
  <div className="flex items-start justify-between gap-2">
  <div className="flex-1 min-w-0">
  <div className="flex items-center gap-2 mb-1">
  <button
- className="cursor-grab active:cursor-grabbing text-slate-400 hover:text-slate-600 p-0.5 rounded hover:bg-slate-100"
+ type="button"
+ className="cursor-grab active:cursor-grabbing text-slate-400 hover:text-slate-600 p-1.5 rounded hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+ aria-label={t('tasks.reorder_task')}
+ onClick={(e) => e.stopPropagation()}
  {...dragHandleProps}
  >
- <GripVertical className="w-4 h-4" />
+ <GripVertical className="w-4 h-4" aria-hidden="true" />
  </button>
  {task.resource_type && (
- <span className="p-1 rounded bg-brand-50 text-brand-700">
+ <span className="p-1 rounded bg-brand-50 text-brand-700" aria-hidden="true">
  <LinkIcon className="w-3 h-3" />
  </span>
  )}

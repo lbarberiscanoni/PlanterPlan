@@ -18,6 +18,15 @@ interface MobileAgendaProps {
  tasks?: AgendaTask[];
 }
 
+/**
+ * "Focused Today" — the user's top ≤3 tasks due today or earlier that
+ * aren't complete. Was `md:hidden` when this file was introduced because
+ * the product was mobile-first; the UX audit flagged that desktop users
+ * (especially Limited / Viewer roles whose Dashboard pipeline board is
+ * effectively read-only) had no equivalent surface. Removed the hidden
+ * class so the card now renders on every breakpoint; on desktop it caps
+ * to `max-w-md` so it doesn't overwhelm the 12-col layout.
+ */
 export default function MobileAgenda({ tasks = [] }: MobileAgendaProps) {
  const navigate = useNavigate();
 
@@ -34,7 +43,7 @@ export default function MobileAgenda({ tasks = [] }: MobileAgendaProps) {
  if (relevantTasks.length === 0) return null;
 
  return (
- <div data-testid="mobile-agenda" className="md:hidden mb-6">
+ <div data-testid="mobile-agenda" className="mb-6 md:max-w-md">
  <Card className="bg-brand-600 text-white border-none shadow-lg">
  <div className="p-4">
  <div className="flex items-center justify-between mb-4">

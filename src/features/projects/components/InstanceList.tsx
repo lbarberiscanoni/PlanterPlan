@@ -69,14 +69,16 @@ const InstanceList = ({
  {task.title}
  </h3>
  <button
- className={`opacity-0 group-hover:opacity-100 p-1 rounded-md transition-all ${isSelected ? 'text-brand-600 hover:bg-brand-100' : 'text-muted-foreground hover:bg-accent hover:text-foreground'
+ type="button"
+ className={`opacity-0 group-hover:opacity-100 focus-visible:opacity-100 p-1 rounded-md transition-all ${isSelected ? 'text-brand-600 hover:bg-brand-100' : 'text-muted-foreground hover:bg-accent hover:text-foreground'
  }`}
  onClick={(e: MouseEvent) => {
  e.stopPropagation();
  }}
+ aria-label={`Project settings for ${task.title ?? 'this project'}`}
  title="Project Settings"
  >
- <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+ <svg aria-hidden="true" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
  </svg>
  </button>
@@ -106,11 +108,16 @@ const InstanceList = ({
  </>
  ) : (
  !isFetchingMore && (
- <div className="flex flex-col items-center justify-center p-4 text-center cursor-pointer hover:bg-muted/50 rounded-lg m-2 transition-colors border border-dashed border-border group" onClick={onLoadMore}>
- <FolderPlus className="w-8 h-8 text-muted-foreground mb-2 group-hover:text-brand-500 transition-colors" />
+ <button
+ type="button"
+ onClick={onLoadMore}
+ className="flex flex-col items-center justify-center p-4 text-center cursor-pointer hover:bg-muted/50 rounded-lg m-2 transition-colors border border-dashed border-border group w-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+ aria-label="No projects yet — click to create your first project"
+ >
+ <FolderPlus aria-hidden="true" className="w-8 h-8 text-muted-foreground mb-2 group-hover:text-brand-500 transition-colors" />
  <p className="text-sm font-medium text-foreground">No Projects</p>
  <p className="text-xs text-muted-foreground">Create your first project to get started.</p>
- </div>
+ </button>
  )
  )}
  </div>

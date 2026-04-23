@@ -1,11 +1,15 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { useCreateTask, useUpdateTask, useDeleteTask } from '@/features/tasks/hooks/useTaskMutations';
 
 import { toast } from 'sonner';
+import { useConfirm } from '@/shared/ui/confirm-dialog';
 import type { TaskRow, TaskUpdate } from '@/shared/db/app.types';
 
 export function useProjectBoard(projectId: string | undefined, tasks: TaskRow[] = []) {
+    const { t } = useTranslation();
+    const confirm = useConfirm();
 
     const [activeTab, setActiveTab] = useState('board');
     const [selectedPhase, setSelectedPhase] = useState<TaskRow | null>(null);
@@ -80,16 +84,21 @@ export function useProjectBoard(projectId: string | undefined, tasks: TaskRow[] 
         }
     };
 
-    const handleDeleteTask = (t: TaskRow) => {
-        if (window.confirm(`Delete "${t.title || 'this task'}"? This cannot be undone.`)) {
-            _deleteTask.mutate({ id: t.id, root_id: projectId }, {
-                onSuccess: () => {
-                    setSelectedTask(null);
-                    toast.success('Task deleted');
-                },
-                onError: (error: Error) => toast.error('Failed to delete task', { description: error.message })
-            });
-        }
+    const handleDeleteTask = async (task: TaskRow) => {
+        const ok = await confirm({
+            title: t('tasks.delete_confirm_title', { title: task.title || t('common.untitled_task') }),
+            description: t('tasks.delete_confirm_description'),
+            confirmText: t('common.delete'),
+            destructive: true,
+        });
+        if (!ok) return;
+        _deleteTask.mutate({ id: task.id, root_id: projectId }, {
+            onSuccess: () => {
+                setSelectedTask(null);
+                toast.success(t('tasks.delete_success'));
+            },
+            onError: (error: Error) => toast.error(t('tasks.delete_failure'), { description: error.message })
+        });
     };
 
     return {

@@ -117,40 +117,55 @@ describe('useProjectRealtime', () => {
   });
 
   describe('payload handling', () => {
-    it('invalidates task tree queries on valid payload with root_id', () => {
+    it('invalidates scoped task-tree queries on non-root task events', () => {
       const invalidateSpy = vi.spyOn(testQueryClient || new QueryClient(), 'invalidateQueries');
       renderHook(() => useProjectRealtime('proj-1'), { wrapper: createWrapper() });
 
-      // Now spy on the actual testQueryClient created inside the wrapper
+      // Non-root task: id !== root_id, parent_task_id is a milestone (not null).
+      // Post-Phase-2: realtime should NOT invalidate ['projects'] / ['project']
+      // in this case — that invalidation used to fan out O(N) refetches during
+      // bulk ops (template clone).
       const spy = vi.spyOn(testQueryClient, 'invalidateQueries');
 
       capturedOnCallback!({
-        new: { id: 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d', root_id: 'f1e2d3c4-b5a6-4978-8a6b-5c4d3e2f1a0b' },
+        new: {
+          id: 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d',
+          root_id: 'f1e2d3c4-b5a6-4978-8a6b-5c4d3e2f1a0b',
+          parent_task_id: 'c5d4e3f2-a1b0-4c6d-9e8f-7a6b5c4d3e2f',
+        },
       });
 
-      // Check that various query keys are invalidated
       const invalidatedKeys = spy.mock.calls.map(call => (call[0] as { queryKey: string[] }).queryKey);
       expect(invalidatedKeys).toContainEqual(['tasks', 'tree', 'f1e2d3c4-b5a6-4978-8a6b-5c4d3e2f1a0b']);
+      expect(invalidatedKeys).toContainEqual(['projectHierarchy', 'f1e2d3c4-b5a6-4978-8a6b-5c4d3e2f1a0b']);
       expect(invalidatedKeys).toContainEqual(['task', 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d']);
-      expect(invalidatedKeys).toContainEqual(['tasks', 'root']);
-      expect(invalidatedKeys).toContainEqual(['projects']);
-      expect(invalidatedKeys).toContainEqual(['project', 'proj-1']);
+      // Intentionally NOT present on non-root task events:
+      expect(invalidatedKeys).not.toContainEqual(['projects']);
+      expect(invalidatedKeys).not.toContainEqual(['project', 'proj-1']);
 
       invalidateSpy.mockRestore();
       spy.mockRestore();
     });
 
-    it('invalidates global query keys on every event', () => {
+    it('invalidates project-scoped keys when the changed row is a root task', () => {
       renderHook(() => useProjectRealtime('proj-1'), { wrapper: createWrapper() });
       const spy = vi.spyOn(testQueryClient, 'invalidateQueries');
 
+      // Root task: id === root_id (the project itself was touched — rename,
+      // status flip, etc.) OR parent_task_id === null. Either triggers a
+      // projects-list refresh so Dashboard cards reflect the change.
       capturedOnCallback!({
-        new: { id: 'b2c3d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e' },
+        new: {
+          id: 'b2c3d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e',
+          root_id: 'b2c3d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e',
+          parent_task_id: null,
+        },
       });
 
       const invalidatedKeys = spy.mock.calls.map(call => (call[0] as { queryKey: string[] }).queryKey);
-      expect(invalidatedKeys).toContainEqual(['tasks', 'root']);
       expect(invalidatedKeys).toContainEqual(['projects']);
+      expect(invalidatedKeys).toContainEqual(['project', 'proj-1']);
+      expect(invalidatedKeys).toContainEqual(['task', 'b2c3d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e']);
 
       spy.mockRestore();
     });

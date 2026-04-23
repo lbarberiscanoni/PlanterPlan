@@ -2,6 +2,9 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import React from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { I18nextProvider } from 'react-i18next';
+import { i18n } from '@/shared/i18n';
+import { ConfirmDialogProvider } from '@/shared/ui/confirm-dialog';
 import type { TaskRow } from '@/shared/db/app.types';
 
 // ---- Mocks ----
@@ -18,6 +21,19 @@ vi.mock('@/features/tasks/hooks/useTaskMutations', () => ({
 vi.mock('sonner', () => ({
   toast: { error: vi.fn(), success: vi.fn() },
 }));
+
+// Stub useConfirm so tests can drive the dialog resolver directly. Default
+// is "user confirms" — tests override via `mockConfirmResult` before acting.
+// Note the ConfirmDialogProvider is still rendered (via the test wrapper) so
+// the surrounding context exists; we override the hook only.
+let mockConfirmResult = true;
+vi.mock('@/shared/ui/confirm-dialog', async (orig) => {
+  const actual = await orig() as typeof import('@/shared/ui/confirm-dialog');
+  return {
+    ...actual,
+    useConfirm: () => vi.fn().mockImplementation(() => Promise.resolve(mockConfirmResult)),
+  };
+});
 
 import { useProjectBoard } from '@/features/projects/hooks/useProjectBoard';
 import { toast } from 'sonner';
@@ -63,8 +79,19 @@ function createWrapper() {
       mutations: { retry: false },
     },
   });
+  // `useProjectBoard` now consumes i18n (for `t(...)` in confirm-dialog copy)
+  // and the `ConfirmDialogProvider` (replaces `window.confirm`). The wrapper
+  // mirrors the app-level provider stack so these hooks resolve in tests.
   return ({ children }: { children: React.ReactNode }) =>
-    React.createElement(QueryClientProvider, { client: queryClient }, children);
+    React.createElement(
+      QueryClientProvider,
+      { client: queryClient },
+      React.createElement(
+        I18nextProvider,
+        { i18n },
+        React.createElement(ConfirmDialogProvider, null, children),
+      ),
+    );
 }
 
 describe('useProjectBoard', () => {
@@ -273,36 +300,35 @@ describe('useProjectBoard', () => {
   });
 
   describe('handleDeleteTask', () => {
-    it('calls mutate when user confirms', () => {
-      vi.spyOn(window, 'confirm').mockReturnValue(true);
+    it('calls mutate when user confirms', async () => {
+      mockConfirmResult = true;
       const task = makeTask({ id: 'delete-me', title: 'Doomed Task' });
       const { result } = renderHook(() => useProjectBoard(projectId), { wrapper: createWrapper() });
 
-      act(() => {
-        result.current.handlers.handleDeleteTask(task);
+      await act(async () => {
+        await result.current.handlers.handleDeleteTask(task);
       });
 
-      expect(window.confirm).toHaveBeenCalledWith('Delete "Doomed Task"? This cannot be undone.');
       expect(mockDeleteMutate).toHaveBeenCalledWith(
         { id: 'delete-me', root_id: projectId },
         expect.objectContaining({ onSuccess: expect.any(Function), onError: expect.any(Function) }),
       );
     });
 
-    it('does not call mutate when user cancels', () => {
-      vi.spyOn(window, 'confirm').mockReturnValue(false);
+    it('does not call mutate when user cancels', async () => {
+      mockConfirmResult = false;
       const task = makeTask({ id: 'keep-me' });
       const { result } = renderHook(() => useProjectBoard(projectId), { wrapper: createWrapper() });
 
-      act(() => {
-        result.current.handlers.handleDeleteTask(task);
+      await act(async () => {
+        await result.current.handlers.handleDeleteTask(task);
       });
 
       expect(mockDeleteMutate).not.toHaveBeenCalled();
     });
 
-    it('onSuccess clears selectedTask and toasts', () => {
-      vi.spyOn(window, 'confirm').mockReturnValue(true);
+    it('onSuccess clears selectedTask and toasts', async () => {
+      mockConfirmResult = true;
       const task = makeTask({ id: 'delete-me' });
       const { result } = renderHook(() => useProjectBoard(projectId), { wrapper: createWrapper() });
 
@@ -312,8 +338,8 @@ describe('useProjectBoard', () => {
       });
       expect(result.current.state.selectedTask).not.toBeNull();
 
-      act(() => {
-        result.current.handlers.handleDeleteTask(task);
+      await act(async () => {
+        await result.current.handlers.handleDeleteTask(task);
       });
 
       // Invoke onSuccess callback
@@ -326,13 +352,13 @@ describe('useProjectBoard', () => {
       expect(toast.success).toHaveBeenCalledWith('Task deleted');
     });
 
-    it('onError calls toast.error', () => {
-      vi.spyOn(window, 'confirm').mockReturnValue(true);
+    it('onError calls toast.error', async () => {
+      mockConfirmResult = true;
       const task = makeTask({ id: 'delete-me' });
       const { result } = renderHook(() => useProjectBoard(projectId), { wrapper: createWrapper() });
 
-      act(() => {
-        result.current.handlers.handleDeleteTask(task);
+      await act(async () => {
+        await result.current.handlers.handleDeleteTask(task);
       });
 
       const onError = mockDeleteMutate.mock.calls[0][1].onError;
