@@ -52,13 +52,10 @@ export default function Project() {
         phases,
         milestones,
         tasks,
+        projectHierarchy,
         teamMembers,
         refetchProject,
     } = useProjectData(projectId);
-
-    // Wave 27: open the per-project presence channel. No-op outside /Project/:id
-    // because `projectId` is undefined on other routes, so the hook short-circuits.
-    const { presentUsers } = useProjectPresence(projectId ?? null);
 
     // Template ids already cloned into this project — excluded from the
     // Master Library combobox so the same template can't be added twice.
@@ -69,6 +66,10 @@ export default function Project() {
 
     const board = useProjectBoard(projectId, (tasks as TaskRow[]) || []);
     const { state, actions, handlers, computed } = board;
+
+    // Wave 27: open the per-project presence channel and publish the focused
+    // task through the same subscribed channel.
+    const { presentUsers } = useProjectPresence(projectId ?? null, state.selectedTask?.id ?? null);
 
     const queryClient = useQueryClient();
     const lastUpdateRef = useRef(0);
@@ -113,7 +114,7 @@ export default function Project() {
                     root_id: projectId
                 });
                 setTaskFormState(null);
-                toast.success('Task updated successfully');
+                toast.success(t('projects.task_updated_toast'));
             } else {
                 const extendedFormData = formData as TaskFormData & { templateId?: string | null };
                 if (extendedFormData.templateId) {
@@ -428,6 +429,7 @@ export default function Project() {
                         taskBeingEdited={taskFormState?.mode === 'edit' ? state.selectedTask || undefined : undefined}
                         parentTaskForForm={state.inlineAddingParentId ? (tasks?.find(t => t.id === state.inlineAddingParentId) as TaskRow) : undefined}
                         membershipRole={userRole}
+                        allProjectTasks={(projectHierarchy as TaskRow[]) || []}
                         onClose={() => {
                             actions.setSelectedTask(null);
                             setTaskFormState(null);
@@ -439,8 +441,8 @@ export default function Project() {
                             <MasterLibrarySearch
                                 mode="copy"
                                 onSelect={onSelect}
-                                label="Search master library"
-                                placeholder={taskFormState?.isPhase ? 'Search for a template phase to copy' : 'Start typing to copy an existing template task'}
+                                label={t('projects.form.search_library_label')}
+                                placeholder={taskFormState?.isPhase ? t('projects.search_template_phase_placeholder') : t('projects.search_template_task_placeholder')}
                                 phasesOnly={!!taskFormState?.isPhase}
                                 excludeTemplateIds={excludedTemplateIds}
                             />

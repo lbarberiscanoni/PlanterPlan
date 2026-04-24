@@ -3,6 +3,7 @@ import { filterAndSortTasks } from '@/features/tasks/hooks/useTaskFilters';
 import { makeTask, makeProject } from '@test/factories';
 
 const NOW = new Date('2026-04-16T12:00:00.000Z');
+const USER_ID = 'user-1';
 
 // Hierarchy:
 //   project (root, instance, due_soon_threshold=3)
@@ -73,6 +74,8 @@ function buildFixture() {
   origin: 'instance',
   task_type: 'task',
   status: 'todo',
+  creator: USER_ID,
+  assignee_id: null,
   due_date: '2026-05-20',
  });
  const milestoneCurrent = makeTask({
@@ -93,6 +96,7 @@ function buildFixture() {
   task_type: 'task',
   status: 'todo',
   priority: 'high',
+  assignee_id: USER_ID,
   due_date: '2026-05-20',
  });
  const taskFuture = makeTask({
@@ -172,10 +176,22 @@ const ALL_INSTANCE_CHILDREN = [
 ];
 
 describe('filterAndSortTasks — views', () => {
- it("'my_tasks' excludes roots and templates", () => {
+ it("'my_tasks' returns assigned tasks plus unassigned tasks created by the current user", () => {
+  const tasks = buildFixture();
+  const result = filterAndSortTasks({
+   tasks,
+   filter: 'my_tasks',
+   sort: 'chronological',
+   now: NOW,
+   currentUserId: USER_ID,
+  });
+  expect(result.map((t) => t.id).sort()).toEqual(['leak-task', 't-priority'].sort());
+ });
+
+ it("'my_tasks' returns no rows without a current user id", () => {
   const tasks = buildFixture();
   const result = filterAndSortTasks({ tasks, filter: 'my_tasks', sort: 'chronological', now: NOW });
-  expect(result.map((t) => t.id).sort()).toEqual([...ALL_INSTANCE_CHILDREN].sort());
+  expect(result).toEqual([]);
  });
 
  it("'priority' keeps only priority==='high' and excludes completed", () => {

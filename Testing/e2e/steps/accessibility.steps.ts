@@ -220,16 +220,13 @@ Given('the user has no tasks due today', async () => {
   // Requires specific test data state
 });
 
-When('the user navigates to the daily tasks page', async ({ page }) => {
-  // Wave 33: /daily was merged into /tasks — the route now redirects. Keep
-  // the step semantically pointing to the old URL so existing scenarios
-  // exercise the redirect path too.
-  await page.goto('/daily');
+When('the user navigates to the tasks page', async ({ page }) => {
+  await page.goto('/tasks');
   await page.waitForLoadState('networkidle');
 });
 
-Then('the mobile agenda card is visible', async ({ page }) => {
-  await expect(page.locator('[data-testid="mobile-agenda"]').or(page.getByText(/today|agenda/i)).first()).toBeVisible();
+Then('the mobile task list is visible', async ({ page }) => {
+  await expect(page.locator('[data-testid="task-item"]').or(page.getByText(/my tasks|no tasks/i)).first()).toBeVisible();
 });
 
 Then('today\'s tasks are listed', async ({ page }) => {

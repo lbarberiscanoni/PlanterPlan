@@ -12,7 +12,7 @@
     "test:e2e": "npx bddgen --config Testing/e2e/playwright.config.ts && npx playwright test --config Testing/e2e/playwright.config.ts",
     "test:e2e:mobile": "npx bddgen --config Testing/e2e/playwright.config.ts && npx playwright test --config Testing/e2e/playwright.config.ts --project=mobile-chrome",
     "test:e2e:headed": "npx bddgen --config Testing/e2e/playwright.config.ts && npx playwright test --config Testing/e2e/playwright.config.ts --headed",
-    "test:e2e:vision": "npx bddgen --config Testing/e2e/playwright.config.ts && GEMINI_API_KEY=${GEMINI_API_KEY} npx playwright test --config Testing/e2e/playwright.config.ts --grep @vision",
+    "test:e2e:vision": "npx bddgen --config Testing/e2e/playwright.config.ts && npx playwright test --config Testing/e2e/playwright.config.ts --grep @vision",
     "test:e2e:a11y": "npx bddgen --config Testing/e2e/playwright.config.ts && npx playwright test --config Testing/e2e/playwright.config.ts --project=accessibility",
     "lint": "eslint .",
     "test": "vitest --run",

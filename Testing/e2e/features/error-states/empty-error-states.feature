@@ -22,9 +22,9 @@ Feature: Empty and Error States
     When the user is on the Reports page without a project
     Then a "Select a Project" prompt is visible
 
-  Scenario: Daily Tasks - all caught up empty state
+  Scenario: My Tasks - all caught up empty state
     Given there are no tasks due today
-    When the user is on the Daily Tasks page
+    When the user is on the My Tasks page
     Then the "All caught up" message is visible
 
   Scenario: Phase with no milestones shows empty message

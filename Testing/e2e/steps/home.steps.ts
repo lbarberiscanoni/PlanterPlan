@@ -1,11 +1,7 @@
 import { createBdd } from 'playwright-bdd';
 import { expect } from '@playwright/test';
 
-const { Given, When, Then } = createBdd();
-
-Given('the user is not authenticated', async ({ page }) => {
-  await page.context().clearCookies();
-});
+const { When, Then } = createBdd();
 
 When('the user navigates to the home page', async ({ page }) => {
   await page.goto('/');

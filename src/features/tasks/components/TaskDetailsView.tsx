@@ -1,4 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -32,19 +34,20 @@ import StrategyFollowUpDialog from '@/features/tasks/components/StrategyFollowUp
 import { collectSpawnedTemplateIds } from '@/shared/lib/tree-helpers';
 
 const emailDetailsSchema = z.object({
-    recipient: z.string().email('Enter a valid email'),
+    recipient: z.string().email(),
 });
 type EmailDetailsFormData = z.infer<typeof emailDetailsSchema>;
 
-function buildEmailBody(task: TaskItemData): string {
-    const lines: string[] = [`Task: ${task.title}`];
-    if (task.purpose) lines.push('', `Purpose:`, task.purpose);
-    if (task.actions) lines.push('', `Actions:`, task.actions);
-    lines.push('', `Start: ${formatDisplayDate(task.start_date) || '—'}`);
-    lines.push(`Due: ${formatDisplayDate(task.due_date) || '—'}`);
+function buildEmailBody(task: TaskItemData, t: TFunction): string {
+    const emptyDate = t('tasks.detail.email_body_empty_date');
+    const lines: string[] = [t('tasks.detail.email_body_task', { title: task.title })];
+    if (task.purpose) lines.push('', t('tasks.detail.email_body_purpose'), task.purpose);
+    if (task.actions) lines.push('', t('tasks.detail.email_body_actions'), task.actions);
+    lines.push('', t('tasks.detail.email_body_start', { date: formatDisplayDate(task.start_date) || emptyDate }));
+    lines.push(t('tasks.detail.email_body_due', { date: formatDisplayDate(task.due_date) || emptyDate }));
     if (typeof window !== 'undefined') {
         const projectId = task.root_id || task.id;
-        lines.push('', `Link: ${window.location.origin}/project/${projectId}`);
+        lines.push('', t('tasks.detail.email_body_link', { url: `${window.location.origin}/project/${projectId}` }));
     }
     return lines.join('\n');
 }
@@ -76,6 +79,7 @@ const TaskDetailsView = ({
     membershipRole,
     ...props
 }: TaskDetailsViewProps) => {
+    const { t } = useTranslation();
     const { user, savedEmailAddresses, rememberEmailAddress } = useAuth();
     const { data: siblings = [] } = useTaskSiblings(task?.id, task?.parent_task_id);
     const [emailOpen, setEmailOpen] = useState(false);
@@ -102,9 +106,9 @@ const TaskDetailsView = ({
         () => phaseLeadIds.map((id) => {
             const member = phaseLeadMembers.find((m) => m.user_id === id);
             const email = member ? (member as unknown as { email?: string }).email : undefined;
-            return email ?? `User ${id.slice(0, 8)}`;
+            return email ?? t('tasks.detail.phase_lead_fallback', { id: id.slice(0, 8) });
         }),
-        [phaseLeadIds, phaseLeadMembers],
+        [phaseLeadIds, phaseLeadMembers, t],
     );
     useEffect(() => {
         const prev = prevStatusRef.current;
@@ -134,10 +138,10 @@ const TaskDetailsView = ({
     });
 
     if (!task) {
-        return <div className="p-4 text-center text-muted-foreground">Select a task to view details</div>;
+        return <div className="p-4 text-center text-muted-foreground">{t('tasks.detail.select_task')}</div>;
     }
 
-    const emailBody = buildEmailBody(task);
+    const emailBody = buildEmailBody(task, t);
 
     const openEmailDialog = () => {
         reset({ recipient: savedEmailAddresses[0] || '' });
@@ -146,7 +150,7 @@ const TaskDetailsView = ({
 
     const onEmailSubmit = async (data: EmailDetailsFormData) => {
         await rememberEmailAddress(data.recipient);
-        const subject = encodeURIComponent(`Task: ${task.title}`);
+        const subject = encodeURIComponent(t('tasks.detail.email_subject', { title: task.title }));
         const body = encodeURIComponent(emailBody);
         window.location.assign(`mailto:${data.recipient}?subject=${subject}&body=${body}`);
         setEmailOpen(false);
@@ -174,12 +178,12 @@ const TaskDetailsView = ({
                     <div className="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-4">
                         <svg className="w-6 h-6 text-purple-600 " fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
                     </div>
-                    <h3 className="text-lg font-bold text-card-foreground mb-2">Premium Content Locked</h3>
+                    <h3 className="text-lg font-bold text-card-foreground mb-2">{t('tasks.detail.premium_locked')}</h3>
                     <p className="text-muted-foreground mb-6 max-w-sm mx-auto">
-                        This content is part of the Premium PlanterPlan curriculum. Upgrade to unlock full access to detailed guides, resources, and templates.
+                        {t('tasks.detail.premium_description')}
                     </p>
                     <button className="px-5 py-2.5 bg-purple-600 hover:bg-purple-700 text-white font-medium rounded-lg shadow-sm transition-colors">
-                        Upgrade to Premium
+                        {t('tasks.detail.upgrade_premium')}
                     </button>
                 </div>
             ) : (
@@ -188,7 +192,7 @@ const TaskDetailsView = ({
                     {task.purpose && (
                         <div className="detail-section mb-6">
                             <h3 className="text-base font-semibold text-slate-800 mb-2">
-                                Purpose (The Why)
+                                {t('tasks.detail.purpose_heading')}
                             </h3>
                             <p className="text-slate-700 leading-relaxed text-base whitespace-pre-wrap">{task.purpose}</p>
                         </div>
@@ -198,7 +202,7 @@ const TaskDetailsView = ({
                     {task.description && (
                         <div className="detail-section mb-6">
                             <h3 className="text-sm font-bold text-slate-900 mb-2 uppercase tracking-wide">
-                                Overview
+                                {t('tasks.detail.overview_heading')}
                             </h3>
                             <p className="text-slate-600 leading-relaxed text-sm whitespace-pre-wrap">{task.description}</p>
                         </div>
@@ -208,7 +212,7 @@ const TaskDetailsView = ({
                     {task.actions && (
                         <div className="detail-section mb-6">
                             <h3 className="text-sm font-bold text-slate-900 mb-2 uppercase tracking-wide">
-                                Action Steps (The What)
+                                {t('tasks.detail.actions_heading')}
                             </h3>
                             <div className="p-4 bg-green-50 border border-green-200 text-slate-700 leading-relaxed text-sm whitespace-pre-wrap">
                                 {task.actions}
@@ -230,11 +234,11 @@ const TaskDetailsView = ({
             {/* Schedule — hidden for template tasks */}
             {task.origin !== 'template' && (
             <div className="detail-section mb-6">
-                <h3 className="text-sm font-bold text-slate-900 mb-3 uppercase tracking-wide">Schedule</h3>
+                <h3 className="text-sm font-bold text-slate-900 mb-3 uppercase tracking-wide">{t('tasks.detail.schedule_heading')}</h3>
                 <div className="grid grid-cols-2 gap-3">
                     <div className="p-4 bg-card border border-border rounded-lg shadow-sm flex flex-col gap-1">
                         <span className="text-xs text-muted-foreground font-medium uppercase tracking-wide">
-                            Start Date
+                            {t('tasks.detail.start_date')}
                         </span>
                         <span className="text-sm font-bold text-card-foreground tracking-tight">
                             {formatDisplayDate(task.start_date)}
@@ -242,7 +246,7 @@ const TaskDetailsView = ({
                     </div>
                     <div className="p-4 bg-card border border-border rounded-lg shadow-sm flex flex-col gap-1">
                         <span className="text-xs text-muted-foreground font-medium uppercase tracking-wide">
-                            Due Date
+                            {t('tasks.detail.due_date')}
                         </span>
                         <span className="text-sm font-bold text-card-foreground tracking-tight">
                             {formatDisplayDate(task.due_date)}
@@ -257,18 +261,18 @@ const TaskDetailsView = ({
                 <div className="flex flex-wrap gap-4">
                     <div className="flex flex-col gap-1">
                         <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-                            Type
+                            {t('tasks.detail.type_label')}
                         </span>
                         <span
                             className={`task-type-badge inline-flex items-center px-3 py-1.5 rounded-full text-xs font-bold border ${task.origin === 'instance' ? 'bg-brand-50 text-brand-700 border-brand-100 ' : 'bg-muted text-muted-foreground border-border'}`}
                         >
-                            {task.origin === 'instance' ? 'Project Task' : 'Template'}
+                            {task.origin === 'instance' ? t('tasks.detail.project_task') : t('tasks.detail.template')}
                         </span>
                     </div>
 
                     <div className="flex flex-col gap-1">
                         <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-                            Status
+                            {t('tasks.detail.status_label')}
                         </span>
                         {task.is_complete ? (
                             <span className="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-bold border bg-emerald-50 text-emerald-700 border-emerald-100">
@@ -281,12 +285,12 @@ const TaskDetailsView = ({
                                         strokeLinejoin="round"
                                     />
                                 </svg>
-                                Complete
+                                {t('tasks.detail.complete')}
                             </span>
                         ) : (
                             <span className="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-bold border bg-amber-50 text-amber-700 border-amber-100">
                                 <span className="w-2 h-2 rounded-full bg-amber-400 mr-2"></span>
-                                Incomplete
+                                {t('tasks.detail.incomplete')}
                             </span>
                         )}
                     </div>
@@ -294,10 +298,10 @@ const TaskDetailsView = ({
                     {task.is_premium && (
                         <div className="flex flex-col gap-1">
                             <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-                                Access
+                                {t('tasks.detail.access_label')}
                             </span>
                             <span className="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-bold border bg-purple-50 text-purple-700 border-purple-100">
-                                Premium
+                                {t('tasks.detail.premium_label')}
                             </span>
                         </div>
                     )}
@@ -305,13 +309,13 @@ const TaskDetailsView = ({
                     {extractCoachingFlag(task as TaskRow) && (
                         <div className="flex flex-col gap-1" data-testid="coaching-badge-group">
                             <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-                                Access
+                                {t('tasks.detail.access_label')}
                             </span>
                             <span
                                 data-testid="coaching-badge"
                                 className="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-bold border bg-sky-50 text-sky-700 border-sky-100"
                             >
-                                Coaching
+                                {t('tasks.detail.coaching_label')}
                             </span>
                         </div>
                     )}
@@ -319,13 +323,13 @@ const TaskDetailsView = ({
                     {isStrategyTask && (
                         <div className="flex flex-col gap-1" data-testid="strategy-badge-group">
                             <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-                                Type
+                                {t('tasks.detail.type_label')}
                             </span>
                             <span
                                 data-testid="strategy-badge"
                                 className="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-bold border bg-emerald-50 text-emerald-700 border-emerald-100"
                             >
-                                Strategy Template
+                                {t('tasks.detail.strategy_template_label')}
                             </span>
                         </div>
                     )}
@@ -333,7 +337,7 @@ const TaskDetailsView = ({
                     {phaseLeadIds.length > 0 && (
                         <div className="flex flex-col gap-1" data-testid="phase-lead-badge-group">
                             <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-                                Phase Leads
+                                {t('tasks.detail.phase_leads_label')}
                             </span>
                             <span
                                 data-testid="phase-lead-badge"
@@ -353,7 +357,7 @@ const TaskDetailsView = ({
             {/* Related Tasks (Siblings) */}
             {task.parent_task_id && (
                 <div className="detail-section mb-6" data-testid="related-tasks-section">
-                    <h3 className="text-sm font-bold text-slate-900 mb-3 uppercase tracking-wide">Related Tasks</h3>
+                    <h3 className="text-sm font-bold text-slate-900 mb-3 uppercase tracking-wide">{t('tasks.detail.related_tasks')}</h3>
                     {siblings.length > 0 ? (
                         <div className="space-y-2">
                             {siblings.map((sibling) => (
@@ -372,7 +376,7 @@ const TaskDetailsView = ({
                             ))}
                         </div>
                     ) : (
-                        <p className="text-sm text-muted-foreground">No sibling tasks in this milestone.</p>
+                        <p className="text-sm text-muted-foreground">{t('tasks.detail.no_sibling_tasks')}</p>
                     )}
                 </div>
             )}
@@ -386,7 +390,7 @@ const TaskDetailsView = ({
             {/* Subtasks */}
             {task.children && task.children.length > 0 && (
                 <div className="detail-section mb-6">
-                    <h3 className="text-sm font-bold text-slate-900 mb-3 uppercase tracking-wide">Subtasks</h3>
+                    <h3 className="text-sm font-bold text-slate-900 mb-3 uppercase tracking-wide">{t('tasks.detail.subtasks')}</h3>
                     <div className="space-y-2">
                         {task.children.map((child: TaskRow) => (
                             <div key={child.id} className="p-3 bg-card border border-border rounded-lg shadow-sm flex items-center justify-between">
@@ -410,7 +414,7 @@ const TaskDetailsView = ({
                         onClick={() => onAddChildTask(task)}
                         className="w-full py-3 bg-brand-600 text-white rounded-lg hover:bg-brand-700 shadow-md transition-all font-medium"
                     >
-                        + Add Child Task
+                        {t('tasks.detail.add_child_task')}
                     </button>
                 </div>
             )}
@@ -418,7 +422,7 @@ const TaskDetailsView = ({
             {/* Notes — only visible to P4P admins */}
             {task.notes && (user as { role?: string })?.role === 'admin' && (
                 <div className="detail-section mb-6">
-                    <h3 className="text-sm font-bold text-slate-900 mb-2 uppercase tracking-wide">Notes</h3>
+                    <h3 className="text-sm font-bold text-slate-900 mb-2 uppercase tracking-wide">{t('tasks.detail.notes')}</h3>
                     <div className="p-3 bg-amber-50 border border-amber-100 text-slate-700 text-sm italic">
                         {task.notes}
                     </div>
@@ -433,7 +437,7 @@ const TaskDetailsView = ({
                     data-testid="email-details-btn"
                     className="flex-1 py-3 px-4 bg-card border border-border text-card-foreground rounded-lg shadow-sm hover:bg-muted hover:shadow-md transition-all font-medium text-sm"
                 >
-                    Email details
+                    {t('tasks.detail.email_details')}
                 </button>
 
                 {onDeleteTask && canEdit && (
@@ -452,7 +456,7 @@ const TaskDetailsView = ({
                         data-testid="delete-task-btn"
                         className="flex-1 py-3 px-4 bg-card border border-rose-200 text-rose-600 rounded-lg shadow-sm hover:bg-rose-50 hover:shadow-md transition-all font-medium text-sm"
                     >
-                        Delete Task
+                        {t('tasks.delete_task')}
                     </button>
                 )}
             </div>
@@ -461,19 +465,19 @@ const TaskDetailsView = ({
             <Dialog open={emailOpen} onOpenChange={setEmailOpen}>
                 <DialogContent data-testid="email-details-dialog">
                     <DialogHeader>
-                        <DialogTitle>Email task details</DialogTitle>
+                        <DialogTitle>{t('tasks.detail.email_dialog_title')}</DialogTitle>
                         <DialogDescription>
-                            Send a summary of this task via your mail client.
+                            {t('tasks.detail.email_dialog_description')}
                         </DialogDescription>
                     </DialogHeader>
                     <form onSubmit={handleSubmit(onEmailSubmit)} className="space-y-4">
                         <div className="space-y-1.5">
-                            <Label htmlFor="email-recipient">Recipient</Label>
+                            <Label htmlFor="email-recipient">{t('tasks.detail.email_recipient')}</Label>
                             <Input
                                 id="email-recipient"
                                 type="email"
                                 list="email-recipient-suggestions"
-                                placeholder="name@example.com"
+                                placeholder={t('tasks.detail.email_placeholder')}
                                 data-testid="email-recipient-input"
                                 {...register('recipient')}
                             />
@@ -484,12 +488,12 @@ const TaskDetailsView = ({
                             </datalist>
                             {errors.recipient && (
                                 <p className="text-xs text-rose-600" data-testid="email-recipient-error">
-                                    {errors.recipient.message}
+                                    {t('tasks.detail.email_recipient_invalid')}
                                 </p>
                             )}
                         </div>
                         <div className="space-y-1.5">
-                            <Label htmlFor="email-body">Message</Label>
+                            <Label htmlFor="email-body">{t('tasks.detail.email_message')}</Label>
                             <Textarea
                                 id="email-body"
                                 readOnly
@@ -505,14 +509,14 @@ const TaskDetailsView = ({
                                 variant="outline"
                                 onClick={() => setEmailOpen(false)}
                             >
-                                Cancel
+                                {t('common.cancel')}
                             </Button>
                             <Button
                                 type="submit"
                                 disabled={isSubmitting}
                                 data-testid="email-send-btn"
                             >
-                                Send
+                                {t('tasks.detail.email_send')}
                             </Button>
                         </DialogFooter>
                     </form>
@@ -523,10 +527,9 @@ const TaskDetailsView = ({
             <Dialog open={deleteGuardOpen} onOpenChange={setDeleteGuardOpen}>
                 <DialogContent data-testid="template-origin-delete-guard">
                     <DialogHeader>
-                        <DialogTitle>Cannot delete template task</DialogTitle>
+                        <DialogTitle>{t('tasks.detail.template_delete_blocked_title')}</DialogTitle>
                         <DialogDescription>
-                            This task originated from the project template. Only the project owner
-                            can delete template-origin tasks.
+                            {t('tasks.detail.template_delete_blocked_description')}
                         </DialogDescription>
                     </DialogHeader>
                     <DialogFooter>
@@ -535,7 +538,7 @@ const TaskDetailsView = ({
                             variant="outline"
                             onClick={() => setDeleteGuardOpen(false)}
                         >
-                            OK
+                            {t('common.confirm')}
                         </Button>
                     </DialogFooter>
                 </DialogContent>
@@ -553,17 +556,17 @@ const TaskDetailsView = ({
             {/* Metadata Footer */}
             <div className="pt-6 border-t border-slate-100 text-xs text-slate-400 flex flex-col gap-1">
                 <div className="flex justify-between">
-                    <span>Created</span>
+                    <span>{t('tasks.detail.created')}</span>
                     <span className="font-mono text-slate-500">{formatDisplayDate(task.created_at)}</span>
                 </div>
                 {task.updated_at && (
                     <div className="flex justify-between">
-                        <span>Updated</span>
+                        <span>{t('tasks.detail.updated')}</span>
                         <span className="font-mono text-slate-500">{formatDisplayDate(task.updated_at)}</span>
                     </div>
                 )}
                 <div className="flex justify-between mt-2">
-                    <span>ID</span>
+                    <span>{t('tasks.detail.id_label')}</span>
                     <span className="font-mono opacity-50">{task.id.slice(0, 8)}...</span>
                 </div>
             </div>
@@ -574,21 +577,22 @@ const TaskDetailsView = ({
 /** Collapsed per-task activity rail. Always mounts the query so the
  *  count surfaces in the summary; body renders only when `<details>` is open. */
 function TaskActivityRail({ taskId }: { taskId: string }) {
+    const { t } = useTranslation();
     const { data: rows = [], isLoading } = useTaskActivity(taskId, { limit: 20 });
     return (
         <details className="detail-section mb-6 group" data-testid="task-activity-rail">
             <summary className="cursor-pointer list-none flex items-center gap-2 text-sm font-bold text-slate-900 uppercase tracking-wide">
-                <span>Activity</span>
+                <span>{t('tasks.detail.activity')}</span>
                 <span className="text-xs text-slate-500 normal-case font-medium">
                     ({rows.length})
                 </span>
             </summary>
             <div className="mt-3 bg-white border border-slate-200 rounded-xl shadow-sm p-4">
                 {isLoading ? (
-                    <p className="text-sm text-slate-500">Loading activity…</p>
+                    <p className="text-sm text-slate-500">{t('tasks.detail.activity_loading')}</p>
                 ) : rows.length === 0 ? (
                     <p className="text-sm text-slate-500" data-testid="task-activity-empty">
-                        No activity yet.
+                        {t('tasks.detail.activity_empty')}
                     </p>
                 ) : (
                     <div className="divide-y divide-slate-100">

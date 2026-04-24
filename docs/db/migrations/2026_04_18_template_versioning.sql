@@ -27,7 +27,6 @@ BEGIN
             COALESCE(NEW.title, '') IS DISTINCT FROM COALESCE(OLD.title, '')
             OR COALESCE(NEW.description, '') IS DISTINCT FROM COALESCE(OLD.description, '')
             OR COALESCE(NEW.days_from_start, -1) IS DISTINCT FROM COALESCE(OLD.days_from_start, -1)
-            OR COALESCE(NEW.duration, -1) IS DISTINCT FROM COALESCE(OLD.duration, -1)
             OR COALESCE(NEW.settings, '{}'::jsonb) IS DISTINCT FROM COALESCE(OLD.settings, '{}'::jsonb)
         THEN
             NEW.template_version := COALESCE(OLD.template_version, 0) + 1;

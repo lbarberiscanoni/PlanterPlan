@@ -75,18 +75,11 @@ The Wave 32 plan originally scoped a third task: "project due date does not pers
 
 **Active (Wave 31).** `src/shared/i18n/locales/es.json` was produced by a machine-translation pass from `en.json` at commit `63c77d8`. The file's `_meta.review_required_before_marketing: true` flag is enforced by `Testing/unit/shared/i18n/es-json.test.ts`. Quality is "good enough for an internal beta" but has not been reviewed by a native Spanish speaker. **Do not market "Spanish support" on the marketing site or app store listing until a human-review pass lands.** The pipeline itself (i18next + module augmentation + locale switcher + Intl formatters) is production-ready — future locales become a translator-only workflow per `docs/architecture/i18n.md` §"Adding a new locale."
 
-### Deferred string-extraction surfaces
+### String-extraction completion
 
-**Active (Wave 31).** Task 2's per-domain extraction landed 17 files (auth, nav, dashboard, project-create/edit, settings, notifications, reports, tasks page, Gantt page, onboarding wizard, login). The following surfaces retain hard-coded English and will be completed in a follow-up wave:
+**Resolved (Wave 36 remediation).** The Wave 31 follow-up surfaces have now been extracted: the `TaskDetailsView` family and side panel labels, `AddPersonModal`, deep library views, activity-log humanizers, command palette/navigation copy, and admin/task surfaces touched by Waves 33-36 resolve through `react-i18next` keys. `Testing/unit/shared/i18n/es-json.test.ts` continues to enforce en/es key parity and interpolation marker parity.
 
-- `src/features/tasks/components/TaskDetailsView.tsx` family (dependencies section, related-tasks panel, resource rail, coaching/strategy badges)
-- `src/features/people/components/AddPersonModal.tsx` — only the `Cancel` button was extracted in the Wave 31 finalize; labels, placeholders, roles enum, statuses enum, and the dynamic title still need work
-- `src/pages/Home.tsx` marketing copy (if it exists / lands)
-- Deep library views (`src/features/library/components/*` beyond the search input)
-- Activity log event-type humanizers in `<ActivityRow>`
-- Per-PR follow-up: see Wave 31 Task 2 PR description for the triage list
-
-The `eslint-plugin-i18next no-literal-string` rule is intentionally NOT enabled yet — revisit once the surfaces above are extracted.
+The `eslint-plugin-i18next no-literal-string` rule remains outside product scope for this remediation because the current parity tests are the active guardrail and the repository still contains acceptable non-UI literals such as enum values, routes, SQL snippets, and test fixtures.
 
 ### React 18.3.1 pin (Wave 31 scope expansion)
 

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { supabase } from '@/shared/db/client';
 import { useAuth } from '@/shared/contexts/AuthContext';
 
@@ -21,30 +21,40 @@ interface UseProjectPresenceResult {
  * who is currently viewing the project and which task (if any) they have
  * open. Emits dedup'd, joinedAt-sorted presence rows.
  *
- * - Channel name: `presence:project:<projectId>` — MUST match the name used
- *   by `useTaskFocusBroadcast` since focus updates piggyback on the same
- *   channel via `track({ ...prev, focusedTaskId })`.
+ * - Channel name: `presence:project:<projectId>`.
  * - Multi-tab dedup: the same `user_id` from N tabs collapses to a single
  *   row using the earliest `joinedAt`.
  * - No-op when `projectId` or `user` is null (route guards outside the
  *   Project page don't open the channel at all).
  *
  * @param {string | null} projectId The project's root task id, or null.
+ * @param {string | null} focusedTaskId The task currently open in the details
+ *   panel, or null when the project shell is focused.
  * @returns {UseProjectPresenceResult} `{ presentUsers, myPresenceKey }` —
  *   `presentUsers` is the deduped + sorted roster; `myPresenceKey` is the
  *   current user's id once subscribed (consumers that want to filter self
  *   can compare against it).
  */
-export function useProjectPresence(projectId: string | null): UseProjectPresenceResult {
+export function useProjectPresence(projectId: string | null, focusedTaskId: string | null = null): UseProjectPresenceResult {
     const { user } = useAuth();
+    const userId = user?.id ?? null;
+    const userEmail = user?.email ?? '';
     const [presentUsers, setPresentUsers] = useState<PresenceState[]>([]);
     const [myPresenceKey, setMyPresenceKey] = useState<string | null>(null);
+    const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+    const joinedAtRef = useRef<number | null>(null);
+    const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     useEffect(() => {
-        if (!projectId || !user) return;
+        if (!projectId || !userId) {
+            return;
+        }
+        const joinedAt = Date.now();
+        joinedAtRef.current = joinedAt;
         const channel = supabase.channel(`presence:project:${projectId}`, {
-            config: { presence: { key: user.id } },
+            config: { presence: { key: userId } },
         });
+        channelRef.current = channel;
 
         channel
             .on('presence', { event: 'sync' }, () => {
@@ -68,21 +78,46 @@ export function useProjectPresence(projectId: string | null): UseProjectPresence
                 }
                 if (status === 'SUBSCRIBED') {
                     await channel.track({
-                        user_id: user.id,
-                        email: user.email,
-                        joinedAt: Date.now(),
+                        user_id: userId,
+                        email: userEmail,
+                        joinedAt,
                         focusedTaskId: null,
                     } satisfies PresenceState);
-                    setMyPresenceKey(user.id);
+                    setMyPresenceKey(userId);
                 }
             });
 
         return () => {
+            if (debounceRef.current) clearTimeout(debounceRef.current);
             channel.untrack();
             supabase.removeChannel(channel);
+            channelRef.current = null;
+            joinedAtRef.current = null;
             setMyPresenceKey(null);
         };
-    }, [projectId, user]);
+    }, [projectId, userId, userEmail]);
 
-    return { presentUsers, myPresenceKey };
+    useEffect(() => {
+        if (!projectId || !userId || !myPresenceKey || !channelRef.current) return;
+        if (debounceRef.current) clearTimeout(debounceRef.current);
+
+        debounceRef.current = setTimeout(() => {
+            void channelRef.current?.track({
+                user_id: userId,
+                email: userEmail,
+                joinedAt: joinedAtRef.current ?? Date.now(),
+                focusedTaskId,
+            } satisfies PresenceState);
+        }, 250);
+
+        return () => {
+            if (debounceRef.current) clearTimeout(debounceRef.current);
+        };
+    }, [projectId, userId, userEmail, myPresenceKey, focusedTaskId]);
+
+    const active = Boolean(projectId && userId);
+    return {
+        presentUsers: active ? presentUsers : [],
+        myPresenceKey: active ? myPresenceKey : null,
+    };
 }

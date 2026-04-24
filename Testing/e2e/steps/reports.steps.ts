@@ -66,7 +66,7 @@ Then('the project selector shows no options', async ({ page }) => {
   await expect(page.getByText(/no projects/i)).toBeVisible();
 });
 
-Then('four stats cards are visible', async ({ page }) => {
+Then('four report stats cards are visible', async ({ page }) => {
   const cards = page.locator('[data-testid="stats-card"], .grid > div');
   await expect(cards).toHaveCount(4, { timeout: 5000 });
 });

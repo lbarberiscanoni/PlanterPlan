@@ -23,6 +23,7 @@ export interface PendingMentionRow {
     payload: {
         comment_id?: string
         task_id?: string
+        root_id?: string
         author_id?: string
         body_preview?: string
     }
@@ -47,6 +48,9 @@ export type EmailSender = (to: string, subject: string, html: string, text: stri
 
 export interface PushInvokeResult {
     ok: boolean
+    sent?: number
+    skipped?: number
+    failed?: number
     error?: string
 }
 
@@ -201,7 +205,8 @@ export async function dispatchPendingMentions(
         const preview = row.payload?.body_preview ?? ''
         const title = 'New mention on PlanterPlan'
         const body = preview || 'Someone mentioned you in a comment.'
-        const url = row.payload?.task_id ? `/project/${row.payload.task_id}` : '/'
+        const projectId = row.payload?.root_id ?? row.payload?.task_id
+        const url = projectId ? `/project/${projectId}` : '/'
 
         let emailSucceeded: boolean | null = null
         let pushSucceeded: boolean | null = null
@@ -236,8 +241,8 @@ export async function dispatchPendingMentions(
                 tag: `mention:${row.payload?.comment_id ?? row.id}`,
                 event_type: 'mentions',
             })
-            pushSucceeded = pushResult.ok
-            if (pushResult.ok) summary.sent_push += 1
+            pushSucceeded = pushResult.ok && (pushResult.sent ?? 0) > 0
+            if (pushSucceeded) summary.sent_push += pushResult.sent ?? 1
             else failures.push(`push:${pushResult.error ?? 'failed'}`)
         }
 

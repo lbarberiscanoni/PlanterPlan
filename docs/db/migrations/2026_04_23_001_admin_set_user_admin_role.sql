@@ -71,7 +71,7 @@ BEGIN
         NULL,
         v_caller,
         'member',
-        p_target_uid::text,
+        p_target_uid,
         CASE WHEN p_make_admin THEN 'admin_granted' ELSE 'admin_revoked' END,
         jsonb_build_object('target_email', v_target_email)
     );

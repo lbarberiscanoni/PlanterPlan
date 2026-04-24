@@ -92,7 +92,7 @@ export default function PhaseCard({ phase, tasks = [], milestones = [], isActive
  <h3 className={cn('font-semibold', isLocked ? 'text-muted-foreground' : 'text-card-foreground')}>
  {phase.title}
  </h3>
- <p className="text-sm text-muted-foreground">{milestones.length} milestones</p>
+ <p className="text-sm text-muted-foreground">{t('projects.phase_milestone_count', { count: milestones.length })}</p>
  </div>
  </div>
  <ChevronRight
@@ -126,29 +126,29 @@ export default function PhaseCard({ phase, tasks = [], milestones = [], isActive
  decorative
  />
  <div className="pointer-events-none absolute inset-0 flex items-center justify-center text-xs font-medium text-slate-900">
- {isLocked ? 'Locked' : `${progress}%`}
+ {isLocked ? t('projects.locked_label') : `${progress}%`}
  </div>
  </div>
  <p className="text-xs text-slate-600">
  {isLocked
-  ? `Complete Phase ${order - 1} to unlock`
-  : `${completedTasks} of ${totalTasks} tasks`}
+  ? t('projects.phase_unlock_hint', { position: order - 1 })
+  : t('projects.phase_task_progress', { completed: completedTasks, count: totalTasks })}
  </p>
  </div>
  ) : isLocked ? (
  <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted p-2 rounded justify-center">
  <Lock className="w-3 h-3" />
- <span>Complete Phase {order - 1} to unlock</span>
+ <span>{t('projects.phase_unlock_hint', { position: order - 1 })}</span>
  </div>
  ) : (
  <>
  <div className="flex justify-between text-sm">
- <span className="text-muted-foreground">Progress</span>
+ <span className="text-muted-foreground">{t('projects.phase_progress_label')}</span>
  <span className={cn('font-medium', colors.text)}>{progress}%</span>
  </div>
  <Progress value={progress} className={cn('h-2', colors.light)} />
  <p className="text-xs text-muted-foreground">
- {completedTasks} of {totalTasks} tasks
+ {t('projects.phase_task_progress', { completed: completedTasks, count: totalTasks })}
  </p>
  </>
  )}

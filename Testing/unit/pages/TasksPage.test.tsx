@@ -28,6 +28,10 @@ vi.mock('@/features/people/hooks/useTeam', () => ({
     useTeam: () => ({ teamMembers: [], isLoading: false }),
 }));
 
+vi.mock('sonner', () => ({
+    toast: { success: vi.fn(), error: vi.fn() },
+}));
+
 // planterClient is the only data source TasksPage uses — return a fixed list.
 vi.mock('@/shared/api/planterClient', () => {
     const taskList = [
@@ -37,6 +41,7 @@ vi.mock('@/shared/api/planterClient', () => {
             parent_task_id: null,
             root_id: 'p-alpha',
             origin: 'instance',
+            creator: 'u1',
             status: 'in_progress',
             task_type: 'project',
         },
@@ -46,6 +51,8 @@ vi.mock('@/shared/api/planterClient', () => {
             parent_task_id: 'p-alpha',
             root_id: 'p-alpha',
             origin: 'instance',
+            creator: 'u1',
+            assignee_id: 'u1',
             status: 'in_progress',
             task_type: 'task',
             due_date: '2026-04-22',
@@ -56,9 +63,23 @@ vi.mock('@/shared/api/planterClient', () => {
             parent_task_id: 'p-alpha',
             root_id: 'p-alpha',
             origin: 'instance',
+            creator: 'u2',
+            assignee_id: 'u1',
             status: 'in_progress',
             task_type: 'task',
             due_date: '2026-05-10',
+        },
+        {
+            id: 't-1-child',
+            title: 'Choose registrar',
+            parent_task_id: 't-1',
+            root_id: 'p-alpha',
+            origin: 'instance',
+            creator: 'u1',
+            assignee_id: 'u1',
+            status: 'todo',
+            task_type: 'subtask',
+            position: 1,
         },
     ];
     return {
@@ -67,6 +88,7 @@ vi.mock('@/shared/api/planterClient', () => {
                 Task: {
                     list: vi.fn().mockResolvedValue(taskList),
                     update: vi.fn(),
+                    delete: vi.fn().mockResolvedValue(true),
                     updateParentDates: vi.fn(),
                 },
             },
@@ -78,10 +100,30 @@ vi.mock('@/shared/api/planterClient', () => {
 // with realtime + presence hooks that aren't relevant to this test's concern
 // (the wiring between TasksPage and the panel, not the panel's internals).
 vi.mock('@/features/tasks/components/TaskDetailsPanel', () => ({
-    default: ({ selectedTask, onClose }: { selectedTask?: { id: string; title: string }; onClose: () => void }) => (
+    default: ({
+        selectedTask,
+        allProjectTasks,
+        onClose,
+        onDeleteTaskWrapper,
+    }: {
+        selectedTask?: { id: string; title: string; children?: { id: string }[] };
+        allProjectTasks?: { id: string }[];
+        onClose: () => void;
+        onDeleteTaskWrapper?: (taskId: string) => Promise<void>;
+    }) => (
         <aside data-testid="tasks-page-details-panel">
             <div data-testid="tasks-page-details-panel-title">{selectedTask?.title}</div>
+            <div data-testid="tasks-page-details-panel-child-count">{selectedTask?.children?.length ?? 0}</div>
+            <div data-testid="tasks-page-details-panel-project-task-count">{allProjectTasks?.length ?? 0}</div>
             <button onClick={onClose} data-testid="tasks-page-details-panel-close">Close</button>
+            {selectedTask && onDeleteTaskWrapper ? (
+                <button
+                    onClick={() => { void onDeleteTaskWrapper(selectedTask.id); }}
+                    data-testid="tasks-page-details-panel-delete"
+                >
+                    Delete from panel
+                </button>
+            ) : null}
         </aside>
     ),
 }));
@@ -93,6 +135,7 @@ vi.mock('@/features/tasks/components/board/ProjectBoardView', () => ({
 
 import { renderWithProviders } from '@test/render-with-providers';
 import TasksPage from '@/pages/TasksPage';
+import { planter } from '@/shared/api/planterClient';
 
 function renderTasksPage() {
     return renderWithProviders(
@@ -125,6 +168,16 @@ describe('TasksPage — click-to-details + tooltip wiring (Wave 33)', () => {
         expect(screen.getByTestId('tasks-page-details-panel-title')).toHaveTextContent('Buy a domain');
     });
 
+    it('hydrates the clicked task with project context for the details panel', async () => {
+        const user = userEvent.setup();
+        renderTasksPage();
+
+        await user.click(await screen.findByTestId('task-row-t-1'));
+
+        expect(await screen.findByTestId('tasks-page-details-panel-child-count')).toHaveTextContent('1');
+        expect(screen.getByTestId('tasks-page-details-panel-project-task-count')).toHaveTextContent('4');
+    });
+
     it('closes the details panel via onClose', async () => {
         const user = userEvent.setup();
         renderTasksPage();
@@ -134,6 +187,22 @@ describe('TasksPage — click-to-details + tooltip wiring (Wave 33)', () => {
 
         await user.click(screen.getByTestId('tasks-page-details-panel-close'));
 
+        await waitFor(() => {
+            expect(screen.queryByTestId('tasks-page-details-panel')).not.toBeInTheDocument();
+        });
+    });
+
+    it('wires the details panel delete action through the task delete mutation', async () => {
+        const user = userEvent.setup();
+        renderTasksPage();
+
+        await user.click(await screen.findByTestId('task-row-t-1'));
+        await user.click(await screen.findByTestId('tasks-page-details-panel-delete'));
+        await user.click(await screen.findByRole('button', { name: 'Delete' }));
+
+        await waitFor(() => {
+            expect(planter.entities.Task.delete).toHaveBeenCalledWith('t-1');
+        });
         await waitFor(() => {
             expect(screen.queryByTestId('tasks-page-details-panel')).not.toBeInTheDocument();
         });

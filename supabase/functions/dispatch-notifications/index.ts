@@ -49,7 +49,26 @@ Deno.serve(async (req) => {
                     console.error('[dispatch-notifications] push invoke failed', res.status, raw)
                     return { ok: false, error: `push_${res.status}` }
                 }
-                return { ok: true }
+                const body = await res.json().catch(() => null) as {
+                    success?: boolean
+                    sent?: number
+                    skipped?: number
+                    failed?: number
+                    error?: string
+                } | null
+                const sent = typeof body?.sent === 'number' ? body.sent : 0
+                const skipped = typeof body?.skipped === 'number' ? body.skipped : 0
+                const failed = typeof body?.failed === 'number' ? body.failed : 0
+                if (body?.success !== true || sent <= 0) {
+                    return {
+                        ok: false,
+                        sent,
+                        skipped,
+                        failed,
+                        error: body?.error ?? (failed > 0 ? 'push_failed' : 'push_not_delivered'),
+                    }
+                }
+                return { ok: true, sent, skipped, failed }
             } catch (err) {
                 console.error('[dispatch-notifications] push invoke error', err)
                 return { ok: false, error: 'push_network_error' }

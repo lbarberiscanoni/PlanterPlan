@@ -40,9 +40,9 @@ Given('the user is logged in as limited user', async ({ browser }) => {
   await page.waitForLoadState('networkidle');
 });
 
-Given('the user is not authenticated', async ({ browser }) => {
-  const context = await browser.newContext();
-  await context.clearCookies();
+Given('the user is not authenticated', async ({ page }) => {
+  await page.context().clearCookies();
+  await page.evaluate(() => window.localStorage.clear()).catch(() => {});
 });
 
 // ── Navigation ──────────────────────────────────────────────────────────────
@@ -50,6 +50,18 @@ Given('the user is not authenticated', async ({ browser }) => {
 When('the user navigates to {string}', async ({ page }, url: string) => {
   await page.goto(url);
   await page.waitForLoadState('networkidle');
+});
+
+When('the user clicks "Add Task"', async ({ page }) => {
+  await page.getByRole('button', { name: /add task/i }).first().click();
+});
+
+When('the user clicks "Settings"', async ({ page }) => {
+  await page.getByRole('link', { name: /settings/i }).or(page.getByRole('button', { name: /settings/i })).first().click();
+});
+
+When('the user clicks "Log out"', async ({ page }) => {
+  await page.getByRole('button', { name: /log out|logout|sign out/i }).or(page.getByRole('menuitem', { name: /log out|logout|sign out/i })).first().click();
 });
 
 Then('the user is redirected to {string}', async ({ page }, url: string) => {

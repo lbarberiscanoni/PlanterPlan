@@ -61,7 +61,7 @@ When('the user clicks the close button', async ({ page }) => {
   await wizard.clickClose();
 });
 
-When('the user clicks Back', async ({ page }) => {
+When('the user clicks Back in the onboarding wizard', async ({ page }) => {
   const wizard = new OnboardingWizard(page);
   await wizard.clickBack();
 });

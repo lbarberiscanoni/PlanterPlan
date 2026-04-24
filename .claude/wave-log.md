@@ -99,8 +99,8 @@ Items explicitly kicked out of a shipped wave. Close out by striking through + m
 | Wave 30 | Admin notifications on new project creation | Wave 34 Task 3 |
 | Wave 30 | `public/sw.js` JS exception (push-only worker) | Open — no wave assigned (original Wave 32 PWA/workbox work descoped during the post-31 renumber) |
 | Wave 31 | Human-review pass on `es.json` before any "Spanish support" marketing claim | Open — no wave assigned |
-| Wave 31 | Remaining string-extraction surfaces: `TaskDetailsView` family, full `AddPersonModal`, deep library views, activity-log humanizers, `<Home>` marketing copy | Open — no wave assigned |
-| Wave 31 | `eslint-plugin-i18next no-literal-string` rule enablement | Open — no wave assigned |
+| Wave 31 | ~~Remaining string-extraction surfaces: `TaskDetailsView` family, full `AddPersonModal`, deep library views, activity-log humanizers, `<Home>` marketing copy~~ | Resolved in Wave 36 remediation |
+| Wave 31 | `eslint-plugin-i18next no-literal-string` rule enablement | Removed from product scope for this remediation; en/es parity tests remain the active guardrail |
 | Wave 31 | React 19 re-adoption | Not on near-term roadmap (18.3.1 stable; no behavioral regressions) |
 | Wave 30 | Four `react-hooks/set-state-in-effect` suppressions in `useTreeState`, `PeopleList`, `useSettings` | Open — future cleanup wave |
 

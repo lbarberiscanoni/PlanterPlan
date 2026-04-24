@@ -2,8 +2,8 @@ import { defineConfig, devices } from '@playwright/test';
 import { defineBddConfig } from 'playwright-bdd';
 
 const testDir = defineBddConfig({
-  features: 'Testing/e2e/features/**/*.feature',
-  steps: 'Testing/e2e/steps/**/*.steps.ts',
+  features: 'features/**/*.feature',
+  steps: 'steps/**/*.steps.ts',
 });
 
 export default defineConfig({
@@ -47,8 +47,13 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command:
-      'VITE_E2E_MODE=true VITE_TEST_EMAIL=test@example.com VITE_TEST_PASSWORD=password123 npm run dev',
+    command: 'npm run dev',
+    env: {
+      ...process.env,
+      VITE_E2E_MODE: 'true',
+      VITE_TEST_EMAIL: 'test@example.com',
+      VITE_TEST_PASSWORD: 'password123',
+    },
     port: 5173,
     reuseExistingServer: !process.env.CI,
     timeout: 30000,

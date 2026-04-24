@@ -51,6 +51,7 @@ export interface UseTaskFiltersArgs {
  tasks: TaskRow[];
  filter: TaskFilterKey;
  sort: TaskSortKey;
+ currentUserId?: string | null;
  now?: Date;
  /** Wave 33: due-date range picker; open-ended when a bound is null. ANDed with the filter predicate. */
  dueDateRange?: DueDateRange;
@@ -74,6 +75,7 @@ export const filterAndSortTasks = ({
  tasks,
  filter,
  sort,
+ currentUserId = null,
  now = new Date(),
  dueDateRange,
 }: UseTaskFiltersArgs): TaskRow[] => {
@@ -91,7 +93,11 @@ export const filterAndSortTasks = ({
  let filtered: TaskRow[];
  switch (filter) {
   case 'my_tasks':
-   filtered = instanceChildren;
+   filtered = currentUserId
+    ? instanceChildren.filter((t) =>
+     t.assignee_id === currentUserId || (!t.assignee_id && t.creator === currentUserId),
+    )
+    : [];
    break;
   case 'priority':
    filtered = instanceChildren.filter((t) => t.priority === 'high' && !isCompleted(t));
@@ -136,10 +142,10 @@ export const filterAndSortTasks = ({
 };
 
 export const useTaskFilters = (args: UseTaskFiltersArgs): TaskRow[] => {
- const { tasks, filter, sort, now, dueDateRange } = args;
+ const { tasks, filter, sort, currentUserId, now, dueDateRange } = args;
  return useMemo(
-  () => filterAndSortTasks({ tasks, filter, sort, now, dueDateRange }),
-  [tasks, filter, sort, now, dueDateRange],
+  () => filterAndSortTasks({ tasks, filter, sort, currentUserId, now, dueDateRange }),
+  [tasks, filter, sort, currentUserId, now, dueDateRange],
  );
 };
 

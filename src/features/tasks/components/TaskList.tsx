@@ -290,10 +290,10 @@ const TaskList = () => {
         }
       }
       setTaskFormState(null);
-      toast.success('Task saved successfully');
+      toast.success(t('projects.task_saved_toast'));
     } catch (err) {
       console.error('Failed to save task:', err);
-      toast.error('Failed to save task. Please try again.');
+      toast.error(t('projects.task_save_failed_retry_toast'));
     }
   };
 
@@ -367,12 +367,13 @@ const TaskList = () => {
           handleEditTask={handleEditTask}
           onDeleteTaskWrapper={async (taskId: string) => { const t = findTask(taskId); if (t) await onDeleteTaskWrapper(t as TaskRow); }}
           fetchTasks={refetchProjects}
+          allProjectTasks={projectHierarchy as TaskRow[]}
           renderLibrarySearch={(onSelect) => (
             <MasterLibrarySearch
               mode="copy"
               onSelect={onSelect}
-              label="Search master library"
-              placeholder="Start typing to copy an existing template task"
+              label={t('projects.form.search_library_label')}
+              placeholder={t('projects.search_template_task_placeholder')}
               excludeTemplateIds={excludedTemplateIds}
             />
           )}

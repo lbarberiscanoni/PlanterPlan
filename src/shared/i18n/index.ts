@@ -9,14 +9,20 @@ import es from './locales/es.json';
 // en-json.test.ts / es-json.test.ts assert each of these exists in en/es.json.
 export const NAMESPACES = [
   'common',
+  'nav',
+  'onboarding',
   'auth',
   'tasks',
+  'activity',
   'projects',
   'library',
   'dashboard',
   'settings',
   'notifications',
   'errors',
+  'ics',
+  'gantt',
+  'admin',
 ] as const;
 
 void i18n

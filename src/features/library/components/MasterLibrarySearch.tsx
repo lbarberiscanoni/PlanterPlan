@@ -1,5 +1,6 @@
 import { useId, useMemo, useRef, useState, useCallback } from 'react';
 import type { ChangeEvent, KeyboardEvent } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ChevronDown, X } from 'lucide-react';
 import useMasterLibrarySearch from '@/features/library/hooks/useMasterLibrarySearch';
 
@@ -23,11 +24,12 @@ interface MasterLibrarySearchProps {
 const MasterLibrarySearch = ({
  onSelect,
  mode = 'copy',
- label = 'Search & pick from Master Library',
- placeholder = 'Search by title or description…',
+ label,
+ placeholder,
  phasesOnly = false,
  excludeTemplateIds,
 }: MasterLibrarySearchProps) => {
+ const { t } = useTranslation();
  const [query, setQuery] = useState('');
  const [isOpen, setIsOpen] = useState(false);
  const [activeIndex, setActiveIndex] = useState(-1);
@@ -76,7 +78,9 @@ const MasterLibrarySearch = ({
  return `${listboxId}-item-${results[activeIndex].id}`;
  }, [activeIndex, listboxId, results]);
 
- const actionLabel = mode === 'view' ? 'View' : 'Copy to form';
+ const resolvedLabel = label ?? t('library.search_label');
+ const resolvedPlaceholder = placeholder ?? t('library.search_placeholder');
+ const actionLabel = mode === 'view' ? t('common.view') : t('library.copy_to_form');
 
  return (
  <div ref={containerRef} className="relative space-y-1">
@@ -84,7 +88,7 @@ const MasterLibrarySearch = ({
  className="block text-sm font-medium text-slate-600"
  htmlFor={`master-library-search-${listboxId}`}
  >
- {label}
+ {resolvedLabel}
  </label>
  <div className="relative">
  <input
@@ -92,7 +96,7 @@ const MasterLibrarySearch = ({
  id={`master-library-search-${listboxId}`}
  type="text"
  className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 pr-16 text-base shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring md:text-sm"
- placeholder={placeholder}
+ placeholder={resolvedPlaceholder}
  value={query}
  onChange={handleQueryChange}
  onFocus={() => setIsOpen(true)}
@@ -118,7 +122,7 @@ const MasterLibrarySearch = ({
  inputRef.current?.focus();
  }}
  className="text-slate-400 hover:text-slate-600"
- aria-label="Clear search"
+ aria-label={t('common.clear_search')}
  >
  <X className="w-4 h-4" />
  </button>
@@ -135,20 +139,20 @@ const MasterLibrarySearch = ({
  <div
  id={listboxId}
  role="listbox"
- aria-label="Template search results"
+ aria-label={t('library.search_results_aria')}
  className="absolute z-50 mt-1 w-full max-h-64 overflow-y-auto rounded-md border border-slate-200 bg-white shadow-lg"
  >
  {isLoading && (
- <div className="px-4 py-3 text-sm text-slate-500">Loading templates…</div>
+ <div className="px-4 py-3 text-sm text-slate-500">{t('library.loading_templates')}</div>
  )}
 
  {!isLoading && results.length === 0 && (
  <div className="px-4 py-3 text-sm text-slate-500">
  {exclusionDrained
- ? 'All matching templates are already in this project.'
+ ? t('library.all_matching_already_added')
  : query
- ? 'No matching templates found.'
- : 'No templates available.'}
+ ? t('library.no_matching_templates')
+ : t('library.no_templates_available')}
  </div>
  )}
 

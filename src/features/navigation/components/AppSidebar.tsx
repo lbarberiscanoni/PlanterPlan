@@ -21,7 +21,7 @@ export default function AppSidebar({ onClose, currentProject, className }: AppSi
    title: t('nav.section_main'),
    items: [
     { name: t('nav.project_dashboard'), icon: LayoutDashboard, path: 'Dashboard' },
-    { name: t('nav.daily_tasks'), icon: Calendar, path: 'daily' },
+    { name: t('nav.my_tasks'), icon: Calendar, path: 'tasks' },
     { name: t('nav.reports'), icon: BarChart3, path: 'Reports' },
    ],
   },

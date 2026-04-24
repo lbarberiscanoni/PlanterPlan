@@ -131,7 +131,7 @@ export default function MilestoneSection({
                             variant="outline"
                             className="text-xs px-1.5 h-5 bg-slate-50 text-slate-500 border-slate-200"
                         >
-                            Locked
+                            {t('projects.locked_label')}
                         </Badge>
                     )}
                     <Badge variant="secondary" className="bg-slate-100 text-slate-600">
@@ -145,7 +145,7 @@ export default function MilestoneSection({
                     <div className="px-5 pb-4 border-t border-slate-100">
                             {milestoneTasks.length === 0 && !isAddingInline ? (
                                 <div className="py-8 text-center">
-                                    <p className="text-slate-500 mb-4">No tasks yet</p>
+                                    <p className="text-slate-500 mb-4">{t('projects.no_tasks_yet')}</p>
                                     {canEdit && onAddChildTask && (
                                         <Button
                                             variant="outline"
@@ -153,7 +153,7 @@ export default function MilestoneSection({
                                             onClick={() => onAddChildTask(milestone)}
                                         >
                                             <Plus className="w-4 h-4 mr-2" />
-                                            Add Task
+                                            {t('projects.add_task_button')}
                                         </Button>
                                     )}
                                 </div>
@@ -196,7 +196,7 @@ export default function MilestoneSection({
                                                     onCommit={(title) => onInlineCommit(milestone.id, title)}
                                                     onCommitFromTemplate={(template) => onInlineCommit(milestone.id, template.title || '', template as Partial<TaskRow>)}
                                                     onCancel={onInlineCancel}
-                                                    placeholder="Add a new task..."
+                                                    placeholder={t('tasks.list.inline_add_placeholder')}
                                                 />
                                             </div>
                                         )}
@@ -209,7 +209,7 @@ export default function MilestoneSection({
                                                 onClick={() => onAddChildTask(milestone)}
                                             >
                                                 <Plus className="w-4 h-4 mr-2" aria-hidden="true" />
-                                                Add Task
+                                                {t('projects.add_task_button')}
                                             </Button>
                                         )}
                                     </SortableContext>

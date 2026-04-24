@@ -27,6 +27,9 @@ import type {
     AdminActivityRow,
     AdminListUserRow,
     AdminListUsersFilter,
+    AdminRootTaskSearchRow,
+    AdminTemplateCloneRow,
+    AdminTemplateRootRow,
     AdminAnalyticsSnapshot,
     IcsFeedTokenRow,
     CreateIcsFeedTokenInput,
@@ -115,6 +118,12 @@ export interface PlanterClient {
         recentActivity: (limit?: number) => Promise<AdminActivityRow[]>;
         /** Paginated user list with server-side filters (Wave 34 Task 2). */
         listUsers: (filter: AdminListUsersFilter, limit?: number, offset?: number) => Promise<AdminListUserRow[]>;
+        /** Admin-gated project/template root search. */
+        searchRootTasks: (query: string, origin?: 'instance' | 'template' | null, limit?: number) => Promise<AdminRootTaskSearchRow[]>;
+        /** Admin-gated template roots catalog. */
+        listTemplateRoots: () => Promise<AdminTemplateRootRow[]>;
+        /** Admin-gated cloned instance list for one template root. */
+        listTemplateClones: (templateId: string) => Promise<AdminTemplateCloneRow[]>;
         /** Aggregated analytics snapshot for the /admin/analytics dashboard (Wave 34 Task 3). */
         analyticsSnapshot: () => Promise<AdminAnalyticsSnapshot | null>;
         /** Grant or revoke platform-admin status for a user. Self-demotion forbidden server-side. */
@@ -1387,6 +1396,31 @@ export const planter: PlanterClient = {
                 filter,
                 p_limit: limit ?? 50,
                 p_offset: offset ?? 0,
+            });
+            if (error) throw error;
+            return data ?? [];
+        },
+        searchRootTasks: async (
+            query: string,
+            origin?: 'instance' | 'template' | null,
+            limit?: number,
+        ): Promise<AdminRootTaskSearchRow[]> => {
+            const { data, error } = await planter.rpc<AdminRootTaskSearchRow[]>('admin_search_root_tasks', {
+                p_query: query,
+                p_origin: origin ?? null,
+                p_max_results: limit ?? 10,
+            });
+            if (error) throw error;
+            return data ?? [];
+        },
+        listTemplateRoots: async (): Promise<AdminTemplateRootRow[]> => {
+            const { data, error } = await planter.rpc<AdminTemplateRootRow[]>('admin_template_roots', {});
+            if (error) throw error;
+            return data ?? [];
+        },
+        listTemplateClones: async (templateId: string): Promise<AdminTemplateCloneRow[]> => {
+            const { data, error } = await planter.rpc<AdminTemplateCloneRow[]>('admin_template_clones', {
+                p_template_id: templateId,
             });
             if (error) throw error;
             return data ?? [];

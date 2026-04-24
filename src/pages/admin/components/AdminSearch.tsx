@@ -12,6 +12,11 @@ interface ProjectHit {
     title: string;
 }
 
+interface RootTaskSearchBuckets {
+    projects: ProjectHit[];
+    templates: ProjectHit[];
+}
+
 const DEBOUNCE_MS = 200;
 const MIN_QUERY_LEN = 2;
 
@@ -43,38 +48,37 @@ export default function AdminSearch() {
         enabled: queryEnabled,
     });
 
-    // Fetch the full task list ONCE (keyed without the debounced query) and
-    // filter in-memory per keystroke. Re-fetching Task.list() on every
-    // debounced tick was quadratic for large tenants.
-    const allTasks = useQuery({
-        queryKey: ['adminSearch', 'allTasks'],
-        queryFn: () => planter.entities.Task.list(),
-        staleTime: 60_000,
+    const rootTasks = useQuery<RootTaskSearchBuckets>({
+        queryKey: ['adminSearch', 'rootTasks', debouncedQuery],
+        queryFn: async () => {
+            const [projectRows, templateRows] = await Promise.all([
+                planter.admin.searchRootTasks(debouncedQuery, 'instance', 10),
+                planter.admin.searchRootTasks(debouncedQuery, 'template', 10),
+            ]);
+            return {
+                projects: projectRows.map((row) => ({
+                    kind: 'project',
+                    id: row.id,
+                    title: row.title ?? '',
+                })),
+                templates: templateRows.map((row) => ({
+                    kind: 'template',
+                    id: row.id,
+                    title: row.title ?? '',
+                })),
+            };
+        },
         enabled: queryEnabled,
     });
 
     const { projects, templates } = useMemo(() => {
-        const out: { projects: ProjectHit[]; templates: ProjectHit[] } = { projects: [], templates: [] };
-        if (!allTasks.data || !queryEnabled) return out;
-        const q = debouncedQuery.toLowerCase();
-        for (const t of allTasks.data) {
-            if (t.parent_task_id !== null || typeof t.title !== 'string') continue;
-            if (!t.title.toLowerCase().includes(q)) continue;
-            const hit: ProjectHit = {
-                kind: t.origin === 'template' ? 'template' : 'project',
-                id: t.id,
-                title: t.title,
-            };
-            if (hit.kind === 'project' && out.projects.length < 10) out.projects.push(hit);
-            else if (hit.kind === 'template' && out.templates.length < 10) out.templates.push(hit);
-            if (out.projects.length >= 10 && out.templates.length >= 10) break;
-        }
-        return out;
-    }, [allTasks.data, debouncedQuery, queryEnabled]);
+        if (!rootTasks.data || !queryEnabled) return { projects: [], templates: [] };
+        return rootTasks.data;
+    }, [rootTasks.data, queryEnabled]);
 
     const handleNavigateUser = (uid: string) => navigate(`/admin/users/${uid}`);
-    const handleNavigateProject = (id: string) => navigate(`/Project/${id}`);
-    const handleNavigateTemplate = (id: string) => navigate(`/Project/${id}`);
+    const handleNavigateProject = (id: string) => navigate(`/project/${id}`);
+    const handleNavigateTemplate = (id: string) => navigate(`/project/${id}`);
 
     return (
         <div className="w-full max-w-2xl" data-testid="admin-search">
@@ -104,7 +108,7 @@ export default function AdminSearch() {
                         items={(users.data ?? []).map((u) => ({
                             key: u.id,
                             primary: u.display_name,
-                            secondary: `${u.email} · ${u.project_count} project${u.project_count === 1 ? '' : 's'}`,
+                            secondary: `${u.email} · ${t('admin.search_project_count', { count: Number(u.project_count) })}`,
                             onClick: () => handleNavigateUser(u.id),
                         }))}
                         testid="admin-search-users"
@@ -112,11 +116,11 @@ export default function AdminSearch() {
                     <ResultGroup
                         heading={t('admin.search_projects_heading')}
                         icon={FolderKanban}
-                        loading={allTasks.isLoading}
-                        error={allTasks.error instanceof Error ? allTasks.error.message : null}
+                        loading={rootTasks.isLoading}
+                        error={rootTasks.error instanceof Error ? rootTasks.error.message : null}
                         items={projects.map((p) => ({
                             key: p.id,
-                            primary: p.title || '(untitled)',
+                            primary: p.title || t('admin.untitled'),
                             secondary: p.id,
                             onClick: () => handleNavigateProject(p.id),
                         }))}
@@ -125,11 +129,11 @@ export default function AdminSearch() {
                     <ResultGroup
                         heading={t('admin.search_templates_heading')}
                         icon={FileStack}
-                        loading={allTasks.isLoading}
-                        error={null}
+                        loading={rootTasks.isLoading}
+                        error={rootTasks.error instanceof Error ? rootTasks.error.message : null}
                         items={templates.map((tmpl) => ({
                             key: tmpl.id,
-                            primary: tmpl.title || '(untitled)',
+                            primary: tmpl.title || t('admin.untitled'),
                             secondary: tmpl.id,
                             onClick: () => handleNavigateTemplate(tmpl.id),
                         }))}

@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import useMasterLibraryTasks from '@/features/library/hooks/useMasterLibraryTasks';
 import { useTreeState } from '@/features/library/hooks/useTreeState';
 import type { TaskItemData } from '@/shared/types/tasks';
@@ -22,6 +23,7 @@ interface MasterLibraryListProps {
 }
 
 const MasterLibraryList = (props: MasterLibraryListProps) => {
+ const { t } = useTranslation();
  const [page, setPage] = useState(0);
  const [resourceType] = useState('all');
 
@@ -45,13 +47,13 @@ const MasterLibraryList = (props: MasterLibraryListProps) => {
  };
 
  const pageDescription = useMemo(() => {
- if (isLoading) return 'Loading master library tasks…';
+ if (isLoading) return t('library.master.loading_tasks');
  const start = page * PAGE_SIZE + 1;
  const end = start + (rootTasks?.length || 0) - 1;
  return rootTasks?.length > 0
- ? `Showing tasks ${start} to ${end}`
- : `No tasks found on page ${page + 1}`;
- }, [isLoading, page, rootTasks]);
+ ? t('library.master.showing_tasks', { start, end })
+ : t('library.master.no_tasks_on_page', { page: page + 1 });
+ }, [isLoading, page, rootTasks, t]);
 
  const handlePrev = () => {
  if (page === 0 || isLoading) return;
@@ -84,7 +86,7 @@ const MasterLibraryList = (props: MasterLibraryListProps) => {
  <section className="mt-10">
  <div className="flex items-center justify-between mb-4">
  <div>
- <h2 className="text-xl font-semibold text-slate-900">Master Library</h2>
+ <h2 className="text-xl font-semibold text-slate-900">{t('library.master.title')}</h2>
  <p className="text-sm text-slate-600" role="status" aria-live="polite">
  {pageDescription}
  </p>
@@ -95,13 +97,13 @@ const MasterLibraryList = (props: MasterLibraryListProps) => {
  className="inline-flex items-center px-3 py-2 text-sm font-medium text-brand-600 bg-brand-50 hover:bg-brand-100 rounded-md"
  disabled={isLoading}
  >
- Refresh
+ {t('common.refresh')}
  </button>
  </div>
 
  <div className="bg-white border border-slate-200 rounded-lg shadow-sm p-4">
  {isLoading && treeData.length === 0 ? (
- <div className="text-center py-8">Loading...</div>
+ <div className="text-center py-8">{t('common.loading')}...</div>
  ) : (
  <div className="space-y-2">
  <DndContext
@@ -121,7 +123,7 @@ const MasterLibraryList = (props: MasterLibraryListProps) => {
  })}
  {loadingNodes[task.id] && (
  <div className="absolute top-2 right-2 text-xs text-slate-500">
- Loading subtasks...
+ {t('library.master.loading_subtasks')}
  </div>
  )}
  </div>
@@ -131,7 +133,7 @@ const MasterLibraryList = (props: MasterLibraryListProps) => {
  )}
 
  {!isLoading && treeData.length === 0 && (
- <div className="text-center py-8 text-slate-500">No tasks found.</div>
+ <div className="text-center py-8 text-slate-500">{t('library.master.no_tasks')}</div>
  )}
 
  <div className="flex items-center justify-between mt-4 pt-4 border-t border-slate-100">
@@ -140,15 +142,15 @@ const MasterLibraryList = (props: MasterLibraryListProps) => {
  disabled={page === 0}
  className="px-3 py-1 border rounded disabled:opacity-50"
  >
- Previous
+ {t('common.previous')}
  </button>
- <span className="text-sm">Page {page + 1}</span>
+ <span className="text-sm">{t('common.page', { page: page + 1 })}</span>
  <button
  onClick={handleNext}
  disabled={!hasNextPage && rootTasks.length <= (page + 1) * PAGE_SIZE}
  className="px-3 py-1 border rounded disabled:opacity-50"
  >
- Next
+ {t('common.next')}
  </button>
  </div>
  </div>

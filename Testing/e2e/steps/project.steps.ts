@@ -75,10 +75,6 @@ When('the user clicks on a task with full details', async ({ page }) => {
   await page.locator('[data-testid="task-item"]').first().click();
 });
 
-When('the user clicks {string}', async ({ page }, text: string) => {
-  await page.getByRole('button', { name: new RegExp(text, 'i') }).or(page.getByRole('menuitem', { name: new RegExp(text, 'i') })).click();
-});
-
 When('the user clicks the {string} tab', async ({ page }, tabName: string) => {
   await page.locator('[role="tab"]').filter({ hasText: new RegExp(tabName, 'i') }).click();
 });

@@ -8,14 +8,20 @@ interface JsonObject {
 
 const REQUIRED_NAMESPACES = [
   'common',
+  'nav',
+  'onboarding',
   'auth',
   'tasks',
+  'activity',
   'projects',
   'library',
   'dashboard',
   'settings',
   'notifications',
   'errors',
+  'ics',
+  'gantt',
+  'admin',
 ] as const;
 
 describe('en.json', () => {

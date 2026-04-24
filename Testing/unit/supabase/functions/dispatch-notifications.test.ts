@@ -161,7 +161,7 @@ function basePending(overrides: Partial<LogRow> = {}): LogRow {
         id: 'log-1',
         user_id: 'u-1',
         event_type: 'mention_pending',
-        payload: { comment_id: 'c-1', task_id: 't-1', author_id: 'u-other', body_preview: 'Hello' },
+        payload: { comment_id: 'c-1', task_id: 't-1', root_id: 'p-1', author_id: 'u-other', body_preview: 'Hello' },
         ...overrides,
     };
 }
@@ -172,7 +172,7 @@ describe('dispatchPendingMentions (Wave 30 Task 3)', () => {
 
     beforeEach(() => {
         emailSender = vi.fn<EmailSender>().mockResolvedValue({ ok: true, id: 'resend-msg-1' });
-        pushInvoker = vi.fn<PushInvoker>().mockResolvedValue({ ok: true });
+        pushInvoker = vi.fn<PushInvoker>().mockResolvedValue({ ok: true, sent: 1, skipped: 0, failed: 0 });
     });
 
     it('returns zero summary when there are no pending rows', async () => {
@@ -201,6 +201,7 @@ describe('dispatchPendingMentions (Wave 30 Task 3)', () => {
         expect(summary.sent_push).toBe(1);
         expect(emailSender).toHaveBeenCalledOnce();
         expect(pushInvoker).toHaveBeenCalledOnce();
+        expect(pushInvoker).toHaveBeenCalledWith(expect.objectContaining({ url: '/project/p-1' }));
         expect(db.notification_log[0].event_type).toBe('mention_sent');
         expect(db.notification_log[0].provider_id).toBe('resend-msg-1');
     });
@@ -282,6 +283,24 @@ describe('dispatchPendingMentions (Wave 30 Task 3)', () => {
         expect(db.notification_log[0].event_type).toBe('mention_failed');
         expect(db.notification_log[0].error).toContain('email:boom');
         expect(db.notification_log[0].error).toContain('push:boom');
+    });
+
+    it('does not mark push-only mentions sent when the push function delivered nothing', async () => {
+        pushInvoker.mockResolvedValueOnce({ ok: false, sent: 0, skipped: 1, failed: 0, error: 'no_subscription' });
+
+        const db: FakeDb = {
+            notification_log: [basePending()],
+            notification_preferences: [basePrefs({ email_mentions: false, push_mentions: true })],
+            users_public: [{ id: 'u-1', email: 'u1@example.com' }],
+        };
+        const supabase = makeSupabase(db);
+
+        const summary = await dispatchPendingMentions(supabase, baseNow, emailSender, pushInvoker);
+
+        expect(summary.failed).toBe(1);
+        expect(summary.sent_push).toBe(0);
+        expect(db.notification_log[0].event_type).toBe('mention_failed');
+        expect(db.notification_log[0].error).toContain('push:no_subscription');
     });
 
     it('does not dispatch the row twice under concurrent invocations (idempotency)', async () => {

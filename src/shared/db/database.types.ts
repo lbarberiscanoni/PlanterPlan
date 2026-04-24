@@ -17,7 +17,7 @@ export type Database = {
  activity_log: {
  Row: {
  id: string
- project_id: string
+ project_id: string | null
  actor_id: string | null
  entity_type: 'task' | 'comment' | 'member' | 'project'
  entity_id: string
@@ -25,12 +25,14 @@ export type Database = {
  | 'created' | 'updated' | 'deleted' | 'status_changed'
  | 'member_added' | 'member_removed' | 'member_role_changed'
  | 'comment_posted' | 'comment_edited' | 'comment_deleted'
+ | 'task_completed' | 'admin_granted' | 'admin_revoked'
+ | 'user_suspended' | 'user_unsuspended' | 'password_reset_requested'
  payload: Json
  created_at: string
  }
  Insert: {
  id?: string
- project_id: string
+ project_id?: string | null
  actor_id?: string | null
  entity_type: 'task' | 'comment' | 'member' | 'project'
  entity_id: string
@@ -40,7 +42,7 @@ export type Database = {
  }
  Update: {
  id?: string
- project_id?: string
+ project_id?: string | null
  actor_id?: string | null
  entity_type?: 'task' | 'comment' | 'member' | 'project'
  entity_id?: string
@@ -1255,17 +1257,7 @@ export type Database = {
  Args: { p_parent_task_id: string | null }
  Returns: string
  }
- clone_project_template:
- | {
- Args: {
- p_new_origin: string
- p_new_parent_id: string
- p_template_id: string
- p_user_id: string
- }
- Returns: Json
- }
- | {
+ clone_project_template: {
  Args: {
  p_description?: string
  p_due_date?: string
@@ -1278,19 +1270,64 @@ export type Database = {
  }
  Returns: Json
  }
- | {
- Args: {
- p_description?: string
- p_due_date?: string
- p_new_origin: string
- p_new_parent_id: string
- p_start_date?: string
- p_template_id: string
- p_title?: string
- p_user_id: string
+ admin_search_root_tasks: {
+ Args: { p_query: string; p_origin?: string | null; p_max_results?: number }
+ Returns: Array<{ id: string; title: string | null; origin: string | null }>
  }
- Returns: Json
+ admin_template_roots: {
+ Args: Record<PropertyKey, never>
+ Returns: Array<{ id: string; title: string | null; template_version: number; updated_at: string | null }>
  }
+ admin_template_clones: {
+ Args: { p_template_id: string }
+ Returns: Array<{
+ project_id: string
+ title: string | null
+ cloned_from_template_version: number | null
+ current_template_version: number
+ stale: boolean
+ }>
+ }
+ admin_search_users: {
+ Args: { p_query: string; p_max_results?: number }
+ Returns: Array<{
+ id: string
+ email: string | null
+ display_name: string | null
+ last_sign_in_at: string | null
+ project_count: number
+ }>
+ }
+ admin_user_detail: { Args: { p_uid: string }; Returns: Json }
+ admin_recent_activity: {
+ Args: { p_limit?: number }
+ Returns: Array<{
+ id: string
+ project_id: string | null
+ actor_id: string | null
+ actor_email: string | null
+ entity_type: string
+ entity_id: string | null
+ action: string
+ payload: Json
+ created_at: string
+ }>
+ }
+ admin_list_users: {
+ Args: { filter?: Json; p_limit?: number; p_offset?: number }
+ Returns: Array<{
+ id: string
+ email: string | null
+ display_name: string | null
+ last_sign_in_at: string | null
+ is_admin: boolean
+ active_project_count: number
+ completed_tasks_30d: number
+ overdue_task_count: number
+ }>
+ }
+ admin_analytics_snapshot: { Args: Record<PropertyKey, never>; Returns: Json }
+ admin_set_user_admin_role: { Args: { p_target_uid: string; p_make_admin: boolean }; Returns: undefined }
  debug_create_project: {
  Args: { p_creator_id: string; p_title: string }
  Returns: Json

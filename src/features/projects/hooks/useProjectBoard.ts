@@ -25,7 +25,7 @@ export function useProjectBoard(projectId: string | undefined, tasks: TaskRow[] 
     const handleTaskUpdate = (taskId: string, data: Partial<TaskUpdate>) => {
         _updateTask.mutate({ id: taskId, ...data, root_id: projectId }, {
             onError: (error: Error) => {
-                toast.error('Failed to update task', { description: error.message });
+                toast.error(t('projects.task_update_failed_toast'), { description: error.message });
             }
         });
     };
@@ -80,7 +80,7 @@ export function useProjectBoard(projectId: string | undefined, tasks: TaskRow[] 
             });
             setInlineAddingParentId(null);
         } catch {
-            toast.error('Failed to create task');
+            toast.error(t('projects.task_create_failed_toast'));
         }
     };
 

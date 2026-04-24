@@ -50,6 +50,8 @@ export default function App() {
  path="reports"
  element={<Suspense fallback={<div className="p-6 text-sm text-slate-600">Loading reports…</div>}><Reports /></Suspense>}
  />
+ <Route path="project/:projectId" element={<Project />} />
+ <Route path="project" element={<Project />} />
  <Route path="Project/:projectId" element={<Project />} />
  <Route path="Project" element={<Project />} />
  <Route path="tasks" element={<TasksPage />} />

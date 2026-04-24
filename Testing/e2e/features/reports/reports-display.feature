@@ -5,7 +5,7 @@ Feature: Reports Display
     And the user is viewing reports for a project
 
   Scenario: Four stats cards displayed with correct values
-    Then four stats cards are visible
+    Then four report stats cards are visible
     And the stats cards show Phases, Total Tasks, Completed Tasks, and Team Members
 
   Scenario: Overall progress card shows percentage and progress bar

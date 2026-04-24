@@ -254,222 +254,566 @@ $$;
 ALTER FUNCTION "public"."user_is_phase_lead"("target_task_id" "uuid", "uid" "uuid") OWNER TO "postgres";
 
 
-CREATE OR REPLACE FUNCTION "public"."clone_project_template"("p_template_id" "uuid", "p_new_parent_id" "uuid", "p_new_origin" "text", "p_user_id" "uuid") RETURNS "jsonb"
+CREATE OR REPLACE FUNCTION "public"."bump_template_version"() RETURNS "trigger"
+    LANGUAGE "plpgsql"
+    AS $$
+BEGIN
+    IF OLD.origin = 'template' AND NEW.origin = 'template' THEN
+        IF
+            COALESCE(NEW.title, '') IS DISTINCT FROM COALESCE(OLD.title, '')
+            OR COALESCE(NEW.description, '') IS DISTINCT FROM COALESCE(OLD.description, '')
+            OR COALESCE(NEW.days_from_start, -1) IS DISTINCT FROM COALESCE(OLD.days_from_start, -1)
+            OR COALESCE(NEW.settings, '{}'::jsonb) IS DISTINCT FROM COALESCE(OLD.settings, '{}'::jsonb)
+        THEN
+            NEW.template_version := COALESCE(OLD.template_version, 0) + 1;
+        END IF;
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."bump_template_version"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."admin_search_users"("p_query" "text", "p_max_results" integer DEFAULT 20) RETURNS TABLE("id" "uuid", "email" "text", "display_name" "text", "last_sign_in_at" timestamp with time zone, "project_count" bigint)
+    LANGUAGE "plpgsql" STABLE SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+DECLARE
+    v_pattern text;
+BEGIN
+    IF NOT public.is_admin(auth.uid()) THEN
+        RAISE EXCEPTION 'unauthorized: admin role required';
+    END IF;
+
+    IF p_query IS NULL OR char_length(trim(p_query)) < 2 THEN
+        RETURN;
+    END IF;
+
+    v_pattern := '%' ||
+        replace(
+            replace(
+                replace(trim(p_query), '\', '\\'),
+                '%', '\%'
+            ),
+            '_', '\_'
+        ) || '%';
+
+    RETURN QUERY
+    SELECT
+        u.id,
+        u.email::text,
+        COALESCE(NULLIF(u.raw_user_meta_data ->> 'full_name', ''), u.email)::text AS display_name,
+        u.last_sign_in_at,
+        (
+            SELECT count(*)
+            FROM public.project_members pm
+            WHERE pm.user_id = u.id
+        ) AS project_count
+    FROM auth.users u
+    WHERE
+        u.email ILIKE v_pattern ESCAPE '\'
+        OR (u.raw_user_meta_data ->> 'full_name') ILIKE v_pattern ESCAPE '\'
+    ORDER BY u.last_sign_in_at DESC NULLS LAST
+    LIMIT GREATEST(1, LEAST(p_max_results, 100));
+END;
+$$;
+
+
+ALTER FUNCTION "public"."admin_search_users"("p_query" "text", "p_max_results" integer) OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."admin_user_detail"("p_uid" "uuid") RETURNS "jsonb"
+    LANGUAGE "plpgsql" STABLE SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+DECLARE
+    v_result jsonb;
+BEGIN
+    IF NOT public.is_admin(auth.uid()) THEN
+        RAISE EXCEPTION 'unauthorized: admin role required';
+    END IF;
+
+    IF p_uid IS NULL THEN
+        RETURN NULL;
+    END IF;
+
+    SELECT jsonb_build_object(
+        'profile', jsonb_build_object(
+            'id', u.id,
+            'email', u.email,
+            'display_name', COALESCE(NULLIF(u.raw_user_meta_data ->> 'full_name', ''), u.email),
+            'last_sign_in_at', u.last_sign_in_at,
+            'created_at', u.created_at,
+            'is_admin', EXISTS (SELECT 1 FROM public.admin_users au WHERE au.user_id = u.id),
+            'banned_until', u.banned_until
+        ),
+        'projects', COALESCE((
+            SELECT jsonb_agg(
+                jsonb_build_object(
+                    'project_id', pm.project_id,
+                    'role', pm.role,
+                    'project_title', r.title
+                )
+                ORDER BY r.title
+            )
+            FROM public.project_members pm
+            LEFT JOIN public.tasks r ON r.id = pm.project_id
+            WHERE pm.user_id = u.id
+        ), '[]'::jsonb),
+        'task_counts', jsonb_build_object(
+            'assigned', COALESCE((
+                SELECT count(*)
+                FROM public.tasks t
+                WHERE t.assignee_id = u.id AND t.origin = 'instance'
+            ), 0),
+            'completed', COALESCE((
+                SELECT count(DISTINCT al.entity_id)
+                FROM public.activity_log al
+                WHERE al.actor_id = u.id
+                  AND al.entity_type = 'task'
+                  AND al.action = 'task_completed'
+                  AND al.created_at >= now() - interval '30 days'
+            ), 0),
+            'overdue', COALESCE((
+                SELECT count(*)
+                FROM public.tasks t
+                WHERE t.assignee_id = u.id
+                  AND t.origin = 'instance'
+                  AND t.status <> 'completed'
+                  AND t.due_date IS NOT NULL
+                  AND t.due_date < now()
+            ), 0)
+        )
+    )
+    INTO v_result
+    FROM auth.users u
+    WHERE u.id = p_uid;
+
+    RETURN v_result;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."admin_user_detail"("p_uid" "uuid") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."admin_recent_activity"("p_limit" integer DEFAULT 50) RETURNS TABLE("id" "uuid", "project_id" "uuid", "actor_id" "uuid", "actor_email" "text", "entity_type" "text", "entity_id" "uuid", "action" "text", "payload" "jsonb", "created_at" timestamp with time zone)
+    LANGUAGE "plpgsql" STABLE SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+BEGIN
+    IF NOT public.is_admin(auth.uid()) THEN
+        RAISE EXCEPTION 'unauthorized: admin role required';
+    END IF;
+
+    RETURN QUERY
+    SELECT
+        al.id,
+        al.project_id,
+        al.actor_id,
+        u.email::text AS actor_email,
+        al.entity_type,
+        al.entity_id,
+        al.action,
+        al.payload,
+        al.created_at
+    FROM public.activity_log al
+    LEFT JOIN auth.users u ON u.id = al.actor_id
+    ORDER BY al.created_at DESC
+    LIMIT GREATEST(1, LEAST(p_limit, 200));
+END;
+$$;
+
+
+ALTER FUNCTION "public"."admin_recent_activity"("p_limit" integer) OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."admin_list_users"("filter" "jsonb" DEFAULT '{}'::"jsonb", "p_limit" integer DEFAULT 50, "p_offset" integer DEFAULT 0) RETURNS TABLE("id" "uuid", "email" "text", "display_name" "text", "last_sign_in_at" timestamp with time zone, "is_admin" boolean, "active_project_count" bigint, "completed_tasks_30d" bigint, "overdue_task_count" bigint)
+    LANGUAGE "plpgsql" STABLE SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+DECLARE
+    v_role text := filter ->> 'role';
+    v_last_login text := filter ->> 'lastLogin';
+    v_has_overdue boolean := (filter ->> 'hasOverdue')::boolean;
+    v_search text := NULLIF(trim(COALESCE(filter ->> 'search', '')), '');
+    v_search_pattern text;
+    v_clamped_limit int := GREATEST(1, LEAST(COALESCE(p_limit, 50), 200));
+    v_clamped_offset int := GREATEST(0, COALESCE(p_offset, 0));
+BEGIN
+    IF NOT public.is_admin(auth.uid()) THEN
+        RAISE EXCEPTION 'unauthorized: admin role required';
+    END IF;
+
+    IF v_search IS NOT NULL THEN
+        v_search_pattern := '%' ||
+            replace(
+                replace(
+                    replace(v_search, '\', '\\'),
+                    '%', '\%'
+                ),
+                '_', '\_'
+            ) || '%';
+    END IF;
+
+    RETURN QUERY
+    WITH base AS (
+        SELECT
+            u.id,
+            u.email::text AS email,
+            COALESCE(NULLIF(u.raw_user_meta_data ->> 'full_name', ''), u.email)::text AS display_name,
+            u.last_sign_in_at,
+            EXISTS (SELECT 1 FROM public.admin_users au WHERE au.user_id = u.id) AS is_admin,
+            (
+                SELECT count(*)
+                FROM public.project_members pm
+                WHERE pm.user_id = u.id
+            ) AS active_project_count,
+            (
+                SELECT count(DISTINCT al.entity_id)
+                FROM public.activity_log al
+                WHERE al.actor_id = u.id
+                  AND al.entity_type = 'task'
+                  AND al.action = 'task_completed'
+                  AND al.created_at >= now() - interval '30 days'
+            ) AS completed_tasks_30d,
+            (
+                SELECT count(*)
+                FROM public.tasks t
+                WHERE t.assignee_id = u.id
+                  AND t.origin = 'instance'
+                  AND t.status <> 'completed'
+                  AND t.due_date IS NOT NULL
+                  AND t.due_date < now()
+            ) AS overdue_task_count
+        FROM auth.users u
+    )
+    SELECT
+        b.id,
+        b.email,
+        b.display_name,
+        b.last_sign_in_at,
+        b.is_admin,
+        b.active_project_count,
+        b.completed_tasks_30d,
+        b.overdue_task_count
+    FROM base b
+    WHERE
+        (v_role IS NULL OR v_role = 'all' OR
+            (v_role = 'admin' AND b.is_admin = true) OR
+            (v_role = 'standard' AND b.is_admin = false)
+        )
+        AND (v_last_login IS NULL OR v_last_login = 'all' OR
+            (v_last_login = 'last_7' AND b.last_sign_in_at >= now() - interval '7 days') OR
+            (v_last_login = 'last_30' AND b.last_sign_in_at >= now() - interval '30 days') OR
+            (v_last_login = 'inactive' AND (b.last_sign_in_at IS NULL OR b.last_sign_in_at < now() - interval '30 days'))
+        )
+        AND (v_has_overdue IS NULL OR v_has_overdue = false OR b.overdue_task_count > 0)
+        AND (v_search_pattern IS NULL
+            OR b.email ILIKE v_search_pattern ESCAPE '\'
+            OR b.display_name ILIKE v_search_pattern ESCAPE '\')
+    ORDER BY b.last_sign_in_at DESC NULLS LAST, b.email ASC
+    LIMIT v_clamped_limit OFFSET v_clamped_offset;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."admin_list_users"("filter" "jsonb", "p_limit" integer, "p_offset" integer) OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."admin_analytics_snapshot"() RETURNS "jsonb"
+    LANGUAGE "plpgsql" STABLE SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+DECLARE
+    v_result jsonb;
+BEGIN
+    IF NOT public.is_admin(auth.uid()) THEN
+        RAISE EXCEPTION 'unauthorized: admin role required';
+    END IF;
+
+    SELECT jsonb_build_object(
+        'totals', jsonb_build_object(
+            'users', (SELECT count(*) FROM auth.users),
+            'projects', (SELECT count(*) FROM public.tasks WHERE parent_task_id IS NULL AND origin = 'instance'),
+            'active_projects_30d', (
+                SELECT count(*)
+                FROM public.tasks p
+                WHERE p.parent_task_id IS NULL
+                  AND p.origin = 'instance'
+                  AND EXISTS (
+                      SELECT 1 FROM public.tasks t
+                      WHERE t.root_id = p.id
+                        AND t.updated_at >= now() - interval '30 days'
+                  )
+            ),
+            'new_users_30d', (
+                SELECT count(*) FROM auth.users WHERE created_at >= now() - interval '30 days'
+            )
+        ),
+        'new_projects_per_week', COALESCE((
+            SELECT jsonb_agg(
+                jsonb_build_object('week_start', week_start, 'count', count)
+                ORDER BY week_start ASC
+            )
+            FROM (
+                SELECT date_trunc('week', created_at)::date::text AS week_start, count(*) AS count
+                FROM public.tasks
+                WHERE parent_task_id IS NULL
+                  AND origin = 'instance'
+                  AND created_at >= now() - interval '12 weeks'
+                GROUP BY 1
+            ) s
+        ), '[]'::jsonb),
+        'project_kind_breakdown', COALESCE((
+            SELECT jsonb_agg(jsonb_build_object('kind', kind_val, 'count', count_val))
+            FROM (
+                SELECT COALESCE(settings ->> 'project_kind', 'date') AS kind_val, count(*) AS count_val
+                FROM public.tasks
+                WHERE parent_task_id IS NULL AND origin = 'instance'
+                GROUP BY 1
+            ) k
+        ), '[]'::jsonb),
+        'task_status_breakdown', COALESCE((
+            SELECT jsonb_agg(jsonb_build_object('status', status, 'count', count))
+            FROM (
+                SELECT COALESCE(status, 'unknown') AS status, count(*) AS count
+                FROM public.tasks
+                WHERE origin = 'instance' AND parent_task_id IS NOT NULL
+                GROUP BY 1
+            ) s
+        ), '[]'::jsonb),
+        'most_active_users', COALESCE((
+            SELECT jsonb_agg(
+                jsonb_build_object(
+                    'user_id', user_id,
+                    'email', email,
+                    'display_name', display_name,
+                    'tasks_created_30d', tasks_created_30d
+                )
+                ORDER BY tasks_created_30d DESC
+            )
+            FROM (
+                SELECT
+                    t.creator AS user_id,
+                    u.email::text AS email,
+                    COALESCE(NULLIF(u.raw_user_meta_data ->> 'full_name', ''), u.email)::text AS display_name,
+                    count(*) AS tasks_created_30d
+                FROM public.tasks t
+                JOIN auth.users u ON u.id = t.creator
+                WHERE t.created_at >= now() - interval '30 days'
+                  AND t.origin = 'instance'
+                GROUP BY t.creator, u.email, u.raw_user_meta_data
+                ORDER BY count(*) DESC
+                LIMIT 10
+            ) active
+        ), '[]'::jsonb),
+        'most_popular_templates', COALESCE((
+            SELECT jsonb_agg(
+                jsonb_build_object(
+                    'template_id', template_id,
+                    'title', title,
+                    'clone_count', clone_count
+                )
+                ORDER BY clone_count DESC
+            )
+            FROM (
+                SELECT template_id, template_title AS title, count(*) AS clone_count
+                FROM (
+                    SELECT
+                        (t.settings ->> 'spawnedFromTemplate')::uuid AS template_id,
+                        tpl.title AS template_title
+                    FROM public.tasks t
+                    LEFT JOIN public.tasks tpl ON tpl.id::text = t.settings ->> 'spawnedFromTemplate'
+                    WHERE t.parent_task_id IS NULL
+                      AND t.origin = 'instance'
+                      AND t.settings ? 'spawnedFromTemplate'
+                ) clones
+                WHERE template_id IS NOT NULL
+                GROUP BY template_id, template_title
+                ORDER BY count(*) DESC
+                LIMIT 10
+            ) templates
+        ), '[]'::jsonb)
+    )
+    INTO v_result;
+
+    RETURN v_result;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."admin_analytics_snapshot"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."admin_set_user_admin_role"("p_target_uid" "uuid", "p_make_admin" boolean) RETURNS "void"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO ''
     AS $$
 DECLARE
-    v_new_root_id uuid;
-    v_top_new_id uuid;
-    v_tasks_count int;
+    v_caller uuid := auth.uid();
+    v_target_email text;
 BEGIN
-    -- 1. Create Temp Table for ID Mapping (Task)
-    CREATE TEMP TABLE IF NOT EXISTS temp_task_map (
-        old_id uuid PRIMARY KEY,
-        new_id uuid
-    ) ON COMMIT DROP;
-
-    -- 2. Create Temp Table for ID Mapping (Resource)
-    CREATE TEMP TABLE IF NOT EXISTS temp_res_map (
-        old_id uuid PRIMARY KEY,
-        new_id uuid
-    ) ON COMMIT DROP;
-
-    -- 3. Identify all tasks in the subtree
-    WITH RECURSIVE subtree AS (
-        SELECT id FROM public.tasks WHERE id = p_template_id
-        UNION ALL
-        SELECT t.id FROM public.tasks t JOIN subtree s ON t.parent_task_id = s.id
-    )
-    INSERT INTO temp_task_map (old_id, new_id)
-    SELECT id, gen_random_uuid() FROM subtree;
-
-    -- Capture new ID of the top node
-    SELECT new_id INTO v_top_new_id FROM temp_task_map WHERE old_id = p_template_id;
-    
-    -- 4. Determine Root ID
-    -- If we have a parent, inherit its root. If not, the new top node is the root.
-    IF p_new_parent_id IS NULL THEN
-        v_new_root_id := v_top_new_id;
-    ELSE
-        SELECT root_id INTO v_new_root_id FROM public.tasks WHERE id = p_new_parent_id;
-        IF v_new_root_id IS NULL THEN
-             RAISE EXCEPTION 'Parent task % has no root_id', p_new_parent_id;
-        END IF;
+    IF v_caller IS NULL THEN
+        RAISE EXCEPTION 'unauthorized: not authenticated';
     END IF;
 
-    -- 5. Insert New Tasks
-    INSERT INTO public.tasks (
-        id, parent_task_id, root_id, creator, origin, 
-        title, description, status, position, 
-        notes, purpose, actions, is_complete, days_from_start, start_date, due_date
-    )
-    SELECT 
-        m.new_id, 
-        CASE 
-            WHEN t.id = p_template_id THEN p_new_parent_id -- Top node gets new parent
-            ELSE mp.new_id  -- Others get mapped parent
-        END,
-        v_new_root_id,
-        p_user_id,
-        p_new_origin,
-        t.title, t.description, t.status, t.position,
-        t.notes, t.purpose, t.actions, false, t.days_from_start, null, null -- Reset dates/completion? Or copy? Keeping implementation logic: Usually reset for templates.
-    FROM public.tasks t
-    JOIN temp_task_map m ON t.id = m.old_id
-    LEFT JOIN temp_task_map mp ON t.parent_task_id = mp.old_id;
+    IF NOT public.is_admin(v_caller) THEN
+        RAISE EXCEPTION 'unauthorized: admin role required';
+    END IF;
 
-    -- 6. Identify Resources to clone
-    INSERT INTO temp_res_map (old_id, new_id)
-    SELECT r.id, gen_random_uuid()
-    FROM public.task_resources r
-    JOIN temp_task_map tm ON r.task_id = tm.old_id;
+    IF v_caller = p_target_uid AND p_make_admin = FALSE THEN
+        RAISE EXCEPTION 'self_demotion_forbidden: remove your own admin flag via service_role';
+    END IF;
 
-    -- 7. Insert New Resources
-    INSERT INTO public.task_resources (
-        id, task_id, resource_type, resource_url, resource_text, storage_path, storage_bucket
-    )
-    SELECT 
-        rm.new_id,
-        tm.new_id,
-        r.resource_type, r.resource_url, r.resource_text, r.storage_path, r.storage_bucket
-    FROM public.task_resources r
-    JOIN temp_res_map rm ON r.id = rm.old_id
-    JOIN temp_task_map tm ON r.task_id = tm.old_id;
+    SELECT u.email INTO v_target_email
+    FROM auth.users u
+    WHERE u.id = p_target_uid;
 
-    -- 8. Update Primary Resource Pointers on New Tasks
-    UPDATE public.tasks t
-    SET primary_resource_id = rm.new_id
-    FROM public.tasks original
-    JOIN temp_task_map tm ON original.id = tm.old_id
-    JOIN temp_res_map rm ON original.primary_resource_id = rm.old_id
-    WHERE t.id = tm.new_id;
+    IF v_target_email IS NULL THEN
+        RAISE EXCEPTION 'target_not_found: no auth.users row with id %', p_target_uid;
+    END IF;
 
-    -- 9. Return result
-    SELECT COUNT(*) INTO v_tasks_count FROM temp_task_map;
+    IF p_make_admin THEN
+        INSERT INTO public.admin_users (user_id, email)
+        VALUES (p_target_uid, v_target_email)
+        ON CONFLICT (user_id) DO NOTHING;
+    ELSE
+        DELETE FROM public.admin_users
+        WHERE user_id = p_target_uid;
+    END IF;
 
-    RETURN jsonb_build_object(
-        'new_root_id', v_top_new_id,
-        'root_project_id', v_new_root_id,
-        'tasks_cloned', v_tasks_count
+    INSERT INTO public.activity_log (project_id, actor_id, entity_type, entity_id, action, payload)
+    VALUES (
+        NULL,
+        v_caller,
+        'member',
+        p_target_uid,
+        CASE WHEN p_make_admin THEN 'admin_granted' ELSE 'admin_revoked' END,
+        jsonb_build_object('target_email', v_target_email)
     );
 END;
 $$;
 
 
-ALTER FUNCTION "public"."clone_project_template"("p_template_id" "uuid", "p_new_parent_id" "uuid", "p_new_origin" "text", "p_user_id" "uuid") OWNER TO "postgres";
+ALTER FUNCTION "public"."admin_set_user_admin_role"("p_target_uid" "uuid", "p_make_admin" boolean) OWNER TO "postgres";
 
 
-CREATE OR REPLACE FUNCTION "public"."clone_project_template"("p_template_id" "uuid", "p_new_parent_id" "uuid", "p_new_origin" "text", "p_user_id" "uuid", "p_title" "text" DEFAULT NULL::"text", "p_description" "text" DEFAULT NULL::"text", "p_start_date" "date" DEFAULT NULL::"date", "p_due_date" "date" DEFAULT NULL::"date") RETURNS "jsonb"
-    LANGUAGE "plpgsql" SECURITY DEFINER
+CREATE OR REPLACE FUNCTION "public"."admin_search_root_tasks"("p_query" "text", "p_origin" "text" DEFAULT NULL::"text", "p_max_results" integer DEFAULT 10) RETURNS TABLE("id" "uuid", "title" "text", "origin" "text")
+    LANGUAGE "plpgsql" STABLE SECURITY DEFINER
     SET "search_path" TO ''
     AS $$
 DECLARE
-    v_new_root_id uuid;
-    v_top_new_id uuid;
-    v_tasks_count int;
+    v_pattern text;
 BEGIN
-    -- 1. Create Temp Table for ID Mapping (Task)
-    CREATE TEMP TABLE IF NOT EXISTS temp_task_map (
-        old_id uuid PRIMARY KEY,
-        new_id uuid
-    ) ON COMMIT DROP;
-
-    -- 2. Create Temp Table for ID Mapping (Resource)
-    CREATE TEMP TABLE IF NOT EXISTS temp_res_map (
-        old_id uuid PRIMARY KEY,
-        new_id uuid
-    ) ON COMMIT DROP;
-
-    -- 3. Identify all tasks in the subtree
-    WITH RECURSIVE subtree AS (
-        SELECT id FROM public.tasks WHERE id = p_template_id
-        UNION ALL
-        SELECT t.id FROM public.tasks t JOIN subtree s ON t.parent_task_id = s.id
-    )
-    INSERT INTO temp_task_map (old_id, new_id)
-    SELECT id, gen_random_uuid() FROM subtree;
-
-    -- Capture new ID of the top node
-    SELECT new_id INTO v_top_new_id FROM temp_task_map WHERE old_id = p_template_id;
-    
-    -- 4. Determine Root ID
-    -- If we have a parent, inherit its root. If not, the new top node is the root.
-    IF p_new_parent_id IS NULL THEN
-        v_new_root_id := v_top_new_id;
-    ELSE
-        SELECT root_id INTO v_new_root_id FROM public.tasks WHERE id = p_new_parent_id;
-        IF v_new_root_id IS NULL THEN
-             RAISE EXCEPTION 'Parent task % has no root_id', p_new_parent_id;
-        END IF;
+    IF NOT public.is_admin(auth.uid()) THEN
+        RAISE EXCEPTION 'unauthorized: admin role required';
     END IF;
 
-    -- 5. Insert New Tasks
-    INSERT INTO public.tasks (
-        id, parent_task_id, root_id, creator, origin, 
-        title, description, status, position, 
-        notes, purpose, actions, is_complete, days_from_start, start_date, due_date
-    )
-    SELECT 
-        m.new_id, 
-        CASE 
-            WHEN t.id = p_template_id THEN p_new_parent_id -- Top node gets new parent
-            ELSE mp.new_id  -- Others get mapped parent
-        END,
-        v_new_root_id,
-        p_user_id,
-        p_new_origin,
-        -- Override Title/Desc for Root if provided
-        CASE WHEN t.id = p_template_id AND p_title IS NOT NULL THEN p_title ELSE t.title END,
-        CASE WHEN t.id = p_template_id AND p_description IS NOT NULL THEN p_description ELSE t.description END,
-        t.status, t.position,
-        t.notes, t.purpose, t.actions, false, t.days_from_start, 
-        -- Set Dates for Root if provided
-        CASE WHEN t.id = p_template_id THEN p_start_date ELSE null END,
-        CASE WHEN t.id = p_template_id THEN p_due_date ELSE null END
+    IF p_query IS NULL OR char_length(trim(p_query)) < 2 THEN
+        RETURN;
+    END IF;
+
+    IF p_origin IS NOT NULL AND p_origin NOT IN ('instance', 'template') THEN
+        RAISE EXCEPTION 'invalid origin filter: %', p_origin;
+    END IF;
+
+    v_pattern := '%' ||
+        replace(
+            replace(
+                replace(trim(p_query), '\', '\\'),
+                '%', '\%'
+            ),
+            '_', '\_'
+        ) || '%';
+
+    RETURN QUERY
+    SELECT t.id, t.title, t.origin
     FROM public.tasks t
-    JOIN temp_task_map m ON t.id = m.old_id
-    LEFT JOIN temp_task_map mp ON t.parent_task_id = mp.old_id;
-
-    -- 6. Identify Resources to clone
-    INSERT INTO temp_res_map (old_id, new_id)
-    SELECT r.id, gen_random_uuid()
-    FROM public.task_resources r
-    JOIN temp_task_map tm ON r.task_id = tm.old_id;
-
-    -- 7. Insert New Resources
-    INSERT INTO public.task_resources (
-        id, task_id, resource_type, resource_url, resource_text, storage_path, storage_bucket
-    )
-    SELECT 
-        rm.new_id,
-        tm.new_id,
-        r.resource_type, r.resource_url, r.resource_text, r.storage_path, r.storage_bucket
-    FROM public.task_resources r
-    JOIN temp_res_map rm ON r.id = rm.old_id
-    JOIN temp_task_map tm ON r.task_id = tm.old_id;
-
-    -- 8. Update Primary Resource Pointers on New Tasks
-    UPDATE public.tasks t
-    SET primary_resource_id = rm.new_id
-    FROM public.tasks original
-    JOIN temp_task_map tm ON original.id = tm.old_id
-    JOIN temp_res_map rm ON original.primary_resource_id = rm.old_id
-    WHERE t.id = tm.new_id;
-
-    -- 9. Return result
-    SELECT COUNT(*) INTO v_tasks_count FROM temp_task_map;
-
-    RETURN jsonb_build_object(
-        'new_root_id', v_top_new_id,
-        'root_project_id', v_new_root_id,
-        'tasks_cloned', v_tasks_count
-    );
+    WHERE t.parent_task_id IS NULL
+      AND t.origin IN ('instance', 'template')
+      AND (p_origin IS NULL OR t.origin = p_origin)
+      AND COALESCE(t.title, '') ILIKE v_pattern ESCAPE '\'
+    ORDER BY t.updated_at DESC NULLS LAST, t.title ASC
+    LIMIT GREATEST(1, LEAST(COALESCE(p_max_results, 10), 100));
 END;
 $$;
 
 
-ALTER FUNCTION "public"."clone_project_template"("p_template_id" "uuid", "p_new_parent_id" "uuid", "p_new_origin" "text", "p_user_id" "uuid", "p_title" "text", "p_description" "text", "p_start_date" "date", "p_due_date" "date") OWNER TO "postgres";
+ALTER FUNCTION "public"."admin_search_root_tasks"("p_query" "text", "p_origin" "text", "p_max_results" integer) OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."admin_template_roots"() RETURNS TABLE("id" "uuid", "title" "text", "template_version" integer, "updated_at" timestamp with time zone)
+    LANGUAGE "plpgsql" STABLE SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+BEGIN
+    IF NOT public.is_admin(auth.uid()) THEN
+        RAISE EXCEPTION 'unauthorized: admin role required';
+    END IF;
+
+    RETURN QUERY
+    SELECT t.id, t.title, COALESCE(t.template_version, 1), t.updated_at
+    FROM public.tasks t
+    WHERE t.parent_task_id IS NULL
+      AND t.origin = 'template'
+    ORDER BY t.updated_at DESC NULLS LAST, t.title ASC;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."admin_template_roots"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."admin_template_clones"("p_template_id" "uuid") RETURNS TABLE("project_id" "uuid", "title" "text", "cloned_from_template_version" integer, "current_template_version" integer, "stale" boolean)
+    LANGUAGE "plpgsql" STABLE SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+DECLARE
+    v_current_version int;
+BEGIN
+    IF NOT public.is_admin(auth.uid()) THEN
+        RAISE EXCEPTION 'unauthorized: admin role required';
+    END IF;
+
+    SELECT COALESCE(t.template_version, 1)
+    INTO v_current_version
+    FROM public.tasks t
+    WHERE t.id = p_template_id
+      AND t.parent_task_id IS NULL
+      AND t.origin = 'template';
+
+    IF v_current_version IS NULL THEN
+        RETURN;
+    END IF;
+
+    RETURN QUERY
+    SELECT
+        i.id,
+        i.title,
+        CASE
+            WHEN jsonb_typeof(i.settings -> 'cloned_from_template_version') = 'number'
+                THEN (i.settings ->> 'cloned_from_template_version')::int
+            ELSE NULL
+        END AS cloned_from_template_version,
+        v_current_version AS current_template_version,
+        CASE
+            WHEN jsonb_typeof(i.settings -> 'cloned_from_template_version') = 'number'
+                THEN (i.settings ->> 'cloned_from_template_version')::int < v_current_version
+            ELSE false
+        END AS stale
+    FROM public.tasks i
+    WHERE i.parent_task_id IS NULL
+      AND i.origin = 'instance'
+      AND i.settings ->> 'spawnedFromTemplate' = p_template_id::text
+    ORDER BY i.updated_at DESC NULLS LAST, i.title ASC;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."admin_template_clones"("p_template_id" "uuid") OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."clone_project_template"("p_template_id" "uuid", "p_new_parent_id" "uuid", "p_new_origin" "text", "p_user_id" "uuid", "p_title" "text" DEFAULT NULL::"text", "p_description" "text" DEFAULT NULL::"text", "p_start_date" timestamp with time zone DEFAULT NULL::timestamp with time zone, "p_due_date" timestamp with time zone DEFAULT NULL::timestamp with time zone) RETURNS "jsonb"
@@ -484,16 +828,56 @@ DECLARE
     v_old_start_date timestamptz;
     v_interval interval;
     v_template_root_id uuid;
+    v_template_origin text;
+    v_template_creator uuid;
+    v_template_published boolean := false;
+    v_actor_id uuid := auth.uid();
 BEGIN
-    -- 0. Security Check: Verify user has access to the template task
-    SELECT COALESCE(root_id, id) INTO v_template_root_id FROM public.tasks WHERE id = p_template_id;
-    
-    IF v_template_root_id IS NULL OR NOT public.has_permission(v_template_root_id, (SELECT auth.uid()), 'member') THEN
+    IF v_actor_id IS NULL OR p_user_id IS NULL OR p_user_id <> v_actor_id THEN
+        RAISE EXCEPTION 'Access denied: authenticated user mismatch.';
+    END IF;
+
+    IF p_new_origin IS NULL OR p_new_origin NOT IN ('instance', 'template') THEN
+        RAISE EXCEPTION 'Invalid clone origin: %', p_new_origin;
+    END IF;
+
+    SELECT
+        COALESCE(t.root_id, t.id),
+        r.origin,
+        r.creator,
+        lower(COALESCE(r.settings ->> 'published', 'false')) = 'true',
+        t.start_date
+    INTO
+        v_template_root_id,
+        v_template_origin,
+        v_template_creator,
+        v_template_published,
+        v_old_start_date
+    FROM public.tasks t
+    LEFT JOIN public.tasks r ON r.id = COALESCE(t.root_id, t.id)
+    WHERE t.id = p_template_id;
+
+    IF v_template_root_id IS NULL THEN
+        RAISE EXCEPTION 'Access denied: template task not found.';
+    END IF;
+
+    IF NOT (
+        public.is_admin(v_actor_id)
+        OR (
+            v_template_origin = 'template'
+            AND (v_template_published OR v_template_creator = v_actor_id)
+        )
+        OR (
+            v_template_origin <> 'template'
+            AND public.has_permission(v_template_root_id, v_actor_id, 'member')
+        )
+    ) THEN
         RAISE EXCEPTION 'Access denied: You do not have permission to access this template.';
     END IF;
 
-    -- 0. Get Template Data for Date Math
-    SELECT start_date INTO v_old_start_date FROM public.tasks WHERE id = p_template_id;
+    IF p_new_origin = 'template' AND NOT public.is_admin(v_actor_id) THEN
+        RAISE EXCEPTION 'Access denied: only admins can create template clones.';
+    END IF;
 
     -- Calculate Interval Offset if both dates exist
     IF p_start_date IS NOT NULL AND v_old_start_date IS NOT NULL THEN
@@ -531,9 +915,15 @@ BEGIN
     IF p_new_parent_id IS NULL THEN
         v_new_root_id := v_top_new_id;
     ELSE
-        SELECT root_id INTO v_new_root_id FROM public.tasks WHERE id = p_new_parent_id;
+        SELECT COALESCE(root_id, id) INTO v_new_root_id FROM public.tasks WHERE id = p_new_parent_id;
         IF v_new_root_id IS NULL THEN
              RAISE EXCEPTION 'Parent task % has no root_id', p_new_parent_id;
+        END IF;
+
+        IF NOT public.is_admin(v_actor_id)
+            AND NOT public.has_project_role(v_new_root_id, v_actor_id, ARRAY['owner', 'editor'])
+        THEN
+            RAISE EXCEPTION 'Access denied: You do not have permission to modify the destination project.';
         END IF;
     END IF;
 
@@ -541,7 +931,8 @@ BEGIN
     INSERT INTO public.tasks (
         id, parent_task_id, root_id, creator, origin, 
         title, description, status, position, 
-        notes, purpose, actions, is_complete, days_from_start, start_date, due_date
+        notes, purpose, actions, is_complete, days_from_start, start_date, due_date,
+        cloned_from_task_id
     )
     SELECT 
         m.new_id, 
@@ -550,7 +941,7 @@ BEGIN
             ELSE mp.new_id  -- Others get mapped parent
         END,
         v_new_root_id,
-        p_user_id,
+        v_actor_id,
         p_new_origin,
         -- Override Title/Desc for Root if provided
         CASE WHEN t.id = p_template_id AND p_title IS NOT NULL THEN p_title ELSE t.title END,
@@ -569,7 +960,8 @@ BEGIN
             WHEN t.id = p_template_id THEN p_due_date 
             WHEN t.due_date IS NOT NULL THEN t.due_date + v_interval
             ELSE null 
-        END
+        END,
+        t.id
     FROM public.tasks t
     JOIN temp_task_map m ON t.id = m.old_id
     LEFT JOIN temp_task_map mp ON t.parent_task_id = mp.old_id;
@@ -613,56 +1005,6 @@ $$;
 
 
 ALTER FUNCTION "public"."clone_project_template"("p_template_id" "uuid", "p_new_parent_id" "uuid", "p_new_origin" "text", "p_user_id" "uuid", "p_title" "text", "p_description" "text", "p_start_date" timestamp with time zone, "p_due_date" timestamp with time zone) OWNER TO "postgres";
-
-
-CREATE OR REPLACE FUNCTION "public"."debug_create_project"("p_title" "text", "p_creator_id" "uuid") RETURNS "jsonb"
-    LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO ''
-    AS $$
-DECLARE
-    v_project_id uuid;
-    v_user_role text;
-    v_is_admin boolean;
-BEGIN
-    -- Log context
-    RAISE NOTICE 'Debug Create Project: Auth UID: %, Role: %', auth.uid(), auth.role();
-    
-    -- Check if user exists
-    IF NOT EXISTS (SELECT 1 FROM auth.users WHERE id = p_creator_id) THEN
-        RETURN jsonb_build_object('error', 'User not found', 'details', p_creator_id);
-    END IF;
-
-    -- Attempt Insert (Simulating Client Insert but from PLPGSQL)
-    -- Note: RLS applies to the current user. SECURITY DEFINER changes current user to owner.
-    -- To test RLS, we should NOT use SECURITY DEFINER, or we should SET ROLE.
-    -- But we can't easily SET ROLE to a UUID in generic Postgres without setup.
-    -- Supabase uses `request.jwt.claim.sub` for auth.uid().
-
-    -- Instead, let's just inspect the pre-conditions that the RLS policy checks.
-    
-    SELECT role INTO v_user_role FROM auth.users WHERE id = p_creator_id; -- Not the claim role, but table role? No, auth.role() is from JWT.
-
-    v_is_admin := public.is_admin(p_creator_id);
-
-    -- Check if there's any existing project member role (should be null)
-    -- ...
-
-    -- Return diagnostic info
-    RETURN jsonb_build_object(
-        'auth_uid', auth.uid(),
-        'auth_role', auth.role(),
-        'target_creator', p_creator_id,
-        'is_admin', v_is_admin,
-        'policy_insert_check', (
-            auth.role() = 'authenticated' AND 
-            p_creator_id = auth.uid()
-        )
-    );
-END;
-$$;
-
-
-ALTER FUNCTION "public"."debug_create_project"("p_title" "text", "p_creator_id" "uuid") OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."derive_task_type"("p_parent_task_id" "uuid") RETURNS "text"
@@ -804,10 +1146,11 @@ ALTER FUNCTION "public"."handle_phase_completion"() OWNER TO "postgres";
 
 CREATE OR REPLACE FUNCTION "public"."handle_updated_at"() RETURNS "trigger"
     LANGUAGE "plpgsql"
+    SET "search_path" TO ''
     AS $$
 BEGIN
-  NEW.updated_at = now();
-  RETURN NEW;
+    NEW.updated_at := now();
+    RETURN NEW;
 END;
 $$;
 
@@ -816,45 +1159,40 @@ ALTER FUNCTION "public"."handle_updated_at"() OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."has_permission"("p_project_id" "uuid", "p_user_id" "uuid", "p_required_role" "text" DEFAULT 'member') RETURNS boolean
-    LANGUAGE "plpgsql" SECURITY DEFINER
+    LANGUAGE "plpgsql" STABLE SECURITY DEFINER
     SET "search_path" TO ''
     AS $$
 DECLARE
-    v_auth_uid uuid;
+    v_role text;
+    v_auth_uid uuid := auth.uid();
 BEGIN
-    v_auth_uid := (SELECT auth.uid());
-    
-    -- Ensure the requesting user matches the requested permission ID
-    IF v_auth_uid IS NULL OR v_auth_uid != p_user_id THEN
+    IF p_user_id IS NULL OR v_auth_uid IS NULL OR p_user_id <> v_auth_uid THEN
         RETURN false;
     END IF;
 
-    -- If required_role is 'owner', check for creator or owner role
-    IF p_required_role = 'owner' THEN
-        RETURN EXISTS (
-            SELECT 1 FROM public.project_members
-            WHERE project_id = p_project_id
-            AND user_id = p_user_id
-            AND role = 'owner'
-        ) OR EXISTS (
-            SELECT 1 FROM public.tasks
-            WHERE id = p_project_id
-            AND creator = p_user_id
-            AND parent_task_id IS NULL
-        );
+    IF public.is_admin(p_user_id) THEN
+        RETURN true;
     END IF;
 
-    -- Generic role check (member or admin or owner)
-    RETURN EXISTS (
-        SELECT 1 FROM public.project_members
-        WHERE project_id = p_project_id
-        AND user_id = p_user_id
-    ) OR EXISTS (
-        SELECT 1 FROM public.tasks
-        WHERE id = p_project_id
-        AND creator = p_user_id
-        AND parent_task_id IS NULL
-    );
+    IF p_required_role = 'owner' THEN
+        RETURN public.check_project_ownership_by_role(p_project_id, p_user_id);
+    END IF;
+
+    -- 'member' branch: any role in project_members counts.
+    SELECT role INTO v_role
+    FROM public.project_members
+    WHERE project_id = p_project_id AND user_id = p_user_id;
+
+    IF v_role IS NULL THEN
+        RETURN false;
+    END IF;
+
+    IF p_required_role = 'member' THEN
+        RETURN true;
+    END IF;
+
+    -- 'editor' / 'coach' / 'viewer' etc. — require exact role or higher.
+    RETURN v_role = p_required_role OR v_role = 'owner';
 END;
 $$;
 
@@ -1168,6 +1506,7 @@ ALTER FUNCTION "public"."is_admin"("p_user_id" "uuid") OWNER TO "postgres";
 
 CREATE OR REPLACE FUNCTION "public"."rag_get_project_context"("p_project_id" "uuid", "p_limit" integer DEFAULT 200) RETURNS "jsonb"
     LANGUAGE "sql" STABLE
+    SET "search_path" TO ''
     AS $$
   select jsonb_build_object(
     'project_id', p_project_id,
@@ -1328,17 +1667,23 @@ ALTER FUNCTION "public"."set_coaching_assignee"() OWNER TO "postgres";
 
 CREATE OR REPLACE FUNCTION "public"."set_root_id_from_parent"() RETURNS "trigger"
     LANGUAGE "plpgsql"
+    SET "search_path" TO ''
     AS $$
+DECLARE
+    v_parent_root uuid;
 BEGIN
-  -- If we are inserting/updating a child (has parent) and no root_id is provided (or we want to force it)
-  -- Actually, we should probably FORCE it to match the parent's root_id (or parent's id if parent is root)
-  IF NEW.parent_task_id IS NOT NULL THEN
-    SELECT COALESCE(root_id, id)
-    INTO NEW.root_id
-    FROM public.tasks
-    WHERE id = NEW.parent_task_id;
-  END IF;
-  RETURN NEW;
+    IF NEW.parent_task_id IS NULL THEN
+        NEW.root_id := NEW.id;
+    ELSE
+        SELECT root_id INTO v_parent_root FROM public.tasks WHERE id = NEW.parent_task_id;
+        IF v_parent_root IS NULL THEN
+            -- Parent might itself be a root whose row is being inserted
+            -- in the same statement; fall back to the parent's id.
+            SELECT id INTO v_parent_root FROM public.tasks WHERE id = NEW.parent_task_id;
+        END IF;
+        NEW.root_id := COALESCE(v_parent_root, NEW.parent_task_id);
+    END IF;
+    RETURN NEW;
 END;
 $$;
 
@@ -1364,29 +1709,16 @@ ALTER FUNCTION "public"."set_task_type"() OWNER TO "postgres";
 
 CREATE OR REPLACE FUNCTION "public"."sync_task_completion_flags"() RETURNS "trigger"
     LANGUAGE "plpgsql"
+    SET "search_path" TO ''
     AS $$
-DECLARE
-    v_status_changed   boolean;
-    v_complete_changed boolean;
 BEGIN
-    -- Wave 23: keep is_complete and status = 'completed' in lockstep.
-    -- status is the source of truth; inconsistent dual-field writes are
-    -- reconciled, not trusted. See
-    -- docs/db/migrations/2026_04_17_sync_task_completion.sql.
-    IF TG_OP = 'INSERT' THEN
-        NEW.is_complete := (COALESCE(NEW.status, '') = 'completed');
-        RETURN NEW;
+    -- Wave 23 invariant: status is the source of truth.
+    -- is_complete is derived to match.
+    IF NEW.status = 'completed' THEN
+        NEW.is_complete := true;
+    ELSE
+        NEW.is_complete := false;
     END IF;
-
-    v_status_changed   := NEW.status IS DISTINCT FROM OLD.status;
-    v_complete_changed := NEW.is_complete IS DISTINCT FROM OLD.is_complete;
-
-    IF v_status_changed THEN
-        NEW.is_complete := (COALESCE(NEW.status, '') = 'completed');
-    ELSIF v_complete_changed THEN
-        NEW.status := CASE WHEN NEW.is_complete THEN 'completed' ELSE 'todo' END;
-    END IF;
-
     RETURN NEW;
 END;
 $$;
@@ -1693,6 +2025,8 @@ CREATE TABLE IF NOT EXISTS "public"."tasks" (
     "settings" "jsonb" DEFAULT '{}'::"jsonb",
     "supervisor_email" "text",
     "task_type" "text",
+    "template_version" integer DEFAULT 1 NOT NULL,
+    "cloned_from_task_id" "uuid",
     CONSTRAINT "tasks_project_kind_check" CHECK ((("parent_task_id" IS NOT NULL) OR (("settings" ->> 'project_kind'::"text") IS NULL) OR (("settings" ->> 'project_kind'::"text") = ANY (ARRAY['date'::"text", 'checkpoint'::"text"])))),
     CONSTRAINT "tasks_project_type_check" CHECK (("project_type" = ANY (ARRAY['primary'::"text", 'secondary'::"text"]))),
     CONSTRAINT "tasks_root_id_required_for_children" CHECK ((("parent_task_id" IS NULL) OR ("root_id" IS NOT NULL))),
@@ -1712,6 +2046,16 @@ COMMENT ON COLUMN "public"."tasks"."settings" IS 'Project-level settings (e.g., 
 
 
 COMMENT ON COLUMN "public"."tasks"."supervisor_email" IS 'Optional supervisor recipient for monthly Project Status Reports. Only meaningful on project roots (parent_task_id IS NULL). UI gates the field to roots; no DB-level check constraint.';
+
+
+COMMENT ON TABLE "public"."admin_users" IS 'SECURITY DEFINER-only access. RLS is intentionally enabled with zero policies - reads happen via public.is_admin(uid) and the public.admin_* SECURITY DEFINER RPCs. Direct SELECT/INSERT/UPDATE/DELETE by authenticated or anon roles is denied by design.';
+
+
+COMMENT ON COLUMN "public"."tasks"."template_version" IS 'Wave 36 — monotonic version on template rows (origin = ''template''). Bumped by trg_bump_template_version on text/structural edits. Cloned instance roots stamp settings.cloned_from_template_version at clone time for traceability; edits to the source template do NOT propagate to existing instances (intentional).';
+
+
+
+COMMENT ON COLUMN "public"."tasks"."cloned_from_task_id" IS 'Wave 36 — stamped during clone_project_template for every cloned descendant. Points to the source template task. NULL on pre-Wave-36 rows and on post-instantiation additions. App-layer UI guard in TaskDetailsView warns non-owners before deleting a template-origin task; owners can delete freely.';
 
 
 CREATE TABLE IF NOT EXISTS "public"."task_comments" (
@@ -1735,7 +2079,7 @@ ALTER TABLE "public"."task_comments" OWNER TO "postgres";
 
 CREATE TABLE IF NOT EXISTS "public"."activity_log" (
     "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
-    "project_id" "uuid" NOT NULL,
+    "project_id" "uuid",
     "actor_id" "uuid",
     "entity_type" "text" NOT NULL,
     "entity_id" "uuid" NOT NULL,
@@ -1743,11 +2087,14 @@ CREATE TABLE IF NOT EXISTS "public"."activity_log" (
     "payload" "jsonb" DEFAULT '{}'::"jsonb" NOT NULL,
     "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
     CONSTRAINT "activity_log_entity_type_check" CHECK (("entity_type" = ANY (ARRAY['task'::"text", 'comment'::"text", 'member'::"text", 'project'::"text"]))),
-    CONSTRAINT "activity_log_action_check" CHECK (("action" = ANY (ARRAY['created'::"text", 'updated'::"text", 'deleted'::"text", 'status_changed'::"text", 'member_added'::"text", 'member_removed'::"text", 'member_role_changed'::"text", 'comment_posted'::"text", 'comment_edited'::"text", 'comment_deleted'::"text"])))
+    CONSTRAINT "activity_log_action_check" CHECK (("action" = ANY (ARRAY['created'::"text", 'updated'::"text", 'deleted'::"text", 'status_changed'::"text", 'member_added'::"text", 'member_removed'::"text", 'member_role_changed'::"text", 'comment_posted'::"text", 'comment_edited'::"text", 'comment_deleted'::"text", 'task_completed'::"text", 'admin_granted'::"text", 'admin_revoked'::"text", 'user_suspended'::"text", 'user_unsuspended'::"text", 'password_reset_requested'::"text"])))
 );
 
 
 ALTER TABLE "public"."activity_log" OWNER TO "postgres";
+
+
+COMMENT ON COLUMN "public"."activity_log"."project_id" IS 'NULL for cross-project / platform-level admin actions (admin role toggle, user moderation). Otherwise references the project the row belongs to.';
 
 
 CREATE TABLE IF NOT EXISTS "public"."notification_preferences" (
@@ -1798,6 +2145,24 @@ CREATE TABLE IF NOT EXISTS "public"."push_subscriptions" (
 
 
 ALTER TABLE "public"."push_subscriptions" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "public"."ics_feed_tokens" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "user_id" "uuid" NOT NULL,
+    "token" "text" NOT NULL,
+    "label" "text",
+    "project_filter" "uuid"[],
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "revoked_at" timestamp with time zone,
+    "last_accessed_at" timestamp with time zone
+);
+
+
+ALTER TABLE "public"."ics_feed_tokens" OWNER TO "postgres";
+
+
+COMMENT ON TABLE "public"."ics_feed_tokens" IS 'Wave 35 — per-user ICS calendar feed tokens. The token value IS the credential used by the public /functions/v1/ics-feed edge function. Revocation is soft (revoked_at) so past accesses stay auditable via last_accessed_at.';
 
 
 -- Wave 30: Bootstrap a notification_preferences row for every auth.users INSERT.
@@ -1865,6 +2230,7 @@ BEGIN
       jsonb_build_object(
         'comment_id', NEW.id,
         'task_id', NEW.task_id,
+        'root_id', NEW.root_id,
         'author_id', NEW.author_id,
         'body_preview', substring(NEW.body, 1, 140)
       )
@@ -1909,16 +2275,23 @@ CREATE OR REPLACE VIEW "public"."tasks_with_primary_resource" AS
     "t"."priority",
     "t"."settings",
     "t"."supervisor_email",
-    NULL::"uuid" AS "resource_id",
-    NULL::"text" AS "resource_type",
-    NULL::"text" AS "resource_url",
-    NULL::"text" AS "resource_text",
-    NULL::"text" AS "storage_path",
+    "t"."task_type",
+    "t"."template_version",
+    "t"."cloned_from_task_id",
+    "r"."id" AS "resource_id",
+    ("r"."resource_type")::"text" AS "resource_type",
+    "r"."resource_url",
+    "r"."resource_text",
+    "r"."storage_path",
     NULL::"text" AS "resource_name"
-   FROM "public"."tasks" "t";
+   FROM ("public"."tasks" "t"
+     LEFT JOIN "public"."task_resources" "r" ON (("r"."id" = "t"."primary_resource_id")));
 
 
 ALTER TABLE "public"."tasks_with_primary_resource" OWNER TO "postgres";
+
+
+ALTER VIEW "public"."tasks_with_primary_resource" SET ("security_invoker"='true');
 
 
 CREATE OR REPLACE VIEW "public"."view_master_library" AS
@@ -1947,6 +2320,20 @@ CREATE OR REPLACE VIEW "public"."view_master_library" AS
 
 
 ALTER TABLE "public"."view_master_library" OWNER TO "postgres";
+
+ALTER VIEW "public"."view_master_library" SET ("security_invoker"='true');
+
+
+CREATE OR REPLACE VIEW "public"."users_public" WITH ("security_invoker"='true') AS
+ SELECT "u"."id",
+    "u"."email"
+   FROM "auth"."users" "u";
+
+
+ALTER TABLE "public"."users_public" OWNER TO "postgres";
+
+
+COMMENT ON VIEW "public"."users_public" IS 'Service-role-only projection of auth.users for edge functions that need recipient email addresses without exposing auth.users through the public API.';
 
 
 ALTER TABLE ONLY "public"."admin_users"
@@ -2020,7 +2407,18 @@ CREATE INDEX "idx_task_resources_task_id" ON "public"."task_resources" USING "bt
 
 
 
+CREATE INDEX "idx_task_relationships_project_id" ON "public"."task_relationships" USING "btree" ("project_id");
+
+
+
+CREATE INDEX "idx_task_relationships_to_task_id" ON "public"."task_relationships" USING "btree" ("to_task_id");
+
+
+
 CREATE INDEX "idx_tasks_assignee_id" ON "public"."tasks" USING "btree" ("assignee_id");
+
+
+CREATE INDEX "idx_tasks_cloned_from_task_id" ON "public"."tasks" USING "btree" ("cloned_from_task_id") WHERE ("cloned_from_task_id" IS NOT NULL);
 
 
 
@@ -2044,7 +2442,7 @@ CREATE INDEX "idx_tasks_is_premium" ON "public"."tasks" USING "btree" ("is_premi
 
 
 
-CREATE INDEX "idx_tasks_parent" ON "public"."tasks" USING "btree" ("parent_task_id");
+CREATE INDEX "idx_tasks_parent_project_id" ON "public"."tasks" USING "btree" ("parent_project_id") WHERE ("parent_project_id" IS NOT NULL);
 
 
 
@@ -2052,7 +2450,11 @@ CREATE INDEX "idx_tasks_parent_id" ON "public"."tasks" USING "btree" ("parent_ta
 
 
 
-CREATE INDEX "idx_tasks_root" ON "public"."tasks" USING "btree" ("root_id");
+CREATE INDEX "idx_tasks_primary_resource_id" ON "public"."tasks" USING "btree" ("primary_resource_id") WHERE ("primary_resource_id" IS NOT NULL);
+
+
+
+CREATE INDEX "idx_tasks_prerequisite_phase_id" ON "public"."tasks" USING "btree" ("prerequisite_phase_id") WHERE ("prerequisite_phase_id" IS NOT NULL);
 
 
 
@@ -2080,10 +2482,6 @@ CREATE INDEX "rag_chunks_task_id_idx" ON "public"."rag_chunks" USING "btree" ("t
 
 
 
-CREATE INDEX "task_resources_task_id_idx" ON "public"."task_resources" USING "btree" ("task_id");
-
-
-
 CREATE INDEX "task_resources_type_idx" ON "public"."task_resources" USING "btree" ("resource_type");
 
 
@@ -2099,12 +2497,18 @@ CREATE INDEX "idx_task_comments_root_id" ON "public"."task_comments" USING "btre
 CREATE INDEX "idx_task_comments_parent_comment_id" ON "public"."task_comments" USING "btree" ("parent_comment_id") WHERE ("parent_comment_id" IS NOT NULL);
 
 
+CREATE INDEX "idx_task_comments_author_id" ON "public"."task_comments" USING "btree" ("author_id");
+
+
 
 CREATE INDEX "idx_activity_log_project_id" ON "public"."activity_log" USING "btree" ("project_id", "created_at" DESC);
 
 
 
 CREATE INDEX "idx_activity_log_entity" ON "public"."activity_log" USING "btree" ("entity_type", "entity_id", "created_at" DESC);
+
+
+CREATE INDEX "idx_activity_log_actor_id" ON "public"."activity_log" USING "btree" ("actor_id") WHERE ("actor_id" IS NOT NULL);
 
 
 
@@ -2117,6 +2521,14 @@ ALTER TABLE ONLY "public"."notification_log"
     ADD CONSTRAINT "notification_log_pkey" PRIMARY KEY ("id");
 
 
+ALTER TABLE ONLY "public"."ics_feed_tokens"
+    ADD CONSTRAINT "ics_feed_tokens_pkey" PRIMARY KEY ("id");
+
+
+ALTER TABLE ONLY "public"."ics_feed_tokens"
+    ADD CONSTRAINT "ics_feed_tokens_token_key" UNIQUE ("token");
+
+
 
 ALTER TABLE ONLY "public"."notification_preferences"
     ADD CONSTRAINT "notification_preferences_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "auth"."users"("id") ON DELETE CASCADE;
@@ -2125,6 +2537,10 @@ ALTER TABLE ONLY "public"."notification_preferences"
 
 ALTER TABLE ONLY "public"."notification_log"
     ADD CONSTRAINT "notification_log_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "auth"."users"("id") ON DELETE CASCADE;
+
+
+ALTER TABLE ONLY "public"."ics_feed_tokens"
+    ADD CONSTRAINT "ics_feed_tokens_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "auth"."users"("id") ON DELETE CASCADE;
 
 
 
@@ -2146,8 +2562,17 @@ ALTER TABLE ONLY "public"."push_subscriptions"
 CREATE INDEX "idx_notification_log_user_id_sent_at" ON "public"."notification_log" USING "btree" ("user_id", "sent_at" DESC);
 
 
+CREATE INDEX "idx_ics_feed_tokens_token" ON "public"."ics_feed_tokens" USING "btree" ("token");
+
+
+CREATE INDEX "idx_ics_feed_tokens_user" ON "public"."ics_feed_tokens" USING "btree" ("user_id");
+
+
 
 CREATE INDEX "idx_notification_log_event_type" ON "public"."notification_log" USING "btree" ("event_type", "sent_at" DESC);
+
+
+CREATE INDEX "idx_notification_log_pending" ON "public"."notification_log" USING "btree" ("id") WHERE ("event_type" = 'mention_pending'::"text");
 
 
 
@@ -2172,6 +2597,9 @@ CREATE OR REPLACE TRIGGER "trg_backfill_coaching_assignees" AFTER INSERT OR UPDA
 
 
 CREATE OR REPLACE TRIGGER "trg_set_coaching_assignee" BEFORE INSERT OR UPDATE ON "public"."tasks" FOR EACH ROW EXECUTE FUNCTION "public"."set_coaching_assignee"();
+
+
+CREATE OR REPLACE TRIGGER "trg_bump_template_version" BEFORE UPDATE ON "public"."tasks" FOR EACH ROW EXECUTE FUNCTION "public"."bump_template_version"();
 
 
 
@@ -2320,6 +2748,10 @@ ALTER TABLE ONLY "public"."tasks"
     ADD CONSTRAINT "tasks_assignee_id_fkey" FOREIGN KEY ("assignee_id") REFERENCES "auth"."users"("id");
 
 
+ALTER TABLE ONLY "public"."tasks"
+    ADD CONSTRAINT "tasks_cloned_from_task_id_fkey" FOREIGN KEY ("cloned_from_task_id") REFERENCES "public"."tasks"("id") ON DELETE SET NULL;
+
+
 
 ALTER TABLE ONLY "public"."tasks"
     ADD CONSTRAINT "tasks_creator_fkey" FOREIGN KEY ("creator") REFERENCES "auth"."users"("id");
@@ -2364,10 +2796,6 @@ CREATE POLICY "Create invites for project members" ON "public"."project_invites"
 
 
 CREATE POLICY "Delete invites for project members" ON "public"."project_invites" FOR DELETE USING (("public"."has_project_role"("project_id", (SELECT (auth.jwt() ->> 'sub')::uuid), ARRAY['owner'::"text", 'editor'::"text"]) OR "public"."is_admin"((SELECT (auth.jwt() ->> 'sub')::uuid))));
-
-
-
-CREATE POLICY "Enable all for authenticated users" ON "public"."project_members" USING (("public"."has_project_role"("project_id", (SELECT (auth.jwt() ->> 'sub')::uuid), ARRAY['owner'::"text"]) OR "public"."is_admin"((SELECT (auth.jwt() ->> 'sub')::uuid))));
 
 
 
@@ -2531,13 +2959,28 @@ ALTER TABLE "public"."notification_preferences" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "public"."notification_log" ENABLE ROW LEVEL SECURITY;
 
 
+ALTER TABLE "public"."ics_feed_tokens" ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY "Users can view their own ICS tokens" ON "public"."ics_feed_tokens" FOR SELECT TO "authenticated" USING ((("user_id" = "auth"."uid"()) OR "public"."is_admin"("auth"."uid"())));
+
+
+CREATE POLICY "Users can create their own ICS tokens" ON "public"."ics_feed_tokens" FOR INSERT TO "authenticated" WITH CHECK (("user_id" = "auth"."uid"()));
+
+
+CREATE POLICY "Users can update their own ICS tokens" ON "public"."ics_feed_tokens" FOR UPDATE TO "authenticated" USING (("user_id" = "auth"."uid"())) WITH CHECK (("user_id" = "auth"."uid"()));
+
+
+CREATE POLICY "Users can delete their own ICS tokens" ON "public"."ics_feed_tokens" FOR DELETE TO "authenticated" USING ((("user_id" = "auth"."uid"()) OR "public"."is_admin"("auth"."uid"())));
+
+
 CREATE POLICY "Notif prefs: select own" ON "public"."notification_preferences" FOR SELECT TO "authenticated" USING (("user_id" = "auth"."uid"()));
 
 
 CREATE POLICY "Notif prefs: insert own" ON "public"."notification_preferences" FOR INSERT TO "authenticated" WITH CHECK (("user_id" = "auth"."uid"()));
 
 
-CREATE POLICY "Notif prefs: update own" ON "public"."notification_preferences" FOR UPDATE TO "authenticated" USING (("user_id" = "auth"."uid"()));
+CREATE POLICY "Notif prefs: update own" ON "public"."notification_preferences" FOR UPDATE TO "authenticated" USING (("user_id" = "auth"."uid"())) WITH CHECK (("user_id" = "auth"."uid"()));
 
 
 CREATE POLICY "Notif log: select own or admin" ON "public"."notification_log" FOR SELECT TO "authenticated" USING ((("user_id" = "auth"."uid"()) OR "public"."is_admin"("auth"."uid"())));
@@ -2778,6 +3221,10 @@ GRANT ALL ON FUNCTION "public"."get_user_id_by_email"("email" "text") TO "servic
 
 
 
+REVOKE ALL ON FUNCTION "public"."has_permission"("p_project_id" "uuid", "p_user_id" "uuid", "p_required_role" "text") FROM PUBLIC;
+
+
+
 GRANT ALL ON FUNCTION "public"."initialize_default_project"("p_project_id" "uuid", "p_creator_id" "uuid") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."initialize_default_project"("p_project_id" "uuid", "p_creator_id" "uuid") TO "service_role";
 
@@ -2797,6 +3244,25 @@ GRANT ALL ON FUNCTION "public"."is_active_member"("p_project_id" "uuid", "p_user
 REVOKE ALL ON FUNCTION "public"."is_admin"("p_user_id" "uuid") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."is_admin"("p_user_id" "uuid") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."is_admin"("p_user_id" "uuid") TO "service_role";
+
+REVOKE ALL ON FUNCTION "public"."admin_search_users"("p_query" "text", "p_max_results" integer) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION "public"."admin_search_users"("p_query" "text", "p_max_results" integer) TO "authenticated";
+REVOKE ALL ON FUNCTION "public"."admin_user_detail"("p_uid" "uuid") FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION "public"."admin_user_detail"("p_uid" "uuid") TO "authenticated";
+REVOKE ALL ON FUNCTION "public"."admin_recent_activity"("p_limit" integer) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION "public"."admin_recent_activity"("p_limit" integer) TO "authenticated";
+REVOKE ALL ON FUNCTION "public"."admin_list_users"("filter" "jsonb", "p_limit" integer, "p_offset" integer) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION "public"."admin_list_users"("filter" "jsonb", "p_limit" integer, "p_offset" integer) TO "authenticated";
+REVOKE ALL ON FUNCTION "public"."admin_analytics_snapshot"() FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION "public"."admin_analytics_snapshot"() TO "authenticated";
+REVOKE ALL ON FUNCTION "public"."admin_set_user_admin_role"("p_target_uid" "uuid", "p_make_admin" boolean) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION "public"."admin_set_user_admin_role"("p_target_uid" "uuid", "p_make_admin" boolean) TO "authenticated";
+REVOKE ALL ON FUNCTION "public"."admin_search_root_tasks"("p_query" "text", "p_origin" "text", "p_max_results" integer) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION "public"."admin_search_root_tasks"("p_query" "text", "p_origin" "text", "p_max_results" integer) TO "authenticated";
+REVOKE ALL ON FUNCTION "public"."admin_template_roots"() FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION "public"."admin_template_roots"() TO "authenticated";
+REVOKE ALL ON FUNCTION "public"."admin_template_clones"("p_template_id" "uuid") FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION "public"."admin_template_clones"("p_template_id" "uuid") TO "authenticated";
 
 REVOKE ALL ON FUNCTION "public"."set_task_comments_root_id"() FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION "public"."set_task_comments_root_id"() TO "authenticated";
@@ -2843,6 +3309,10 @@ GRANT ALL ON TABLE "public"."task_resources" TO "service_role";
 GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE "public"."task_resources" TO "authenticated";
 
 
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE "public"."ics_feed_tokens" TO "authenticated";
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE "public"."ics_feed_tokens" TO "service_role";
+
+
 
 GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE "public"."tasks" TO "authenticated";
 GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE "public"."tasks" TO "service_role";
@@ -2850,44 +3320,15 @@ GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE "public"."tasks" TO "service_role";
 
 
 GRANT SELECT ON TABLE "public"."tasks_with_primary_resource" TO "authenticated";
-GRANT SELECT ON TABLE "public"."tasks_with_primary_resource" TO "anon";
 GRANT SELECT ON TABLE "public"."tasks_with_primary_resource" TO "service_role";
 
 
 
 GRANT SELECT ON TABLE "public"."view_master_library" TO "authenticated";
-GRANT SELECT ON TABLE "public"."view_master_library" TO "anon";
 GRANT SELECT ON TABLE "public"."view_master_library" TO "service_role";
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+GRANT SELECT ON TABLE "public"."users_public" TO "service_role";
 
 
 

@@ -11,7 +11,7 @@ Feature: Command Palette
   Scenario: Palette shows Suggestions group
     When the command palette is open
     Then the "Suggestions" section is visible
-    And items "Dashboard", "Daily Tasks", and "Settings" are listed
+    And items "Project Dashboard", "My Tasks", and "Settings" are listed
 
   Scenario: Palette shows Projects group
     When the command palette is open

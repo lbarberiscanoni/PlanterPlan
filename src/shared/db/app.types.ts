@@ -273,6 +273,30 @@ export interface AdminListUsersFilter {
     search?: string;
 }
 
+/** Row returned by `public.admin_search_root_tasks`. */
+export interface AdminRootTaskSearchRow {
+    id: string;
+    title: string | null;
+    origin: 'instance' | 'template';
+}
+
+/** Row returned by `public.admin_template_roots`. */
+export interface AdminTemplateRootRow {
+    id: string;
+    title: string | null;
+    template_version: number;
+    updated_at: string | null;
+}
+
+/** Row returned by `public.admin_template_clones`. */
+export interface AdminTemplateCloneRow {
+    project_id: string;
+    title: string | null;
+    cloned_from_template_version: number | null;
+    current_template_version: number;
+    stale: boolean;
+}
+
 /** Shape returned by `public.admin_analytics_snapshot()` (Wave 34 Task 3). */
 export interface AdminAnalyticsSnapshot {
     totals: {

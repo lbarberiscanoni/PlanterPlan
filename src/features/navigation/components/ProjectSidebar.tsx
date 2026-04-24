@@ -1,4 +1,5 @@
 import { useLocation, useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/shared/contexts/AuthContext';
 import InstanceList from '@/features/projects/components/InstanceList';
 import JoinedProjectsList from '@/features/projects/components/JoinedProjectsList';
@@ -50,6 +51,7 @@ const ProjectSidebar = ({
  isFetchingMore,
  onLoadMore,
 }: ProjectSidebarProps) => {
+ const { t } = useTranslation();
  const { user, signOut } = useAuth();
  const location = useLocation();
  const navigate = useNavigate();
@@ -79,25 +81,25 @@ const ProjectSidebar = ({
  <div className="flex flex-col h-full bg-card text-card-foreground border-r border-border shadow-sm">
  <div className="px-4 py-4 space-y-1">
  <GlobalNavItem
- label="Project Dashboard"
+ label={t('nav.project_dashboard')}
  isActive={location.pathname === '/dashboard'}
  onClick={() => handleGlobalNav('/dashboard')}
  icon={<LayoutDashboard className="w-5 h-5" />}
  />
  <GlobalNavItem
- label="My Tasks"
+ label={t('nav.my_tasks')}
  isActive={location.pathname === '/tasks'}
  onClick={() => handleGlobalNav('/tasks')}
  icon={<Calendar className="w-5 h-5" />}
  />
  <GlobalNavItem
- label="Reports"
+ label={t('nav.reports')}
  isActive={location.pathname === '/reports'}
  onClick={() => handleGlobalNav(selectedTaskId ? `/reports?project=${selectedTaskId}` : '/reports')}
  icon={<BarChart className="w-5 h-5" />}
  />
  <GlobalNavItem
- label="Settings"
+ label={t('nav.settings')}
  isActive={location.pathname === '/settings'}
  onClick={() => handleGlobalNav('/settings')}
  icon={<Settings className="w-5 h-5" />}
@@ -115,7 +117,7 @@ const ProjectSidebar = ({
  <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
  </svg>
- New Project
+ {t('dashboard.new_project')}
  </button>
 
  <button
@@ -126,7 +128,7 @@ const ProjectSidebar = ({
  <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
  </svg>
- New Template
+ {t('dashboard.new_template')}
  </button>
  </div>
 
@@ -177,13 +179,13 @@ const ProjectSidebar = ({
  </div>
  <div className="flex-1 min-w-0">
  <p className="text-sm font-medium text-card-foreground truncate">
- {user?.email || 'Unknown User'}
+ {user?.email || t('nav.user_fallback')}
  </p>
  <button
  onClick={signOut}
  className="text-xs text-muted-foreground hover:text-rose-600 hover:underline transition-colors flex items-center mt-0.5"
  >
- Sign Out
+ {t('nav.logout')}
  </button>
  </div>
  </div>

@@ -1,7 +1,7 @@
 import { createBdd } from 'playwright-bdd';
 import { expect } from '@playwright/test';
 
-const { Given, Then } = createBdd();
+const { Given, When, Then } = createBdd();
 
 Given('the user is logged in as a viewer', async ({ page }) => {
   const authState = 'e2e/.auth/viewer.json';

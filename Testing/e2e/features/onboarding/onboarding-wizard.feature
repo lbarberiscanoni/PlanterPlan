@@ -30,7 +30,7 @@ Feature: Onboarding Wizard
 
   Scenario: Step 2 - Back button returns to step 1 preserving name
     Given the user is on onboarding step 2
-    When the user clicks Back
+    When the user clicks Back in the onboarding wizard
     Then the user is on step 1
     And the church name field still contains the previously entered name
 
