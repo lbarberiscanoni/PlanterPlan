@@ -8,8 +8,8 @@ import { Card } from '@/shared/ui/card';
 import { Progress } from '@/shared/ui/progress';
 import { ArrowLeft, Loader2, BarChart, TrendingUp, CheckCircle2, AlertTriangle, Clock } from 'lucide-react';
 import { STALE_TIMES } from '@/shared/lib/react-query-config';
-import { toMonthKey } from '@/shared/lib/date-engine';
-import { useAuth } from '@/shared/contexts/AuthContext';
+import { getNow, toMonthKey } from '@/shared/lib/date-engine';
+import { useAuth } from '@/shared/contexts/auth-context';
 import {
     Select,
     SelectContent,
@@ -68,7 +68,7 @@ export default function Reports() {
     const phases = allTasks.filter((t) => t.parent_task_id === projectId);
     const tasks = allTasks.filter((t) => t.parent_task_id !== projectId);
 
-    const [selectedMonth, setSelectedMonth] = useState<string>(() => toMonthKey(new Date()));
+    const [selectedMonth, setSelectedMonth] = useState<string>(() => toMonthKey(getNow()));
 
     const {
         statsConfig,
@@ -236,7 +236,7 @@ export default function Reports() {
                                             <input
                                                 type="month"
                                                 value={selectedMonth}
-                                                onChange={(e) => setSelectedMonth(e.target.value || toMonthKey(new Date()))}
+                                                onChange={(e) => setSelectedMonth(e.target.value || toMonthKey(getNow()))}
                                                 className="px-2 py-1 rounded-md border border-border bg-card text-sm"
                                                 aria-label={t('projects.reports.month_aria')}
                                             />

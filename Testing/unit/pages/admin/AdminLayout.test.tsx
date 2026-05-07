@@ -17,7 +17,7 @@ vi.mock('sonner', () => ({
 }));
 
 const authState = { user: null as { id: string; role: string } | null, loading: false };
-vi.mock('@/shared/contexts/AuthContext', () => ({
+vi.mock('@/shared/contexts/auth-context', () => ({
     useAuth: () => ({
         user: authState.user,
         loading: authState.loading,
@@ -37,7 +37,7 @@ function renderAt(initialEntry = '/admin') {
                 <Route path="/admin" element={<AdminLayout />}>
                     <Route index element={<div data-testid="admin-home-stub">home</div>} />
                 </Route>
-                <Route path="/dashboard" element={<div data-testid="dashboard-stub">dashboard</div>} />
+                <Route path="/tasks" element={<div data-testid="tasks-stub">tasks</div>} />
             </Routes>
         </MemoryRouter>,
     );
@@ -48,11 +48,11 @@ describe('AdminLayout auth gate (Wave 34)', () => {
         toastError.mockReset();
     });
 
-    it('redirects non-admin users to /dashboard with a toast', async () => {
+    it('redirects non-admin users to /tasks with a toast', async () => {
         authState.user = { id: 'u1', role: 'editor' };
         authState.loading = false;
         renderAt();
-        expect(await screen.findByTestId('dashboard-stub')).toBeInTheDocument();
+        expect(await screen.findByTestId('tasks-stub')).toBeInTheDocument();
         expect(toastError).toHaveBeenCalledWith('You need admin access for this page.');
     });
 

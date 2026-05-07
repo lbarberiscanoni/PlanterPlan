@@ -8,7 +8,7 @@
  */
 import type { Task as GanttTaskApiType } from 'gantt-task-react';
 import type { HierarchyTask } from '@/shared/db/app.types';
-import { compareDateAsc } from '@/shared/lib/date-engine';
+import { addDaysToDate, compareDateAsc } from '@/shared/lib/date-engine';
 
 export interface GanttRowOptions {
     includeLeafTasks: boolean;
@@ -23,6 +23,11 @@ export interface AdapterResult {
 const BRAND_COLOR_FALLBACK = 'hsl(19, 96%, 41%)';
 
 type WithChildren = HierarchyTask & { __kids?: HierarchyTask[] };
+
+const toGanttDate = (iso: string): Date | null => addDaysToDate(
+    /^\d{4}-\d{2}-\d{2}$/.test(iso) ? `${iso}T00:00:00.000Z` : iso,
+    0,
+);
 
 /**
  * Walks a flat hierarchy of tasks and emits one gantt row per phase + milestone,
@@ -105,8 +110,12 @@ export function tasksToGanttRows(tasks: HierarchyTask[], opts: GanttRowOptions):
             return;
         }
 
-        const start = new Date(startIso);
-        let end = new Date(endIso);
+        const start = toGanttDate(startIso);
+        let end = toGanttDate(endIso);
+        if (!start || !end) {
+            skippedCount += 1;
+            return;
+        }
         if (compareDateAsc(startIso, endIso) > 0) {
             console.warn(`[gantt-adapter] Task ${node.id} has due_date before start_date; collapsing to start.`);
             end = start;

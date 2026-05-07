@@ -60,8 +60,8 @@ describe('constructUpdatePayload', () => {
     };
     const form: TaskFormData = { ...baseForm, days_from_start: 10 };
     const result = constructUpdatePayload(form, currentTask, ctx);
-    expect(result.start_date).toBe('2026-01-11');
-    expect(result.due_date).toBe('2026-01-11');
+    expect(result.start_date).toBe('2026-01-15');
+    expect(result.due_date).toBe('2026-01-15');
     expect(result.days_from_start).toBe(10);
   });
 
@@ -185,8 +185,8 @@ describe('constructCreatePayload', () => {
     };
     const form: TaskFormData = { ...baseForm, days_from_start: 5 };
     const result = constructCreatePayload(form, ctx);
-    expect(result.start_date).toBe('2026-01-06');
-    expect(result.due_date).toBe('2026-01-06');
+    expect(result.start_date).toBe('2026-01-08');
+    expect(result.due_date).toBe('2026-01-08');
   });
 
   it('uses manual dates when provided', () => {

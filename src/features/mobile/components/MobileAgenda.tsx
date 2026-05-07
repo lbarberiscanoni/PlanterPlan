@@ -22,8 +22,7 @@ interface MobileAgendaProps {
  * "Focused Today" — the user's top ≤3 tasks due today or earlier that
  * aren't complete. Was `md:hidden` when this file was introduced because
  * the product was mobile-first; the UX audit flagged that desktop users
- * (especially Limited / Viewer roles whose Dashboard pipeline board is
- * effectively read-only) had no equivalent surface. Removed the hidden
+ * (especially Limited / Viewer roles) had no equivalent surface. Removed the hidden
  * class so the card now renders on every breakpoint; on desktop it caps
  * to `max-w-md` so it doesn't overwhelm the 12-col layout.
  */

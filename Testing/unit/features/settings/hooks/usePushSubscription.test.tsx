@@ -23,7 +23,7 @@ vi.mock('@/shared/api/planterClient', () => ({
 
 const stableUser = { id: 'user-abc', email: 'user@test.local' };
 const stableAuthContext = { user: stableUser };
-vi.mock('@/shared/contexts/AuthContext', () => ({
+vi.mock('@/shared/contexts/auth-context', () => ({
     // Stable references so the hook's `[isSupported, user]` effect dep doesn't re-fire every render.
     useAuth: () => stableAuthContext,
 }));
@@ -140,6 +140,30 @@ describe('usePushSubscription (Wave 30)', () => {
         expect(mockCreate).not.toHaveBeenCalled();
         expect(result.current.permissionState).toBe('denied');
         expect(result.current.subscription).toBeNull();
+    });
+
+    it('subscribe: service worker registration failure is contained', async () => {
+        notif.requestPermission.mockImplementation(async () => {
+            notif.setPermission('granted');
+            return 'granted' as NotificationPermission;
+        });
+        sw.register.mockRejectedValue(new Error('registration failed'));
+        const errSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+        const { result } = renderHook(() => usePushSubscription());
+        await waitFor(() => expect(mockList).toHaveBeenCalled());
+
+        await act(async () => {
+            await result.current.subscribe();
+        });
+
+        expect(sw.register).toHaveBeenCalledWith('/sw.js');
+        expect(sw.pushManager.subscribe).not.toHaveBeenCalled();
+        expect(mockCreate).not.toHaveBeenCalled();
+        expect(result.current.subscription).toBeNull();
+        expect(result.current.isSubscribing).toBe(false);
+        expect(errSpy).toHaveBeenCalledWith('[usePushSubscription] subscribe failed', expect.any(Error));
+        errSpy.mockRestore();
     });
 
     it('unsubscribe: calls DELETE + clears local state', async () => {

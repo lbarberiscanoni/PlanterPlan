@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
-import { useAuth } from '@/shared/contexts/AuthContext';
+import { useAuth } from '@/shared/contexts/auth-context';
 import { planter } from '@/shared/api/planterClient';
 import { toast } from 'sonner';
+import { useTranslation } from 'react-i18next';
 
 export interface UserProfile {
     full_name: string;
@@ -13,12 +14,14 @@ export interface UserProfile {
 }
 
 export interface PasswordForm {
+    currentPassword: string;
     newPassword: string;
     confirmPassword: string;
 }
 
 export function useSettings() {
     const { user } = useAuth();
+    const { t } = useTranslation();
 
     const [loading, setLoading] = useState(false);
     const [avatarError, setAvatarError] = useState('');
@@ -33,6 +36,7 @@ export function useSettings() {
     });
 
     const [passwordForm, setPasswordForm] = useState<PasswordForm>({
+        currentPassword: '',
         newPassword: '',
         confirmPassword: '',
     });
@@ -40,12 +44,9 @@ export function useSettings() {
     const [passwordLoading, setPasswordLoading] = useState(false);
 
     // Load initial data from User Metadata. The form must stay editable after hydration,
-    // so derived-memo won't work — we intentionally seed state from the auth user.
-    // eslint-plugin-react-hooks@7 flags setState-in-effect; refactoring this
-    // form-hydration pattern is out of Wave 30 Task 3 scope — tracked for cleanup.
+    // so derived-memo won't work; we intentionally seed state from the auth user.
     useEffect(() => {
         if (user) {
-            // eslint-disable-next-line react-hooks/set-state-in-effect
             setProfile({
                 full_name: String(user.user_metadata?.full_name || ''),
                 email: user.email || '',
@@ -70,13 +71,13 @@ export function useSettings() {
                 email_frequency: profile.email_frequency,
             });
 
-            toast.success("Settings saved", {
-                description: "Your profile has been updated successfully.",
+            toast.success(t('settings.profile.save_success_title'), {
+                description: t('settings.profile.save_success_description'),
             });
         } catch (error) {
             console.error('Error updating profile:', error);
-            toast.error("Error", {
-                description: "Failed to update settings. Please try again.",
+            toast.error(t('settings.profile.save_failed_title'), {
+                description: t('settings.profile.save_failed_description'),
             });
         } finally {
             setLoading(false);
@@ -86,27 +87,32 @@ export function useSettings() {
     const handlePasswordChange = async () => {
         setPasswordError('');
 
+        if (!passwordForm.currentPassword) {
+            setPasswordError(t('settings.security.current_password_required'));
+            return;
+        }
+
         if (passwordForm.newPassword.length < 8) {
-            setPasswordError('Password must be at least 8 characters');
+            setPasswordError(t('settings.security.password_min_length'));
             return;
         }
 
         if (passwordForm.newPassword !== passwordForm.confirmPassword) {
-            setPasswordError('Passwords do not match');
+            setPasswordError(t('settings.security.passwords_mismatch'));
             return;
         }
 
         setPasswordLoading(true);
         try {
-            await planter.auth.changePassword(passwordForm.newPassword);
-            toast.success('Password updated', {
-                description: 'Your password has been changed successfully.',
+            await planter.auth.changePassword(passwordForm.currentPassword, passwordForm.newPassword);
+            toast.success(t('settings.security.password_updated_title'), {
+                description: t('settings.security.password_updated_description'),
             });
-            setPasswordForm({ newPassword: '', confirmPassword: '' });
+            setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
         } catch (error) {
             console.error('Error changing password:', error);
-            toast.error('Error', {
-                description: 'Failed to change password. Please try again.',
+            toast.error(t('settings.security.password_update_failed_title'), {
+                description: t('settings.security.password_update_failed_description'),
             });
         } finally {
             setPasswordLoading(false);
@@ -115,7 +121,7 @@ export function useSettings() {
 
     const validateAvatarUrl = (url: string) => {
         if (url && !url.match(/^https?:\/\/.+/)) {
-            setAvatarError('Please enter a valid URL (https://...)');
+            setAvatarError(t('settings.profile.avatar_url_invalid'));
         } else {
             setAvatarError('');
         }

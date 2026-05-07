@@ -1,7 +1,8 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { planter } from '@/shared/api/planterClient';
-import { useAuth } from '@/shared/contexts/AuthContext';
+import { useAuth } from '@/shared/contexts/auth-context';
+import { nowUtcIso } from '@/shared/lib/date-engine';
 import type { TaskCommentWithAuthor } from '@/shared/db/app.types';
 
 type CommentsCache = TaskCommentWithAuthor[];
@@ -48,7 +49,7 @@ export function useCreateComment(taskId: string) {
             await qc.cancelQueries({ queryKey: key });
             const previous = qc.getQueryData<CommentsCache>(key);
             if (user) {
-                const now = new Date().toISOString();
+                const now = nowUtcIso();
                 const temp: TaskCommentWithAuthor = {
                     id: `optimistic-${globalThis.crypto.randomUUID()}`,
                     task_id: taskId,
@@ -101,7 +102,7 @@ export function useUpdateComment(taskId: string) {
                               ...c,
                               body: payload.body,
                               mentions: payload.mentions,
-                              edited_at: new Date().toISOString(),
+                              edited_at: nowUtcIso(),
                           }
                         : c,
                 ),
@@ -132,7 +133,7 @@ export function useDeleteComment(taskId: string) {
         onMutate: async (commentId) => {
             await qc.cancelQueries({ queryKey: key });
             const previous = qc.getQueryData<CommentsCache>(key);
-            const now = new Date().toISOString();
+            const now = nowUtcIso();
             qc.setQueryData<CommentsCache>(key, (old = []) =>
                 old.map((c) => (c.id === commentId ? { ...c, deleted_at: now, body: '' } : c)),
             );

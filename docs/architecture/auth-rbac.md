@@ -23,7 +23,7 @@ The Auth & RBAC system manages application-level authentication, user account li
 | Permission / Action | Owner | Editor | Viewer (Limited) | Coach |
 | :--- | :--- | :--- | :--- | :--- |
 | **View all tasks/hierarchy** | Yes | Yes | Yes | Yes |
-| **Edit task text info/fields**| Yes | Yes | Yes (If Assigned Lead) | Yes (Coaching Tasks Only)|
+| **Edit task text info/fields**| Yes | Yes | Yes (If Assigned Lead) | No |
 | **Update task status** | Yes | Yes | Yes (If Assigned Lead) | Yes (Coaching Tasks Only)|
 | **Add tasks / subtasks** | Yes | Yes | Yes (If Assigned Lead) | No |
 | **Delete tasks / subtasks** | Yes | Yes | No | No |
@@ -75,7 +75,7 @@ Migration: `docs/db/migrations/2026_04_18_rewrite_project_members_policies.sql`.
 
 ## Resolved
 
-* **Coach Role Tagging (Wave 22, 2026-04-17):** Resolved. Tasks intended for coach editing are now flagged via `settings -> 'is_coaching_task' = true`. A project owner or editor tags the task through the "Coaching task" checkbox in TaskForm; TaskDetailsView surfaces a "Coaching" badge. An additive RLS UPDATE policy — `"Enable update for coaches on coaching tasks"` (see `docs/db/migrations/2026_04_17_coaching_task_rls.sql`) — allows any user with the project `coach` role to update rows where the flag is true, scoped to non-template origins. The pre-existing owner/editor/admin UPDATE policy is unchanged, so coaches retain zero access to non-coaching rows.
+* **Coach Role Tagging (Wave 22, hardened PR 3):** Resolved. Tasks intended for coach progress updates are flagged via `settings -> 'is_coaching_task' = true`. PR F moved authoring to template forms only; project instance forms hide the toggle and strip hidden flag values before submit. TaskDetailsView surfaces a read-only "Coaching" badge on tagged instances. The RLS UPDATE policy `"Enable update for coaches on coaching tasks"` scopes coach rows to non-template Coaching tasks and includes a matching `WITH CHECK`; `trg_enforce_coach_task_update_scope` then restricts coach writes to progress/status fields only. Coaches cannot edit text/content, settings, assignee, priority, hierarchy, origin/template metadata, resources, or delete tasks. Owner/editor/admin UPDATE behavior is unchanged.
 
 * **Comments (Wave 26):** SELECT inherits project membership; INSERT requires `author_id = auth.uid()`; UPDATE restricted to authors on undeleted rows; DELETE allowed for authors, project owners (`check_project_ownership_by_role`), or admins. Full policy text in `docs/architecture/tasks-subtasks.md`.
 
@@ -88,9 +88,9 @@ A project Owner may designate any `viewer` or `limited`-role member as the **Lea
 **RLS** (migration `docs/db/migrations/2026_04_18_phase_lead_rls.sql`):
 * Helper: `user_is_phase_lead(target_task_id uuid, uid uuid)` walks up the `parent_task_id` chain **starting at the parent** (the row itself is never matched) and returns true if any ancestor's `settings.phase_lead_user_ids` contains `uid`. Self-exclusion is load-bearing: a Phase Lead can edit tasks UNDER a phase but cannot edit the phase row itself.
 * Policy: `"Enable update for phase leads"` on `public.tasks` — `USING (origin = 'instance' AND user_is_phase_lead(id, auth.uid()))` with a matching `WITH CHECK`.
-* **Additive only** — owner/editor/coach UPDATE policies are unchanged. SELECT for viewers is unchanged (already project-wide).
+* **Additive only** — owner/editor UPDATE policies are unchanged. Coach progress-only scope is enforced separately by `trg_enforce_coach_task_update_scope`. SELECT for viewers is unchanged (already project-wide).
 
-**UI** (`src/features/tasks/components/TaskFormFields.tsx`): the `<PhaseLeadPicker>` sub-component (multi-select popover) renders only for `membershipRole === 'owner'` on phase/milestone rows. Options come from `useTeam(projectId).teamMembers.filter(m => m.role === 'viewer' || m.role === 'limited')` — owners/editors/coaches/admins are NOT in the picker because they already have UPDATE via existing policies. Badge in `TaskDetailsView.tsx` lists current leads.
+**UI** (`src/features/tasks/components/TaskFormFields.tsx`): the `<PhaseLeadPicker>` sub-component (multi-select popover) renders only for `membershipRole === 'owner'` on phase/milestone rows. Options come from `useTeam(projectId).teamMembers.filter(m => m.role === 'viewer' || m.role === 'limited')` — owners/editors/admins already have task edit privileges, while coaches are governed by the separate Coaching-task progress scope. Badge in `TaskDetailsView.tsx` lists current leads.
 
 **Permission matrix update**: limited viewers may now edit tasks under any phase/milestone they are designated as Phase Lead for. See the matrix footnote above.
 
@@ -105,9 +105,9 @@ Per-user `public.notification_preferences` row, bootstrapped by `trg_bootstrap_n
 **Quiet hours**: stored as `TIME` in the user-supplied `timezone` column. Tasks 2 + 3 dispatch functions are responsible for skipping + logging when local-now is within the quiet window.
 
 Migration: `docs/db/migrations/2026_04_18_notification_preferences.sql`.
-## Admin RPCs (Wave 34)
+## Admin RPCs And Moderation (Wave 34, Verified PR 8)
 
-Four SECURITY DEFINER RPCs back the `/admin/*` surface. Every one shares the same auth-gate pattern (see `docs/db/migrations/2026_04_18_admin_rpcs.sql`):
+SECURITY DEFINER RPCs back the `/admin/*` read surface and the platform-admin role toggle. Every admin read RPC shares the same auth-gate pattern (see `docs/db/migrations/2026_04_18_admin_rpcs.sql`):
 
 ```sql
 IF NOT public.is_admin(auth.uid()) THEN
@@ -124,7 +124,16 @@ Non-admin callers never get an empty result set — they get the loud exception.
 | `admin_recent_activity(limit)` | `TABLE (…, actor_email)` | `2026_04_18_admin_rpcs.sql` |
 | `admin_list_users(filter jsonb, limit, offset)` | `TABLE (…, is_admin, active_project_count, completed_tasks_30d, overdue_task_count)` | `2026_04_18_admin_list_users_rpc.sql` |
 | `admin_analytics_snapshot()` | `jsonb` (totals + time series + breakdowns + top-10 lists) | `2026_04_18_admin_analytics_rpc.sql` |
+| `admin_set_user_admin_role(target_uid, make_admin)` | `void`; writes `admin_users` + `activity_log`; self-demotion forbidden | `2026_04_23_001_admin_set_user_admin_role.sql` |
 
 Each RPC has `REVOKE ALL ... FROM PUBLIC; GRANT EXECUTE ... TO authenticated;` so the call surface is restricted to signed-in users, with the function body enforcing admin-only access.
 
 Client wrappers live under `planter.admin.*` in `src/shared/api/planterClient.ts`. The `useIsAdmin` hook (`src/features/admin/hooks/useIsAdmin.ts`) reads the already-hydrated `user.role === 'admin'` assignment from AuthContext — no extra round-trip per render.
+
+Admin suspension, unsuspension, and password-reset link generation cannot be implemented as SQL RPCs because they call Supabase Auth admin APIs. Those actions route through `supabase/functions/admin-user-moderation/`:
+
+* The function first authenticates the caller with the submitted user JWT.
+* It checks `public.is_admin(caller.id)` before any target user lookup.
+* Only after that check passes does it use the service-role client for `auth.admin.updateUserById` or `auth.admin.generateLink`.
+* Self-suspend/self-unsuspend are rejected; reset-password on self is allowed.
+* `activity_log` records `user_suspended`, `user_unsuspended`, or `password_reset_requested`, but reset links are never written to logs.

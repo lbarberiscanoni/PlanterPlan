@@ -2,6 +2,7 @@ import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-
 import { isRecurrenceRule, shouldFireRecurrenceOn, RecurrenceRule } from '../_shared/recurrence.ts'
 import { isCheckpointProject, toUtcIsoDate } from '../_shared/date.ts'
 import { corsHeaders, requireServiceRole } from '../_shared/auth.ts'
+import { dueSoonCutoffMs } from './urgency.ts'
 
 const DEFAULT_DUE_SOON_THRESHOLD_DAYS = 3
 
@@ -230,7 +231,6 @@ Deno.serve(async (req) => {
             if (overdueUpdateErr) throw overdueUpdateErr
         }
 
-        const nowMs = new Date(nowIso).getTime()
         const dueSoonIds: string[] = []
         for (const row of dueSoonCandRows) {
             if (!row.due_date) continue
@@ -240,7 +240,8 @@ Deno.serve(async (req) => {
                 : DEFAULT_DUE_SOON_THRESHOLD_DAYS
             const dueMs = new Date(row.due_date).getTime()
             if (Number.isNaN(dueMs)) continue
-            const cutoffMs = nowMs + threshold * 24 * 60 * 60 * 1000
+            const cutoffMs = dueSoonCutoffMs(nowIso, threshold)
+            if (cutoffMs === null) continue
             if (dueMs <= cutoffMs) dueSoonIds.push(row.id)
         }
 

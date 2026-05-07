@@ -1,14 +1,27 @@
 const { spawnSync } = require('child_process');
 
 console.error("Running TypeScript compiler (Agent Mode)...");
-const result = spawnSync('npx', ['tsc', '--noEmit', '--pretty', 'false'], { encoding: 'utf-8' });
+const result = spawnSync('npx', ['tsc', '--noEmit', '--pretty', 'false'], {
+    encoding: 'utf-8',
+    shell: process.platform === 'win32'
+});
+
+if (result.error) {
+    console.log(JSON.stringify({
+        status: 'ERROR',
+        message: `Failed to start TypeScript compiler: ${result.error.message}`
+    }, null, 2));
+    process.exit(1);
+}
 
 if (result.status === 0) {
     console.log(JSON.stringify({ status: 'SUCCESS', message: 'No TypeScript errors found.' }));
     process.exit(0);
 }
 
-const lines = result.stdout.split('\n');
+const stdout = result.stdout || '';
+const stderr = result.stderr || '';
+const lines = stdout.split('\n');
 const errors = [];
 let currentError = null;
 
@@ -48,7 +61,8 @@ console.log(JSON.stringify({
     status: 'FAIL', 
     code: result.status, 
     total_errors: flattenedErrors.length,
-    errors: flattenedErrors 
+    errors: flattenedErrors,
+    stderr: stderr.trim() || undefined
 }, null, 2));
 
-process.exit(result.status);
+process.exit(result.status || 1);

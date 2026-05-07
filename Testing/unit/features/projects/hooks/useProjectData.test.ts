@@ -6,14 +6,14 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 // ---- Mocks ----
 const mockGetWithStats = vi.fn();
 const mockTaskFilter = vi.fn();
-const mockTeamMemberFilter = vi.fn();
+const mockListTeamMembersWithProfiles = vi.fn();
 
 vi.mock('@/shared/api/planterClient', () => ({
   planter: {
     entities: {
       Project: { getWithStats: (...args: unknown[]) => mockGetWithStats(...args) },
       Task: { filter: (...args: unknown[]) => mockTaskFilter(...args) },
-      TeamMember: { filter: (...args: unknown[]) => mockTeamMemberFilter(...args) },
+      TeamMember: { listByProjectWithProfiles: (...args: unknown[]) => mockListTeamMembersWithProfiles(...args) },
     },
   },
 }));
@@ -38,7 +38,7 @@ describe('useProjectData', () => {
     vi.clearAllMocks();
     mockGetWithStats.mockResolvedValue({ data: { id: projectId, title: 'Test Project' } });
     mockTaskFilter.mockResolvedValue([]);
-    mockTeamMemberFilter.mockResolvedValue([]);
+    mockListTeamMembersWithProfiles.mockResolvedValue([]);
   });
 
   describe('disabled states', () => {
@@ -48,7 +48,7 @@ describe('useProjectData', () => {
       expect(result.current.project).toBeUndefined();
       expect(mockGetWithStats).not.toHaveBeenCalled();
       expect(mockTaskFilter).not.toHaveBeenCalled();
-      expect(mockTeamMemberFilter).not.toHaveBeenCalled();
+      expect(mockListTeamMembersWithProfiles).not.toHaveBeenCalled();
     });
 
     it('does not fetch when projectId is undefined', () => {
@@ -89,7 +89,7 @@ describe('useProjectData', () => {
 
     it('fetches team members by project_id', async () => {
       const members = [{ id: 'm1', project_id: projectId, user_id: 'u1', role: 'editor' }];
-      mockTeamMemberFilter.mockResolvedValue(members);
+      mockListTeamMembersWithProfiles.mockResolvedValue(members);
 
       const { result } = renderHook(() => useProjectData(projectId), { wrapper: createWrapper() });
 
@@ -97,7 +97,7 @@ describe('useProjectData', () => {
         expect(result.current.teamMembers).toEqual(members);
       });
 
-      expect(mockTeamMemberFilter).toHaveBeenCalledWith({ project_id: projectId });
+      expect(mockListTeamMembersWithProfiles).toHaveBeenCalledWith(projectId);
     });
 
     it('defaults teamMembers to empty array', async () => {

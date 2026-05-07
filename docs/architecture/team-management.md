@@ -11,7 +11,7 @@ The Team Management domain handles project-specific collaboration, including the
 ## State Machines / Lifecycles
 ### Member Lifecycle
 1. **Pending:** Owner invites a user via email. Supabase Edge Function (`invite-by-email`) dispatches the invite.
-2. **Active:** User accepts. Project populates in their "Joined Projects" dashboard.
+2. **Active:** User accepts. Project appears in their project sidebar and switcher.
 3. **Mutation:** Project Owner adjusts the user's role mid-project.
 4. **Removal:** Project Owner explicitly removes the user from the roster.
 

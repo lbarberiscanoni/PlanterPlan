@@ -1,6 +1,7 @@
 import type { Database } from './database.types';
 
 export type Json = Database['public']['Tables']['tasks']['Row']['settings'];
+export type JsonObject = Extract<NonNullable<Json>, { [key: string]: Json | undefined }>;
 
 // ----------------------------------------------------------------------------
 // Utilities
@@ -22,9 +23,7 @@ export type Task = TaskRow & {
 };
 
 /** Standardized Project type */
-export type Project = Task & {
-    settings?: Record<string, unknown> | null;
-};
+export type Project = Task;
 
 export type HierarchyTask = TaskRow & {
     children?: HierarchyTask[];
@@ -51,6 +50,21 @@ export type PersonUpdate = Database['public']['Tables']['people']['Update'];
 export type TaskResourceRow = Database['public']['Tables']['task_resources']['Row'];
 export type TaskRelationshipRow = Database['public']['Tables']['task_relationships']['Row'];
 export type TeamMemberRow = Database['public']['Tables']['project_members']['Row'];
+export type TeamMemberWithProfile = TeamMemberRow & {
+    email?: string | null;
+    first_name?: string | null;
+    last_name?: string | null;
+    display_name?: string | null;
+    avatar_url?: string | null;
+};
+
+export interface ProjectInviteResult {
+    message: string;
+    user: {
+        id: string;
+        email: string;
+    };
+}
 
 /** Task resource row augmented with its parent task info (used by Resource Library). */
 export type ResourceWithTask = TaskResourceRow & {
@@ -68,8 +82,8 @@ export type TaskCommentUpdate = Database['public']['Tables']['task_comments']['U
 export type TaskCommentWithAuthor = TaskCommentRow & {
     author: {
         id: string;
-        email: string;
-        user_metadata?: UserMetadata;
+        email: string | null;
+        user_metadata?: UserMetadata | null;
     } | null;
 };
 
@@ -175,7 +189,7 @@ export interface TaskSettings {
     /** Wave 21: idempotency marker stamped by nightly-sync's recurrence pass. */
     spawnedOn?: string;
     due_soon_threshold?: number;
-    /** Wave 22: when true, users with the `coach` project role may update this task (RLS policy "Enable update for coaches on coaching tasks"). */
+    /** Wave 22 + PR 3: when true, users with the `coach` project role may update status/progress only. */
     is_coaching_task?: boolean;
     /** Wave 24: when true, completing this instance task opens a dialog offering Master Library follow-ups (cloned as siblings). */
     is_strategy_template?: boolean;
@@ -328,7 +342,7 @@ export interface IcsFeedTokenRow {
     last_accessed_at: string | null;
 }
 
-/** Payload for creating a new ICS token. The client generates the token value via crypto.randomUUID(). */
+/** Payload for creating a new ICS token. The client generates the token value via Web Crypto getRandomValues(). */
 export interface CreateIcsFeedTokenInput {
     label?: string | null;
     project_filter?: string[] | null;

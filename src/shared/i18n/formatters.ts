@@ -1,5 +1,5 @@
 import { i18n } from '@/shared/i18n';
-import { diffInCalendarDays } from '@/shared/lib/date-engine';
+import { addDaysToDate, diffInCalendarDays, getNow } from '@/shared/lib/date-engine';
 
 const currentLocale = (): string => i18n.language || 'en';
 
@@ -54,11 +54,11 @@ export function formatDateLocalized(
   format: 'short' | 'long' | 'relative',
 ): string {
   if (!iso) return '';
-  const d = new Date(iso);
-  if (isNaN(d.getTime())) return '';
+  const d = addDaysToDate(/^\d{4}-\d{2}-\d{2}$/.test(iso) ? `${iso}T00:00:00.000Z` : iso, 0);
+  if (!d) return '';
   const locale = currentLocale();
   if (format === 'relative') {
-    const diffDays = diffInCalendarDays(d, new Date());
+    const diffDays = diffInCalendarDays(d, getNow());
     if (diffDays === null) return '';
     const rtf = getRelativeTimeFormat(locale);
     // RelativeTimeFormat 'day' is the finest-grained unit we render. For

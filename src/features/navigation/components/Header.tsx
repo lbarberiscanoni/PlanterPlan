@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/shared/ui/button';
@@ -12,16 +13,16 @@ import { Avatar, AvatarFallback } from '@/shared/ui/avatar';
 import { CheckCircle2, User, Settings, LogOut, Menu, ChevronRight } from 'lucide-react';
 
 import { useUser } from '@/shared/hooks/useUser';
-import { useAuth } from '@/shared/contexts/AuthContext';
-import ProjectSwitcher from '@/features/projects/components/ProjectSwitcher';
+import { useAuth } from '@/shared/contexts/auth-context';
 
 
 interface HeaderProps {
     onMenuToggle?: () => void;
     showMenuButton?: boolean;
+    projectSwitcher?: ReactNode;
 }
 
-export default function Header({ onMenuToggle, showMenuButton = false }: HeaderProps) {
+export default function Header({ onMenuToggle, showMenuButton = false, projectSwitcher }: HeaderProps) {
     const { t } = useTranslation();
     const { data: userData } = useUser();
     const user = userData as { full_name?: string; email?: string } | null;
@@ -59,7 +60,7 @@ export default function Header({ onMenuToggle, showMenuButton = false }: HeaderP
                             </Button>
                         )}
 
-                        <Link to="/Dashboard" className="flex items-center gap-2" aria-label={t('nav.planterplan_home_aria')}>
+                        <Link to="/tasks" className="flex items-center gap-2" aria-label={t('nav.planterplan_home_aria')}>
                             <div className="w-9 h-9 bg-orange-500 rounded-lg flex items-center justify-center shadow-sm">
                                 <CheckCircle2 className="w-5 h-5 text-white" />
                             </div>
@@ -76,9 +77,9 @@ export default function Header({ onMenuToggle, showMenuButton = false }: HeaderP
                     </div>
 
                     <div className="flex items-center gap-2">
-                        {user && (
+                        {user && projectSwitcher && (
                             <div className="hidden md:block">
-                                <ProjectSwitcher />
+                                {projectSwitcher}
                             </div>
                         )}
                         {user && (

@@ -16,6 +16,9 @@ export const toUtcIsoDate = (d: Date): string => {
     return `${y}-${m}-${day}`
 }
 
+/** Centralized edge clock helper; mirrors src/shared/lib/date-engine/getNow. */
+export const getNow = (): Date => new Date()
+
 export const dateStringToUtcMidnightMs = (raw: string | null): number | null => {
     if (!raw) return null
     const iso = /^\d{4}-\d{2}-\d{2}$/.test(raw) ? `${raw}T00:00:00.000Z` : raw

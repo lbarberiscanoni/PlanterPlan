@@ -5,11 +5,11 @@ import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { ArrowUpDown, ArrowUp, ArrowDown, Loader2, Shield, ShieldOff, Ban, KeyRound, CheckCircle2 } from 'lucide-react';
 import { useAdminUsers, useAdminUserDetail } from '@/features/admin/hooks/useAdminUsers';
-import { useAuth } from '@/shared/contexts/AuthContext';
+import { useAuth } from '@/shared/contexts/auth-context';
 import { formatDisplayDate, getNow, isBeforeDate } from '@/shared/lib/date-engine';
 import { planter } from '@/shared/api/planterClient';
 import { Button } from '@/shared/ui/button';
-import { useConfirm } from '@/shared/ui/confirm-dialog';
+import { useConfirm } from '@/shared/ui/confirm-dialog-context';
 import type { AdminListUserRow, AdminListUsersFilter } from '@/shared/db/app.types';
 import {
     Select,
@@ -483,16 +483,13 @@ export default function AdminUsers() {
                                     </section>
                                 )}
 
-                                {/* Moderation actions. "Toggle admin" is the
-                                  * only action shipped in this phase — reset
-                                  * password and suspend need edge-function
-                                  * work (admin.generateLink / updateUserById)
-                                  * and are tracked as a follow-up wave.
-                                  *
-                                  * Self-demotion is disabled client-side as
-                                  * well as blocked server-side (belt + braces):
-                                  * the server raises `self_demotion_forbidden`
-                                  * even if the button is clicked via devtools. */}
+                                {/* Moderation actions. Admin-role toggles use
+                                  * the SECURITY DEFINER SQL RPC; suspension
+                                  * and reset-password use the admin-only
+                                  * `admin-user-moderation` Edge Function
+                                  * because they require Supabase Auth admin
+                                  * APIs. Self-demotion/self-suspension are
+                                  * disabled client-side and blocked server-side. */}
                                 <section className="mt-5 border-t border-border pt-4 space-y-2">
                                     <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                                         {t('admin.users_moderation_heading')}

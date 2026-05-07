@@ -6,7 +6,7 @@ import {
   useCreateProject,
   useUpdateProject,
   useDeleteProject,
-  useUpdateProjectStatus,
+  useSetProjectArchived,
 } from '@/features/projects/hooks/useProjectMutations';
 import { makeTask } from '@test';
 
@@ -20,6 +20,9 @@ const mockTaskUpsert = vi.fn();
 
 vi.mock('@/shared/api/planterClient', () => ({
   planter: {
+    auth: {
+      me: vi.fn().mockResolvedValue({ id: 'user-1' }),
+    },
     entities: {
       Project: {
         create: (...args: unknown[]) => mockProjectCreate(...args),
@@ -31,17 +34,6 @@ vi.mock('@/shared/api/planterClient', () => ({
         filter: (...args: unknown[]) => mockTaskFilter(...args),
         upsert: (...args: unknown[]) => mockTaskUpsert(...args),
       },
-    },
-  },
-}));
-
-// Mock supabase auth
-vi.mock('@/shared/db/client', () => ({
-  supabase: {
-    auth: {
-      getUser: vi.fn().mockResolvedValue({
-        data: { user: { id: 'user-1' } },
-      }),
     },
   },
 }));
@@ -83,7 +75,7 @@ describe('useCreateProject', () => {
     expect(mockTaskClone).not.toHaveBeenCalled();
   });
 
-  it('clones template when templateId provided', async () => {
+  it('clones template without inventing a root due date when templateId provided', async () => {
     const cloned = makeTask({ id: 'cloned-proj' });
     mockTaskClone.mockResolvedValueOnce({ data: cloned, error: null });
     const { Wrapper } = createWrapper();
@@ -93,6 +85,7 @@ describe('useCreateProject', () => {
     await act(async () => {
       await result.current.mutateAsync({
         title: 'From Template',
+        description: 'Cloned project description',
         templateId: 'tmpl-1',
         start_date: '2026-01-01',
       });
@@ -103,8 +96,14 @@ describe('useCreateProject', () => {
       null,
       'instance',
       'user-1',
-      expect.objectContaining({ title: 'From Template' }),
+      expect.objectContaining({
+        title: 'From Template',
+        description: 'Cloned project description',
+        start_date: '2026-01-01',
+      }),
     );
+    const cloneOverrides = mockTaskClone.mock.calls[0][4] as Record<string, unknown>;
+    expect(cloneOverrides).not.toHaveProperty('due_date');
     expect(mockProjectCreate).not.toHaveBeenCalled();
   });
 
@@ -148,11 +147,12 @@ describe('useUpdateProject', () => {
 
   it('cascades dates when start_date changes', async () => {
     const tasks = [
-      makeTask({ id: 't1', start_date: '2026-01-10', due_date: '2026-01-20', is_complete: false }),
+      makeTask({ id: 'proj-1', parent_task_id: null, start_date: '2026-01-01', due_date: '2026-01-01', is_complete: false }),
+      makeTask({ id: 't1', parent_task_id: 'proj-1', start_date: '2026-01-10', due_date: '2026-01-20', is_complete: false }),
     ];
     mockTaskFilter.mockResolvedValueOnce(tasks);
-    mockProjectUpdate.mockResolvedValueOnce(makeTask());
-    mockTaskUpsert.mockResolvedValueOnce({ data: [], error: null });
+    mockProjectUpdate.mockResolvedValue(makeTask());
+    mockTaskUpsert.mockResolvedValue({ data: [], error: null });
     const { Wrapper } = createWrapper();
 
     const { result } = renderHook(() => useUpdateProject(), { wrapper: Wrapper });
@@ -166,7 +166,19 @@ describe('useUpdateProject', () => {
     });
 
     expect(mockTaskFilter).toHaveBeenCalledWith({ root_id: 'proj-1' });
-    expect(mockTaskUpsert).toHaveBeenCalled();
+    expect(mockProjectUpdate).toHaveBeenNthCalledWith(1, 'proj-1', expect.objectContaining({
+      due_date: '2026-01-23',
+    }));
+    expect(mockTaskUpsert).toHaveBeenCalledTimes(2);
+    const dueOnlyArg = mockTaskUpsert.mock.calls[0][0] as Array<{ id: string; due_date?: string; start_date?: string }>;
+    expect(dueOnlyArg).toEqual([expect.objectContaining({ id: 't1', due_date: '2026-01-23' })]);
+    expect(dueOnlyArg[0]).not.toHaveProperty('start_date');
+    const fullUpsertArg = mockTaskUpsert.mock.calls[1][0] as Array<{ id: string }>;
+    expect(fullUpsertArg.map((u) => u.id)).toEqual(['t1']);
+    expect(mockProjectUpdate).toHaveBeenLastCalledWith('proj-1', expect.objectContaining({
+      start_date: '2026-01-06',
+      due_date: '2026-01-23',
+    }));
   });
 
   it('invalidates project-specific query keys on success', async () => {
@@ -205,14 +217,15 @@ describe('useUpdateProject', () => {
 
   it('returns shiftedCount matching incomplete tasks and skips completed ones', async () => {
     const tasks = [
-      makeTask({ id: 't1', start_date: '2026-01-10', due_date: '2026-01-20', is_complete: false }),
-      makeTask({ id: 't2', start_date: '2026-01-12', due_date: '2026-01-22', is_complete: false }),
-      makeTask({ id: 't3', start_date: '2026-01-14', due_date: '2026-01-24', is_complete: false }),
-      makeTask({ id: 't4', start_date: '2026-01-16', due_date: '2026-01-26', is_complete: true }),
+      makeTask({ id: 'proj-1', parent_task_id: null, start_date: '2026-01-01', due_date: '2026-01-01', is_complete: false }),
+      makeTask({ id: 't1', parent_task_id: 'proj-1', start_date: '2026-01-10', due_date: '2026-01-20', is_complete: false }),
+      makeTask({ id: 't2', parent_task_id: 'proj-1', start_date: '2026-01-12', due_date: '2026-01-22', is_complete: false }),
+      makeTask({ id: 't3', parent_task_id: 'proj-1', start_date: '2026-01-14', due_date: '2026-01-24', is_complete: false }),
+      makeTask({ id: 't4', parent_task_id: 'proj-1', start_date: '2026-01-16', due_date: '2026-01-26', is_complete: true }),
     ];
     mockTaskFilter.mockResolvedValueOnce(tasks);
-    mockProjectUpdate.mockResolvedValueOnce(makeTask());
-    mockTaskUpsert.mockResolvedValueOnce({ data: [], error: null });
+    mockProjectUpdate.mockResolvedValue(makeTask());
+    mockTaskUpsert.mockResolvedValue({ data: [], error: null });
     const { Wrapper } = createWrapper();
 
     const { result } = renderHook(() => useUpdateProject(), { wrapper: Wrapper });
@@ -227,8 +240,8 @@ describe('useUpdateProject', () => {
     });
 
     expect(returned).toEqual({ shiftedCount: 3 });
-    expect(mockTaskUpsert).toHaveBeenCalledTimes(1);
-    const upsertArg = mockTaskUpsert.mock.calls[0][0] as Array<{ id: string }>;
+    expect(mockTaskUpsert).toHaveBeenCalledTimes(2);
+    const upsertArg = mockTaskUpsert.mock.calls[1][0] as Array<{ id: string }>;
     expect(upsertArg).toHaveLength(3);
     expect(upsertArg.map(u => u.id).sort()).toEqual(['t1', 't2', 't3']);
   });
@@ -268,20 +281,33 @@ describe('useDeleteProject', () => {
 });
 
 // ---------------------------------------------------------------------------
-// useUpdateProjectStatus
+// useSetProjectArchived
 // ---------------------------------------------------------------------------
-describe('useUpdateProjectStatus', () => {
-  it('calls Project.update with status', async () => {
-    mockProjectUpdate.mockResolvedValueOnce(makeTask({ status: 'launched' }));
+describe('useSetProjectArchived', () => {
+  it('archives projects through the visibility-only mutation', async () => {
+    mockProjectUpdate.mockResolvedValueOnce(makeTask({ status: 'archived' }));
     const { Wrapper } = createWrapper();
 
-    const { result } = renderHook(() => useUpdateProjectStatus(), { wrapper: Wrapper });
+    const { result } = renderHook(() => useSetProjectArchived(), { wrapper: Wrapper });
 
     await act(async () => {
-      await result.current.mutateAsync({ projectId: 'proj-1', status: 'launched' });
+      await result.current.mutateAsync({ projectId: 'proj-1', archived: true });
     });
 
-    expect(mockProjectUpdate).toHaveBeenCalledWith('proj-1', { status: 'launched' });
+    expect(mockProjectUpdate).toHaveBeenCalledWith('proj-1', { status: 'archived' });
+  });
+
+  it('unarchives projects without accepting arbitrary lifecycle statuses', async () => {
+    mockProjectUpdate.mockResolvedValueOnce(makeTask({ status: 'in_progress' }));
+    const { Wrapper } = createWrapper();
+
+    const { result } = renderHook(() => useSetProjectArchived(), { wrapper: Wrapper });
+
+    await act(async () => {
+      await result.current.mutateAsync({ projectId: 'proj-1', archived: false });
+    });
+
+    expect(mockProjectUpdate).toHaveBeenCalledWith('proj-1', { status: 'in_progress' });
   });
 
   it('invalidates project keys on success', async () => {
@@ -289,10 +315,10 @@ describe('useUpdateProjectStatus', () => {
     const { Wrapper, queryClient } = createWrapper();
     const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries');
 
-    const { result } = renderHook(() => useUpdateProjectStatus(), { wrapper: Wrapper });
+    const { result } = renderHook(() => useSetProjectArchived(), { wrapper: Wrapper });
 
     await act(async () => {
-      await result.current.mutateAsync({ projectId: 'proj-1', status: 'in_progress' });
+      await result.current.mutateAsync({ projectId: 'proj-1', archived: true });
     });
 
     expect(invalidateSpy).toHaveBeenCalledWith(expect.objectContaining({ queryKey: ['project', 'proj-1'] }));

@@ -9,12 +9,12 @@ import type { TaskRow } from '@/shared/db/app.types';
 
 const mockUpdateMutateAsync = vi.fn();
 const mockDeleteMutateAsync = vi.fn();
-const mockUpdateStatusMutateAsync = vi.fn();
+const mockSetArchivedMutateAsync = vi.fn();
 
 vi.mock('@/features/projects/hooks/useProjectMutations', () => ({
   useUpdateProject: () => ({ mutateAsync: mockUpdateMutateAsync }),
   useDeleteProject: () => ({ mutateAsync: mockDeleteMutateAsync }),
-  useUpdateProjectStatus: () => ({ mutateAsync: mockUpdateStatusMutateAsync, isPending: false }),
+  useSetProjectArchived: () => ({ mutateAsync: mockSetArchivedMutateAsync, isPending: false }),
 }));
 
 const mockToastSuccess = vi.fn();
@@ -57,7 +57,7 @@ function renderModal(project: TaskRow) {
 beforeEach(() => {
   vi.clearAllMocks();
   mockUpdateMutateAsync.mockResolvedValue({ shiftedCount: 0 });
-  mockUpdateStatusMutateAsync.mockResolvedValue(undefined);
+  mockSetArchivedMutateAsync.mockResolvedValue(undefined);
   mockFunctionsInvoke.mockReset();
 });
 

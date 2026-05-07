@@ -1,28 +1,35 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { useUpdateTask } from '@/features/tasks/hooks/useTaskMutations';
 import { compareDateAsc, isBeforeDate, toIsoDate } from '@/shared/lib/date-engine';
 import type { HierarchyTask } from '@/shared/db/app.types';
+
+export interface GanttTaskDateUpdate {
+    id: string;
+    root_id: string;
+    start_date: string;
+    due_date: string;
+}
 
 export interface UseGanttDragShiftArgs {
     projectId: string;
     /** Flat snapshot of the project's tasks for parent-bounds lookup. */
     tasks: HierarchyTask[];
+    /** Page-composed mutation callback that persists the validated date shift. */
+    updateTaskDates: (update: GanttTaskDateUpdate) => Promise<unknown>;
 }
 
 export type OnShiftDates = (taskId: string, newStart: Date, newEnd: Date) => Promise<void>;
 
 /**
  * Returns a handler that validates a drag-end against the parent phase's bounds
- * and the start ≤ end invariant, then persists via `useUpdateTask`. Cascade-up
+ * and the start ≤ end invariant, then persists via `updateTaskDates`. Cascade-up
  * on parent dates is handled by `updateParentDates` in the Wave 18 mutation
  * wiring — no manual child shifts here.
  *
  * @param args - The project id (for query invalidation) and the flat task snapshot.
  * @returns A handler suitable for `gantt-task-react`'s `onDateChange` adapter.
  */
-export function useGanttDragShift({ projectId, tasks }: UseGanttDragShiftArgs): OnShiftDates {
-    const updateTask = useUpdateTask();
+export function useGanttDragShift({ projectId, tasks, updateTaskDates }: UseGanttDragShiftArgs): OnShiftDates {
     const qc = useQueryClient();
 
     return async function onShiftDates(taskId, newStart, newEnd) {
@@ -55,7 +62,7 @@ export function useGanttDragShift({ projectId, tasks }: UseGanttDragShiftArgs): 
         }
 
         try {
-            await updateTask.mutateAsync({
+            await updateTaskDates({
                 id: taskId,
                 root_id: task.root_id ?? projectId,
                 start_date: newStartIso,

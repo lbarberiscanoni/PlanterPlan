@@ -8,7 +8,7 @@ import { Input } from '@/shared/ui/input';
 import { formatDisplayDate } from '@/shared/lib/date-engine';
 import type { IcsFeedTokenRow } from '@/shared/db/app.types';
 import { Copy, Trash2, Plus, RotateCw } from 'lucide-react';
-import { useConfirm } from '@/shared/ui/confirm-dialog';
+import { useConfirm } from '@/shared/ui/confirm-dialog-context';
 
 /**
  * Wave 35 Task 1 — Settings → Integrations → Calendar feeds.

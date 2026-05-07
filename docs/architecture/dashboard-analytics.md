@@ -1,21 +1,26 @@
 # docs/architecture/dashboard-analytics.md
 
 ## Domain Overview
-The Dashboard & Analytics domain aggregates telemetry across Projects, Tasks, and the Date Engine to provide real-time reporting and pipeline visualization for users and Admins.
+The Analytics domain aggregates telemetry across Projects, Tasks, and the Date Engine to provide reporting for users and operational analytics for Admins. The user-facing project dashboard and pipeline board were removed in PR D; `/dashboard` now redirects to `/tasks`.
 
 ## Core Entities & Data Models
-* **User Dashboard:** Primary UI split into `Owned Projects` and `Joined Projects`. Contains `ProjectPipelineBoard` and `StatsOverview`.
+* **User Reports:** `/reports` provides project status reporting without owning project lifecycle state.
 * **Admin Analytics:** System-wide operational metrics dashboard.
-* **Pipeline Math:** The aggregation logic (`pipelineMath.ts`) determining phase/milestone completion ratios.
 
 ## State Machines / Lifecycles
 ### Metrics Recalculation Lifecycle
 1. **Task Mutation:** A user changes a task status (e.g., To Do -> Complete).
 2. **Local State Update:** Optimistic UI update on the task list.
-3. **Pipeline Recalculation:** The mathematical engine recalculates the Milestone and Phase percentages.
-4. **Dashboard Broadcast:** Real-time hooks push the updated percentage to the Project Card and Dashboard Overview.
+3. **Progress Recalculation:** Project, phase, and report surfaces derive completion percentages from task state.
+4. **Realtime Broadcast:** Project realtime hooks invalidate affected hierarchy/project queries.
 
 ## Business Rules & Constraints
+* **User-testing tranche directive (PR D shipped):** project/template creation
+  is hosted by the authenticated creation action host via `/tasks?action=...`.
+  `/dashboard` redirects to `/tasks`; the former pipeline board and manual
+  project-lifecycle status mutation were removed. Project lifecycle indicators
+  derive from child task state; archive remains a visibility-only action unless
+  product revises that decision.
 * **Required Visualizations:**
   * Total Projects counts.
   * Task Arrays: Current, Due Soon, Overdue.
@@ -53,7 +58,7 @@ Per-project presence channel `presence:project:<id>`, opened once in `src/pages/
 
 **Task focus** — `useTaskFocusBroadcast` in `src/features/tasks/components/TaskDetailsPanel.tsx` debounces (250ms) and updates the same presence state with `focusedTaskId`. `TaskItem.tsx` reads `presentUsers` (threaded from the project route via `MilestoneSection`) and renders a chip when any peer's `focusedTaskId === task.id`. No second channel — one channel, one track call, two consumers.
 
-**Disabled** outside the project route — Dashboard, Reports, Tasks, Settings do not open presence channels (`projectId` is only defined on `/project/:id`).
+**Disabled** outside the project route — Reports, Tasks, Settings, and other app-shell routes do not open presence channels (`projectId` is only defined on `/project/:id`).
 
 ## Gantt Chart (Wave 28)
 
@@ -76,7 +81,7 @@ Standalone route `/gantt?projectId=:id` (registered in `src/app/App.tsx`, lazy-l
 
 ## Integration Points
 * **Date Engine:** Sources calculations for 'Due Soon' and 'Overdue' task arrays.
-* **Projects & Phases:** Supplies the hierarchical data required to build the pipeline board.
+* **Projects & Phases:** Supplies hierarchical data for progress, reports, and derived project-state badges.
 
 ## Known Gaps / Technical Debt
 
@@ -91,7 +96,7 @@ Standalone route `/gantt?projectId=:id` (registered in `src/app/App.tsx`, lazy-l
 * **Most active users (30d)** top-10 list sourced from `tasks.creator` joined with `auth.users`.
 * **Most popular templates** top-10 list sourced from the Wave 22 `settings.spawnedFromTemplate` stamp on cloned roots.
 
-One RPC keeps the dashboard's cold-load cost bounded. 5-minute `staleTime` on the React Query hook; one round-trip on load, zero re-renders on filter changes (there are no filters on this page).
+One RPC keeps the admin analytics cold-load cost bounded. 5-minute `staleTime` on the React Query hook; one round-trip on load, zero re-renders on filter changes (there are no filters on this page).
 
 Migration: `docs/db/migrations/2026_04_18_admin_analytics_rpc.sql`.
 

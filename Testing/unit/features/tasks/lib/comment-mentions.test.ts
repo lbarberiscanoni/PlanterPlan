@@ -92,21 +92,33 @@ describe('resolveMentions (Wave 30)', () => {
         expect(rpcMock).toHaveBeenCalledWith('resolve_user_handles', { p_handles: ['alice', 'ghost', 'bob'] });
     });
 
-    it('returns the original handles verbatim when the RPC errors', async () => {
+    it('returns no mentions and warns when the RPC errors', async () => {
+        const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
         rpcMock.mockResolvedValueOnce({
             data: null,
             error: new Error('RPC failed'),
         });
 
         const result = await resolveMentions(['alice', 'bob']);
-        expect(result).toEqual(['alice', 'bob']);
+        expect(result).toEqual([]);
+        expect(warnSpy).toHaveBeenCalledWith(
+            '[comments] mention resolution failed; posting comment without mention notifications',
+            { handles: ['alice', 'bob'], error: 'RPC failed' },
+        );
+        warnSpy.mockRestore();
     });
 
-    it('returns the original handles when the RPC returns null data without error', async () => {
+    it('returns no mentions and warns when the RPC returns null data without error', async () => {
+        const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
         rpcMock.mockResolvedValueOnce({ data: null, error: null });
 
         const result = await resolveMentions(['alice']);
-        expect(result).toEqual(['alice']);
+        expect(result).toEqual([]);
+        expect(warnSpy).toHaveBeenCalledWith(
+            '[comments] mention resolution failed; posting comment without mention notifications',
+            { handles: ['alice'], error: 'empty resolve_user_handles response' },
+        );
+        warnSpy.mockRestore();
     });
 
     it('passes through handles when ALL lookups miss', async () => {

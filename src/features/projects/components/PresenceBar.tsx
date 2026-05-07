@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { Avatar, AvatarFallback } from '@/shared/ui/avatar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/shared/ui/popover';
-import type { PresenceState } from '@/features/projects/hooks/useProjectPresence';
+import type { PresenceState } from '@/shared/types/presence';
 
 interface PresenceBarProps {
     presentUsers: PresenceState[];

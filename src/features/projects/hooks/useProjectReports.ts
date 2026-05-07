@@ -4,6 +4,8 @@ import { CheckCircle2, Clock, AlertTriangle, Circle } from 'lucide-react';
 import {
  dateStringToMonthKey,
  dateStringToUtcMidnight,
+ getNow,
+ toIsoDate,
  toMonthKey,
 } from '@/shared/lib/date-engine';
 import type { TaskRow } from '@/shared/db/app.types';
@@ -20,7 +22,7 @@ export function useProjectReports(
  phases: TaskRow[],
  options: UseProjectReportsOptions = {},
 ) {
- const { selectedMonth, now = new Date() } = options;
+ const { selectedMonth, now = getNow() } = options;
  return useMemo(() => {
  // Basic task counts
  const tasksByStatus = {
@@ -106,11 +108,7 @@ export function useProjectReports(
 
  // Month-scoped milestone lists (Wave 20)
  const monthKey = selectedMonth ?? toMonthKey(now);
- const todayMidnight = (() => {
-  const d = new Date(now.getTime());
-  d.setUTCHours(0, 0, 0, 0);
-  return d.getTime();
- })();
+ const todayMidnight = dateStringToUtcMidnight(toIsoDate(now)) ?? 0;
 
  const isMilestoneComplete = (m: (typeof milestones)[number]) =>
   Boolean(m.is_complete) || m.status === TASK_STATUS.COMPLETED;

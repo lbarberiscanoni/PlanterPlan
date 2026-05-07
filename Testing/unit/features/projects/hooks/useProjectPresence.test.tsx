@@ -20,7 +20,7 @@ vi.mock('@/shared/db/client', () => ({
 // intermittent `null` vs `'me'` observed by the first test.
 const mockAuthUser = { id: 'me', email: 'me@example.com' };
 const mockAuthValue = { user: mockAuthUser };
-vi.mock('@/shared/contexts/AuthContext', () => ({
+vi.mock('@/shared/contexts/auth-context', () => ({
     useAuth: () => mockAuthValue,
 }));
 

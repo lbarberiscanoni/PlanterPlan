@@ -5,31 +5,35 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 // ---- Mocks ----
 const mockProjectGet = vi.fn();
-const mockTeamMemberFilter = vi.fn();
-const mockTeamMemberList = vi.fn();
-const mockTeamMemberCreate = vi.fn();
+const mockListTeamMembersWithProfiles = vi.fn();
+const mockInviteMemberByEmail = vi.fn();
 const mockTeamMemberDelete = vi.fn();
 
 vi.mock('@/shared/api/planterClient', () => ({
   planter: {
     entities: {
-      Project: { get: (...args: unknown[]) => mockProjectGet(...args) },
+      Project: {
+        get: (...args: unknown[]) => mockProjectGet(...args),
+        inviteMemberByEmail: (...args: unknown[]) => mockInviteMemberByEmail(...args),
+      },
       TeamMember: {
-        filter: (...args: unknown[]) => mockTeamMemberFilter(...args),
-        list: (...args: unknown[]) => mockTeamMemberList(...args),
-        create: (...args: unknown[]) => mockTeamMemberCreate(...args),
+        listByProjectWithProfiles: (...args: unknown[]) => mockListTeamMembersWithProfiles(...args),
         delete: (...args: unknown[]) => mockTeamMemberDelete(...args),
       },
     },
   },
 }));
 
-vi.mock('@/shared/contexts/AuthContext', () => ({
+vi.mock('@/shared/contexts/auth-context', () => ({
   useAuth: () => ({ user: { id: 'current-user-1' } }),
 }));
 
 vi.mock('sonner', () => ({
   toast: { success: vi.fn(), error: vi.fn() },
+}));
+
+vi.mock('react-i18next', () => ({
+  useTranslation: () => ({ t: (key: string) => key }),
 }));
 
 import { useTeam } from '@/features/people/hooks/useTeam';
@@ -48,30 +52,26 @@ function createWrapper() {
 describe('useTeam', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockProjectGet.mockResolvedValue({ id: 'p1', title: 'Test Project' });
-    mockTeamMemberFilter.mockResolvedValue([
-      { id: 'm1', project_id: 'p1', user_id: 'u1', role: 'editor' },
-    ]);
-    mockTeamMemberList.mockResolvedValue([
-      { id: 'm1', project_id: 'p1', user_id: 'u1', role: 'editor' },
-      { id: 'm2', project_id: 'p2', user_id: 'u2', role: 'viewer' },
+    mockProjectGet.mockResolvedValue({ id: 'p1', title: 'Test Project', origin: 'instance', parent_task_id: null });
+    mockListTeamMembersWithProfiles.mockResolvedValue([
+      { id: 'm1', project_id: 'p1', user_id: 'u1', role: 'editor', email: 'u1@example.com' },
     ]);
   });
 
-  it('fetches team members filtered by projectId', async () => {
+  it('fetches hydrated team members filtered by projectId', async () => {
     const { result } = renderHook(() => useTeam('p1'), { wrapper: createWrapper() });
 
     await waitFor(() => expect(result.current.isLoading).toBe(false));
-    expect(mockTeamMemberFilter).toHaveBeenCalledWith({ project_id: 'p1' });
+    expect(mockListTeamMembersWithProfiles).toHaveBeenCalledWith('p1');
     expect(result.current.teamMembers).toHaveLength(1);
   });
 
-  it('fetches all team members when projectId is null', async () => {
+  it('does not fetch team members when projectId is null', async () => {
     const { result } = renderHook(() => useTeam(null), { wrapper: createWrapper() });
 
     await waitFor(() => expect(result.current.isLoading).toBe(false));
-    expect(mockTeamMemberList).toHaveBeenCalled();
-    expect(result.current.teamMembers).toHaveLength(2);
+    expect(mockListTeamMembersWithProfiles).not.toHaveBeenCalled();
+    expect(result.current.teamMembers).toEqual([]);
   });
 
   it('fetches project data when projectId is provided', async () => {
@@ -90,6 +90,19 @@ describe('useTeam', () => {
     expect(mockProjectGet).not.toHaveBeenCalled();
   });
 
+  it('does not call the roster RPC for template roots', async () => {
+    mockProjectGet.mockResolvedValue({ id: 'tmpl-1', title: 'Template Root', origin: 'template', parent_task_id: null });
+
+    const { result } = renderHook(() => useTeam('tmpl-1'), { wrapper: createWrapper() });
+
+    await waitFor(() => {
+      expect(mockProjectGet).toHaveBeenCalledWith('tmpl-1');
+    });
+
+    expect(mockListTeamMembersWithProfiles).not.toHaveBeenCalled();
+    expect(result.current.teamMembers).toEqual([]);
+  });
+
   it('deleteMember calls delete and invalidates queries', async () => {
     mockTeamMemberDelete.mockResolvedValue({});
 
@@ -106,8 +119,8 @@ describe('useTeam', () => {
     });
   });
 
-  it('addMember injects current user id', async () => {
-    mockTeamMemberCreate.mockResolvedValue({ id: 'm3' });
+  it('addMember delegates to the owner-only email invite path', async () => {
+    mockInviteMemberByEmail.mockResolvedValue({ message: 'ok', user: { id: 'u3', email: 'new@example.com' } });
 
     const { result } = renderHook(() => useTeam('p1'), { wrapper: createWrapper() });
 
@@ -123,17 +136,12 @@ describe('useTeam', () => {
     });
 
     await waitFor(() => {
-      expect(mockTeamMemberCreate).toHaveBeenCalledWith(
-        expect.objectContaining({
-          user_id: 'current-user-1',
-          project_id: 'p1',
-        }),
-      );
+      expect(mockInviteMemberByEmail).toHaveBeenCalledWith('p1', 'new@example.com', 'editor');
     });
   });
 
   it('defaults teamMembers to empty array', () => {
-    mockTeamMemberFilter.mockResolvedValue(undefined);
+    mockListTeamMembersWithProfiles.mockResolvedValue(undefined);
     const { result } = renderHook(() => useTeam('p1'), { wrapper: createWrapper() });
     expect(result.current.teamMembers).toEqual([]);
   });

@@ -3,11 +3,12 @@ Feature: User Login
   Background:
     Given the user is on the login page
 
+  @release
   Scenario: Successful login with valid credentials
     When the user enters email "test@example.com"
     And the user enters password "password123"
     And the user clicks the sign in button
-    Then the user is redirected to "/dashboard"
+    Then the user is redirected to "/tasks"
 
   Scenario: Login fails with invalid email
     When the user enters email "wrong@example.com"
@@ -31,6 +32,7 @@ Feature: User Login
     And the user clicks the sign in button
     Then a validation error "Password must be at least 6 characters" is shown for "password"
 
+  @release
   Scenario: Login shows email validation error for malformed email
     When the user enters email "notanemail"
     And the user enters password "password123"

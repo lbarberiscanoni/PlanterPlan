@@ -21,13 +21,13 @@ Feature: Sidebar Navigation
     When the user is on a project page
     Then that project is highlighted in the sidebar
 
-  Scenario: New Project button navigates to dashboard
+  Scenario: New Project button opens project creation from tasks
     When the user clicks the sidebar "New Project" button
-    Then the user is navigated to the dashboard
+    Then the user is navigated to the tasks creation action
 
-  Scenario: New Template button navigates to dashboard
+  Scenario: New Template button opens template creation from tasks
     When the user clicks the sidebar "New Template" button
-    Then the user is navigated to the dashboard
+    Then the user is navigated to the tasks template action
 
   Scenario: Load more pagination for projects list
     Given there are more projects than the initial page size

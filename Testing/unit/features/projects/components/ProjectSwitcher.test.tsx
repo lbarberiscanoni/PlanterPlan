@@ -4,7 +4,8 @@ import React from 'react';
 import { MemoryRouter } from 'react-router-dom';
 
 const mockNavigate = vi.fn();
-const mockUseTaskQuery = vi.fn();
+let projects: Array<{ id: string; title: string; origin: string; status: string | null; is_complete: boolean }> = [];
+let projectsLoading = false;
 
 vi.mock('react-router-dom', async () => {
   const actual = await vi.importActual<typeof import('react-router-dom')>('react-router-dom');
@@ -15,16 +16,12 @@ vi.mock('react-router-dom', async () => {
   };
 });
 
-vi.mock('@/features/tasks/hooks/useTaskQuery', () => ({
-  useTaskQuery: () => mockUseTaskQuery(),
-}));
-
 import ProjectSwitcher from '@/features/projects/components/ProjectSwitcher';
 
 function renderSwitcher() {
   return render(
     <MemoryRouter>
-      <ProjectSwitcher />
+      <ProjectSwitcher projects={projects} projectsLoading={projectsLoading} />
     </MemoryRouter>,
   );
 }
@@ -41,19 +38,18 @@ async function openMenu() {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  projects = [];
+  projectsLoading = false;
 });
 
 describe('ProjectSwitcher', () => {
   it('renders only active projects in the dropdown by default', async () => {
-    mockUseTaskQuery.mockReturnValue({
-      tasks: [
+    projects = [
         { id: 'p1', title: 'Active One', origin: 'instance', status: 'in_progress', is_complete: false },
         { id: 'p2', title: 'Archived One', origin: 'instance', status: 'archived', is_complete: false },
         { id: 'p3', title: 'Active Two', origin: 'instance', status: 'planning', is_complete: false },
         { id: 't1', title: 'Template', origin: 'template', status: null, is_complete: false },
-      ],
-      projectsLoading: false,
-    });
+      ];
 
     renderSwitcher();
     await openMenu();
@@ -65,13 +61,10 @@ describe('ProjectSwitcher', () => {
   });
 
   it('reveals archived projects when "Show archived" is toggled', async () => {
-    mockUseTaskQuery.mockReturnValue({
-      tasks: [
+    projects = [
         { id: 'p1', title: 'Active One', origin: 'instance', status: 'in_progress', is_complete: false },
         { id: 'p2', title: 'Archived One', origin: 'instance', status: 'archived', is_complete: false },
-      ],
-      projectsLoading: false,
-    });
+      ];
 
     renderSwitcher();
     await openMenu();
@@ -84,12 +77,9 @@ describe('ProjectSwitcher', () => {
   });
 
   it('navigates to /project/:id when an item is selected', async () => {
-    mockUseTaskQuery.mockReturnValue({
-      tasks: [
+    projects = [
         { id: 'p1', title: 'Active One', origin: 'instance', status: 'in_progress', is_complete: false },
-      ],
-      projectsLoading: false,
-    });
+      ];
 
     renderSwitcher();
     await openMenu();
@@ -101,13 +91,10 @@ describe('ProjectSwitcher', () => {
   });
 
   it('excludes completed projects from the active list', async () => {
-    mockUseTaskQuery.mockReturnValue({
-      tasks: [
+    projects = [
         { id: 'p1', title: 'Done', origin: 'instance', status: 'completed', is_complete: true },
         { id: 'p2', title: 'Live', origin: 'instance', status: 'in_progress', is_complete: false },
-      ],
-      projectsLoading: false,
-    });
+      ];
 
     renderSwitcher();
     await openMenu();
@@ -119,13 +106,10 @@ describe('ProjectSwitcher', () => {
   // Wave 25: "Show completed" toggle ------------------------------------
 
   it('hides completed projects by default; the "Show completed" toggle reveals them', async () => {
-    mockUseTaskQuery.mockReturnValue({
-      tasks: [
+    projects = [
         { id: 'p1', title: 'Live', origin: 'instance', status: 'in_progress', is_complete: false },
         { id: 'p2', title: 'Done', origin: 'instance', status: 'completed', is_complete: true },
-      ],
-      projectsLoading: false,
-    });
+      ];
 
     renderSwitcher();
     await openMenu();
@@ -143,13 +127,10 @@ describe('ProjectSwitcher', () => {
   });
 
   it('"Show completed" does NOT reveal archived projects (toggles are independent)', async () => {
-    mockUseTaskQuery.mockReturnValue({
-      tasks: [
+    projects = [
         { id: 'p1', title: 'Done', origin: 'instance', status: 'completed', is_complete: true },
         { id: 'p2', title: 'Archived', origin: 'instance', status: 'archived', is_complete: false },
-      ],
-      projectsLoading: false,
-    });
+      ];
 
     renderSwitcher();
     await openMenu();
@@ -167,8 +148,7 @@ describe('ProjectSwitcher', () => {
     // classified as archived and NOT as completed by the component's filters
     // (completed requires NOT archived). So it shows up in the archived list
     // with "Show archived" on, not in the completed list.
-    mockUseTaskQuery.mockReturnValue({
-      tasks: [
+    projects = [
         {
           id: 'p1',
           title: 'Archived & Complete',
@@ -176,9 +156,7 @@ describe('ProjectSwitcher', () => {
           status: 'archived',
           is_complete: true,
         },
-      ],
-      projectsLoading: false,
-    });
+      ];
 
     renderSwitcher();
     await openMenu();
@@ -202,12 +180,9 @@ describe('ProjectSwitcher', () => {
   });
 
   it('navigates to /project/:id when a completed entry is selected', async () => {
-    mockUseTaskQuery.mockReturnValue({
-      tasks: [
+    projects = [
         { id: 'p1', title: 'Done', origin: 'instance', status: 'completed', is_complete: true },
-      ],
-      projectsLoading: false,
-    });
+      ];
 
     renderSwitcher();
     await openMenu();

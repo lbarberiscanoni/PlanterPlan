@@ -154,7 +154,7 @@ export function makeCommentWithAuthor(
 ): TaskCommentWithAuthor {
   const base = makeComment(overrides as Partial<TaskCommentRow>);
   const defaultAuthor = {
-    id: base.author_id,
+    id: base.author_id ?? faker.string.uuid(),
     email: faker.internet.email(),
     user_metadata: { full_name: faker.person.fullName() },
   };

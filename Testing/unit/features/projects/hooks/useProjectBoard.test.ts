@@ -12,12 +12,6 @@ const mockMutate = vi.fn();
 const mockMutateAsync = vi.fn();
 const mockDeleteMutate = vi.fn();
 
-vi.mock('@/features/tasks/hooks/useTaskMutations', () => ({
-  useCreateTask: () => ({ mutate: mockMutate, mutateAsync: mockMutateAsync }),
-  useUpdateTask: () => ({ mutate: mockMutate }),
-  useDeleteTask: () => ({ mutate: mockDeleteMutate }),
-}));
-
 vi.mock('sonner', () => ({
   toast: { error: vi.fn(), success: vi.fn() },
 }));
@@ -27,14 +21,13 @@ vi.mock('sonner', () => ({
 // Note the ConfirmDialogProvider is still rendered (via the test wrapper) so
 // the surrounding context exists; we override the hook only.
 let mockConfirmResult = true;
-vi.mock('@/shared/ui/confirm-dialog', async (orig) => {
-  const actual = await orig() as typeof import('@/shared/ui/confirm-dialog');
+vi.mock('@/shared/ui/confirm-dialog-context', async (orig) => {
+  const actual = await orig() as typeof import('@/shared/ui/confirm-dialog-context');
   return {
     ...actual,
     useConfirm: () => vi.fn().mockImplementation(() => Promise.resolve(mockConfirmResult)),
   };
 });
-
 import { useProjectBoard } from '@/features/projects/hooks/useProjectBoard';
 import { toast } from 'sonner';
 
@@ -94,6 +87,17 @@ function createWrapper() {
     );
 }
 
+function renderProjectBoard(projectId: string, tasks: TaskRow[] = []) {
+  return renderHook(
+    () => useProjectBoard(projectId, tasks, {
+      updateTask: mockMutate,
+      createTask: mockMutateAsync,
+      deleteTask: mockDeleteMutate,
+    }),
+    { wrapper: createWrapper() },
+  );
+}
+
 describe('useProjectBoard', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -104,7 +108,7 @@ describe('useProjectBoard', () => {
 
   describe('initial state', () => {
     it('has correct default values', () => {
-      const { result } = renderHook(() => useProjectBoard(projectId), { wrapper: createWrapper() });
+      const { result } = renderProjectBoard(projectId);
 
       expect(result.current.state.activeTab).toBe('board');
       expect(result.current.state.selectedPhase).toBeNull();
@@ -116,7 +120,7 @@ describe('useProjectBoard', () => {
 
   describe('actions', () => {
     it('setActiveTab updates activeTab', () => {
-      const { result } = renderHook(() => useProjectBoard(projectId), { wrapper: createWrapper() });
+      const { result } = renderProjectBoard(projectId);
 
       act(() => {
         result.current.actions.setActiveTab('list');
@@ -127,7 +131,7 @@ describe('useProjectBoard', () => {
 
     it('setSelectedPhase updates selectedPhase', () => {
       const task = makeTask({ id: 'phase-1' });
-      const { result } = renderHook(() => useProjectBoard(projectId), { wrapper: createWrapper() });
+      const { result } = renderProjectBoard(projectId);
 
       act(() => {
         result.current.actions.setSelectedPhase(task);
@@ -137,7 +141,7 @@ describe('useProjectBoard', () => {
     });
 
     it('setShowInviteModal toggles invite modal', () => {
-      const { result } = renderHook(() => useProjectBoard(projectId), { wrapper: createWrapper() });
+      const { result } = renderProjectBoard(projectId);
 
       act(() => {
         result.current.actions.setShowInviteModal(true);
@@ -150,7 +154,7 @@ describe('useProjectBoard', () => {
   describe('handleTaskClick', () => {
     it('sets selectedTask', () => {
       const task = makeTask({ id: 'clicked-task' });
-      const { result } = renderHook(() => useProjectBoard(projectId), { wrapper: createWrapper() });
+      const { result } = renderProjectBoard(projectId);
 
       act(() => {
         result.current.handlers.handleTaskClick(task);
@@ -162,7 +166,7 @@ describe('useProjectBoard', () => {
 
   describe('handleTaskUpdate', () => {
     it('calls mutate with correct payload', () => {
-      const { result } = renderHook(() => useProjectBoard(projectId), { wrapper: createWrapper() });
+      const { result } = renderProjectBoard(projectId);
 
       act(() => {
         result.current.handlers.handleTaskUpdate('task-1', { status: 'completed' });
@@ -175,7 +179,7 @@ describe('useProjectBoard', () => {
     });
 
     it('calls toast.error on mutation error', () => {
-      const { result } = renderHook(() => useProjectBoard(projectId), { wrapper: createWrapper() });
+      const { result } = renderProjectBoard(projectId);
 
       act(() => {
         result.current.handlers.handleTaskUpdate('task-1', { status: 'completed' });
@@ -195,7 +199,7 @@ describe('useProjectBoard', () => {
     it('adds ID when expanding', () => {
       const task = makeTask({ id: 'expand-me' });
       const tasks = [task];
-      const { result } = renderHook(() => useProjectBoard(projectId, tasks), { wrapper: createWrapper() });
+      const { result } = renderProjectBoard(projectId, tasks);
 
       act(() => {
         result.current.handlers.handleToggleExpand(task, true);
@@ -209,7 +213,7 @@ describe('useProjectBoard', () => {
     it('removes ID when collapsing', () => {
       const task = makeTask({ id: 'collapse-me' });
       const tasks = [task];
-      const { result } = renderHook(() => useProjectBoard(projectId, tasks), { wrapper: createWrapper() });
+      const { result } = renderProjectBoard(projectId, tasks);
 
       // Expand first
       act(() => {
@@ -230,7 +234,7 @@ describe('useProjectBoard', () => {
     it('sets inlineAddingParentId and expands parent', () => {
       const parent = makeTask({ id: 'parent-1' });
       const tasks = [parent];
-      const { result } = renderHook(() => useProjectBoard(projectId, tasks), { wrapper: createWrapper() });
+      const { result } = renderProjectBoard(projectId, tasks);
 
       act(() => {
         result.current.handlers.handleStartInlineAdd(parent);
@@ -246,7 +250,7 @@ describe('useProjectBoard', () => {
 
   describe('handleInlineCommit', () => {
     it('creates task with correct payload and clears inlineAddingParentId', async () => {
-      const { result } = renderHook(() => useProjectBoard(projectId), { wrapper: createWrapper() });
+      const { result } = renderProjectBoard(projectId);
 
       await act(async () => {
         await result.current.handlers.handleInlineCommit('parent-1', 'New Task');
@@ -260,7 +264,7 @@ describe('useProjectBoard', () => {
         priority: 'medium',
         is_complete: false,
         description: '',
-        notes: '',
+        notes: null,
         purpose: '',
         actions: '',
       }));
@@ -268,7 +272,7 @@ describe('useProjectBoard', () => {
     });
 
     it('spreads templateData fields when provided', async () => {
-      const { result } = renderHook(() => useProjectBoard(projectId), { wrapper: createWrapper() });
+      const { result } = renderProjectBoard(projectId);
 
       await act(async () => {
         await result.current.handlers.handleInlineCommit('parent-1', 'Templated Task', {
@@ -276,20 +280,29 @@ describe('useProjectBoard', () => {
           notes: 'Template notes',
           purpose: 'Template purpose',
           actions: 'Template actions',
+          settings: {
+            is_coaching_task: true,
+            is_strategy_template: true,
+            recurrence: { kind: 'weekly' },
+          },
         } as Partial<TaskRow>);
       });
 
       expect(mockMutateAsync).toHaveBeenCalledWith(expect.objectContaining({
         description: 'Template desc',
-        notes: 'Template notes',
+        notes: null,
         purpose: 'Template purpose',
         actions: 'Template actions',
+        settings: {
+          is_coaching_task: true,
+          is_strategy_template: true,
+        },
       }));
     });
 
     it('calls toast.error on failure', async () => {
       mockMutateAsync.mockRejectedValue(new Error('Create failed'));
-      const { result } = renderHook(() => useProjectBoard(projectId), { wrapper: createWrapper() });
+      const { result } = renderProjectBoard(projectId);
 
       await act(async () => {
         await result.current.handlers.handleInlineCommit('parent-1', 'Failing Task');
@@ -303,7 +316,7 @@ describe('useProjectBoard', () => {
     it('calls mutate when user confirms', async () => {
       mockConfirmResult = true;
       const task = makeTask({ id: 'delete-me', title: 'Doomed Task' });
-      const { result } = renderHook(() => useProjectBoard(projectId), { wrapper: createWrapper() });
+      const { result } = renderProjectBoard(projectId);
 
       await act(async () => {
         await result.current.handlers.handleDeleteTask(task);
@@ -318,7 +331,7 @@ describe('useProjectBoard', () => {
     it('does not call mutate when user cancels', async () => {
       mockConfirmResult = false;
       const task = makeTask({ id: 'keep-me' });
-      const { result } = renderHook(() => useProjectBoard(projectId), { wrapper: createWrapper() });
+      const { result } = renderProjectBoard(projectId);
 
       await act(async () => {
         await result.current.handlers.handleDeleteTask(task);
@@ -330,7 +343,7 @@ describe('useProjectBoard', () => {
     it('onSuccess clears selectedTask and toasts', async () => {
       mockConfirmResult = true;
       const task = makeTask({ id: 'delete-me' });
-      const { result } = renderHook(() => useProjectBoard(projectId), { wrapper: createWrapper() });
+      const { result } = renderProjectBoard(projectId);
 
       // Select the task first
       act(() => {
@@ -355,7 +368,7 @@ describe('useProjectBoard', () => {
     it('onError calls toast.error', async () => {
       mockConfirmResult = true;
       const task = makeTask({ id: 'delete-me' });
-      const { result } = renderHook(() => useProjectBoard(projectId), { wrapper: createWrapper() });
+      const { result } = renderProjectBoard(projectId);
 
       await act(async () => {
         await result.current.handlers.handleDeleteTask(task);
@@ -377,7 +390,7 @@ describe('useProjectBoard', () => {
       const child2 = makeTask({ id: 'child-2', parent_task_id: 'parent', position: 10000 });
       const tasks = [parent, child1, child2];
 
-      const { result } = renderHook(() => useProjectBoard(projectId, tasks), { wrapper: createWrapper() });
+      const { result } = renderProjectBoard(projectId, tasks);
 
       const mapped = result.current.computed.mapTaskWithState(parent);
       expect((mapped.children as unknown[]).length).toBe(2);
@@ -391,7 +404,7 @@ describe('useProjectBoard', () => {
       const selfRef = makeTask({ id: 'self', parent_task_id: 'self' });
       const tasks = [selfRef];
 
-      const { result } = renderHook(() => useProjectBoard(projectId, tasks), { wrapper: createWrapper() });
+      const { result } = renderProjectBoard(projectId, tasks);
 
       // Should not stack overflow
       const mapped = result.current.computed.mapTaskWithState(selfRef);

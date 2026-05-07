@@ -1,8 +1,9 @@
 import * as React from 'react';
 import { Command as CommandPrimitive } from 'cmdk';
 import { Search } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { cn } from '@/shared/lib/utils';
-import { Dialog, DialogContent } from '@/shared/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/shared/ui/dialog';
 import type { DialogProps } from '@radix-ui/react-dialog';
 
 const Command = React.forwardRef<
@@ -23,9 +24,12 @@ Command.displayName = CommandPrimitive.displayName;
 type CommandDialogProps = DialogProps;
 
 const CommandDialog = ({ children, ...props }: CommandDialogProps) => {
+ const { t } = useTranslation();
  return (
  <Dialog {...props}>
  <DialogContent className="overflow-hidden p-0">
+ <DialogTitle className="sr-only">{t('nav.command_title')}</DialogTitle>
+ <DialogDescription className="sr-only">{t('nav.command_description')}</DialogDescription>
  <Command className="[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:text-muted-foreground [&_[cmdk-group]:not([hidden])_~[cmdk-group]]:pt-0 [&_[cmdk-group]]:px-2 [&_[data-cmdk-input-wrapper]_svg]:h-5 [&_[data-cmdk-input-wrapper]_svg]:w-5 [&_[cmdk-input]]:h-12 [&_[cmdk-item]]:px-2 [&_[cmdk-item]]:py-3 [&_[cmdk-item]_svg]:h-5 [&_[cmdk-item]_svg]:w-5">
  {children}
  </Command>

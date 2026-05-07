@@ -8,7 +8,7 @@ This domain governs the atomic execution units within a Project. It provides the
   * **Fields:** `Title`, `Description`, `Purpose`, `Actions`, `Additional Resources`, `Start Date`, `End Date`, `Notes`, `Assignee`, `Status`.
 * **Subtask:** A child node of a Task.
 * **Dependency:** A horizontal link between tasks dictating order of execution.
-* **`task_type` discriminator (Wave 25):** a `text` column on `public.tasks` kept in lockstep with the row's depth in the `parent_task_id` tree. Possible values: `'project' | 'phase' | 'milestone' | 'task' | 'subtask'` (the last is reserved; `derive_task_type` returns `'task'` for depth ≥ 3 today, matching the app-level max-subtask-depth-1 invariant). Writers do not set the column manually — the `trg_set_task_type` BEFORE INSERT OR UPDATE OF `parent_task_id` trigger calls `public.derive_task_type(parent_task_id)` and assigns the result. Consumers can use the column to skip recursive tree walks ("all phases", "all milestones", "all leaves"). Migration: `docs/db/migrations/2026_04_18_task_type_discriminator.sql`.
+* **`task_type` discriminator (Wave 25 + PR 4):** a `text` column on `public.tasks` kept in lockstep with the row's depth in the `parent_task_id` tree. Possible values: `'project' | 'phase' | 'milestone' | 'task' | 'subtask'`; `derive_task_type(parent_task_id)` emits `subtask` for children of task-depth rows. Writers do not set the column manually — the `trg_set_task_type` BEFORE INSERT OR UPDATE OF `parent_task_id` trigger calls `public.derive_task_type(parent_task_id)` and assigns the result. Consumers can use the column to skip recursive tree walks ("all phases", "all milestones", "all leaves"). Migrations: `docs/db/migrations/2026_04_18_task_type_discriminator.sql`, `supabase/migrations/20260506003000_task_hierarchy_depth_guard.sql`.
 
 ## State Machines / Lifecycles
 ### Task Completion Lifecycle
@@ -21,11 +21,12 @@ Transitions strictly through: `To Do` -> `In Progress` -> `Complete` -> `Blocked
 
 ## Business Rules & Constraints
 * **Max Subtask Depth:** Subtasks *cannot* have child tasks (Maximum depth = 1).
-  * *Constraint:* If Task A has Subtask X, Task A cannot be dropped into Task B to become a subtask, preventing depth violations.
-* **Drag-and-Drop Constraints (`dragDropUtils.ts`):**
+  * *Constraint:* `trg_enforce_task_hierarchy_depth` rejects inserts, updates, cycles, or reparenting operations that would exceed `project -> phase -> milestone -> task -> subtask`. If Task A has Subtask X, Task A cannot be dropped into Task B to become a subtask, preventing depth violations.
+* **Drag-and-Drop Constraints (`useProjectDnd.ts` + `task-hierarchy.ts`):**
   * Items dropped adjacent to peers reorder the list index.
   * A childless Task dropped inside another Task becomes a Subtask.
   * Dragging a Task moves all of its nested Subtasks concurrently.
+  * Invalid depth/cycle drops are rejected before mutation and surfaced as a recoverable localized toast; the DB trigger remains the trusted enforcement layer for direct API/RPC/database writes.
 * **Kanban Board V2 (Wave 20):** Native column-to-column drag-and-drop is implemented in `src/features/tasks/components/board/` (`ProjectBoardView.tsx`, `BoardColumn.tsx`, `BoardTaskCard.tsx`). Drops between columns change task `status`; depth constraints and cycle detection still apply.
 * **Dependencies:** Tasks mapped as dependencies cannot be closed out of sequence without throwing a warning.
 * **Deletion Invariants:** Deleting an item triggers a warning and cascades a hard delete to all descendants.
@@ -59,10 +60,16 @@ normalises into the nested JSONB shape before persisting.
 
 ## Coaching Tasks (Wave 22)
 
+> **User-testing tranche note:** PR F makes coaching flag authoring
+> template-only. Instance forms strip hidden `is_coaching_task` values before
+> submit, and `pages/Project.tsx` only builds a settings patch for template
+> origin, so project instances cannot mutate this flag through form paths.
+> Existing instance badges/coach behavior remain read-only inherited behavior.
+
 Any **instance task** (`origin = 'instance'`) may be tagged as a *coaching
-task* via `settings.is_coaching_task: true`. The flag widens edit access
-to users with the project `coach` role via an additive RLS UPDATE policy
-(see `auth-rbac.md`).
+task* via `settings.is_coaching_task: true`. The flag widens progress/status
+access to users with the project `coach` role via an additive RLS UPDATE policy
+plus a column-scope trigger (see `auth-rbac.md`).
 
 **Flag shape** (`src/shared/db/app.types.ts` → `TaskSettings`):
 * `is_coaching_task?: boolean` — absence / `false` both mean "not a coaching
@@ -70,13 +77,16 @@ to users with the project `coach` role via an additive RLS UPDATE policy
 
 **Authoring:** the "Coaching task" checkbox in
 `src/features/tasks/components/TaskFormFields.tsx` is gated to
-`membershipRole ∈ {owner, editor}` and shown only for instance origin. The
-prop flows `pages/Project.tsx` → `TaskDetailsPanel` → `TaskForm` →
-`TaskFormFields`. Coaches/viewers cannot toggle the flag.
+`origin === 'template'` and `membershipRole ∈ {owner, editor, admin}` (or app
+admin). The prop flows `pages/Project.tsx` → `TaskDetailsPanel` → `TaskForm` →
+`TaskFormFields`. Project instance forms do not render the toggle.
 
-**Normalisation:** submit emits a flat `is_coaching_task` field. The helper
-pair in `src/features/tasks/lib/coaching-form.ts` handles the merge into
-`settings`:
+**Normalisation:** submit emits a flat `is_coaching_task` field only when the
+template checkbox is registered. `src/features/tasks/lib/task-form-flags.ts`
+strips coaching/strategy fields from instance form submissions, and
+`buildTemplateFlagSettingsPatch()` returns `undefined` for instance origin even
+if a crafted payload includes the flags. The lower-level helper pair in
+`src/features/tasks/lib/coaching-form.ts` handles the merge into `settings`:
 * `formDataToCoachingFlag(data)` → `true | false | null` (null = leave
   settings untouched — the UI gate hid the checkbox).
 * `applyCoachingFlag(currentSettings, flag)` — preserves every other key,
@@ -87,24 +97,29 @@ pair in `src/features/tasks/lib/coaching-form.ts` handles the merge into
 **Surface:** `TaskDetailsView.tsx` renders a "Coaching" badge in the status
 row when `extractCoachingFlag(task)` returns `true`.
 
-**RLS:** `docs/db/migrations/2026_04_17_coaching_task_rls.sql` adds the
-`"Enable update for coaches on coaching tasks"` policy. It's purely
-additive — the owner/editor/admin UPDATE policy is unchanged, so coaches
-retain zero access to non-coaching rows and to templates. Policy text is
-mirrored into `docs/db/schema.sql` as the SSoT.
+**RLS:** `docs/db/migrations/2026_04_17_coaching_task_rls.sql` added the
+`"Enable update for coaches on coaching tasks"` policy. PR 3 tightened that
+policy with a matching `WITH CHECK` and added
+`trg_enforce_coach_task_update_scope`: coaches may update only
+status/completion progress on Coaching-labeled instance rows. Content,
+settings, assignment, priority, hierarchy, origin/template metadata, and
+delete paths remain denied below the UI. The owner/editor/admin UPDATE policy
+is unchanged. Policy and trigger text are mirrored into `docs/db/schema.sql`
+as the SSoT.
 
 **Auto-assignment (Wave 23):**
 `docs/db/migrations/2026_04_17_coaching_auto_assign.sql` adds a
 `BEFORE INSERT OR UPDATE ON public.tasks` trigger (`trg_set_coaching_assignee`
 → `set_coaching_assignee()`). When a row carries
 `settings.is_coaching_task = true` AND `assignee_id` is null, the trigger
-looks up `project_members WHERE project_id = COALESCE(NEW.root_id, NEW.id)
-AND role = 'coach'`. If *exactly one* coach is found, `NEW.assignee_id` is
-set to that user. **Zero or multiple coaches → no-op**, leaving the field
-null so a human can pick. **User intent wins:** the trigger never
-overwrites a non-null `assignee_id` the caller supplied. The UI picks up
-the server-assigned coach via the standard `useUpdateTask` / `useCreateTask`
-`onSettled` invalidation of `['projectHierarchy', rootId]`.
+resolves the project from `NEW.root_id`, walking `parent_task_id` first when a
+new child row has not yet been root-stamped, then looks up coach membership for
+that project. If *exactly one* coach is found, `NEW.assignee_id` is set to that
+user. **Zero or multiple coaches → no-op**, leaving the field null so a human
+can pick. **User intent wins:** the trigger never overwrites a non-null
+`assignee_id` the caller supplied. The UI picks up the server-assigned coach via
+the standard `useUpdateTask` / `useCreateTask` `onSettled` invalidation of
+`['projectHierarchy', rootId]`.
 
 **Backfill on membership change (Wave 24):**
 `docs/db/migrations/2026_04_18_coaching_backfill_on_membership.sql` adds
@@ -124,6 +139,13 @@ unrelated projects are never touched.
 
 ## Strategy Templates (Wave 24)
 
+> **User-testing tranche note:** PR F makes strategy flag authoring
+> template-only. Instance forms strip hidden `is_strategy_template` values before
+> submit, and `pages/Project.tsx` only builds a settings patch for template
+> origin, so project instances cannot mutate this flag through form paths.
+> Existing instance badges/follow-up behavior remain read-only inherited
+> behavior.
+
 Any **instance task** (`origin = 'instance'`) may be tagged as a *strategy
 template* via `settings.is_strategy_template: true`. The flag is purely a
 UX convention — no RLS carve-out, no additional DB triggers. It tells the
@@ -137,14 +159,16 @@ right at the moment of completion.
 
 **Authoring:** the "Strategy template" checkbox in
 `src/features/tasks/components/TaskFormFields.tsx` sits next to the
-"Coaching task" checkbox and shares the same permission gate
-(`membershipRole ∈ {owner, editor}`, `origin === 'instance'`). The prop
-chain matches Coaching: `pages/Project.tsx` → `TaskDetailsPanel` →
-`TaskForm` → `TaskFormFields`.
+"Coaching task" checkbox and shares the same template-only permission gate
+(`origin === 'template'`, `membershipRole ∈ {owner, editor, admin}` or app
+admin). The prop chain matches Coaching: `pages/Project.tsx` →
+`TaskDetailsPanel` → `TaskForm` → `TaskFormFields`.
 
-**Normalisation:** submit emits a flat `is_strategy_template` field. The
-helper trio in `src/features/tasks/lib/strategy-form.ts` mirrors
-`coaching-form.ts`:
+**Normalisation:** submit emits a flat `is_strategy_template` field only when
+the template checkbox is registered. `task-form-flags.ts` strips
+coaching/strategy fields from instance submissions and applies them only for
+template-origin settings patches. The helper trio in
+`src/features/tasks/lib/strategy-form.ts` mirrors `coaching-form.ts`:
 * `formDataToStrategyTemplateFlag(data)` → `true | false | null` (null =
   leave settings untouched — the UI gate hid the checkbox).
 * `applyStrategyTemplateFlag(currentSettings, flag)` — preserves every
@@ -177,6 +201,13 @@ instance tasks.
 
 ## Comments (Wave 26)
 
+> **User-testing tranche note:** PR E removes comments from the project task
+> detail UI as a UI-only change. `src/pages/Project.tsx` passes
+> `showComments={false}` through `TaskDetailsPanel` to `TaskDetailsView`;
+> `public.task_comments`, RLS policies, realtime hooks, activity-log triggers,
+> and notification mention plumbing remain intact pending a separate
+> data-retention decision.
+
 Threaded task comments live in `public.task_comments`. Each row carries
 `task_id` (the comment's target), `root_id` (auto-filled from the parent
 task's root via `trg_task_comments_set_root_id`, mirrors the
@@ -207,7 +238,8 @@ invalidates `['taskComments', taskId]` on any payload.
 
 ## Integration Points
 * **Date Engine:** Dragging tasks triggers date inheritance logic (`dateInheritance.ts`) to adjust bounds automatically.
-* **Dashboard:** Feeds raw status counts.
+* **Task/reporting surfaces:** Feeds raw status counts to task views, project
+  progress, reports, and admin analytics.
 * **Nightly CRON:** Owns the recurrence-clone pass (see `supabase/functions/nightly-sync/README.md`).
 
 ## Known Gaps / Technical Debt

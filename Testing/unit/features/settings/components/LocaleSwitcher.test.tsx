@@ -30,4 +30,31 @@ describe('LocaleSwitcher', () => {
     expect(window.localStorage.getItem('planterplan.locale')).toBe('es');
     expect(screen.getByText('Idioma')).toBeInTheDocument();
   });
+
+  it('labels Spanish as beta and review-required in the switcher', async () => {
+    renderWithProviders(<LocaleSwitcher />);
+
+    await act(async () => {
+      await i18n.changeLanguage('es');
+    });
+
+    expect(screen.getByText('Español')).toBeInTheDocument();
+    expect(screen.getByText('Beta')).toBeInTheDocument();
+    expect(screen.getByText('Revisión humana requerida antes de afirmaciones comerciales o de lanzamiento.'))
+      .toBeInTheDocument();
+  });
+
+  it('keeps the review-required warning visible for regional Spanish locales', async () => {
+    renderWithProviders(<LocaleSwitcher />);
+
+    await act(async () => {
+      await i18n.changeLanguage('es-MX');
+    });
+
+    expect(screen.getByText('Español')).toBeInTheDocument();
+    expect(screen.getByText('Beta')).toBeInTheDocument();
+    expect(screen.getByRole('combobox')).toHaveTextContent('Español');
+    expect(screen.getByText('Revisión humana requerida antes de afirmaciones comerciales o de lanzamiento.'))
+      .toBeInTheDocument();
+  });
 });

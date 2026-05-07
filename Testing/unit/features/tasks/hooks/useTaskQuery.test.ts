@@ -9,6 +9,7 @@ import { makeTask } from '@test';
 const mockListByCreator = vi.fn();
 const mockTaskFilter = vi.fn();
 const mockListJoined = vi.fn();
+let mockAuthUser: { id: string } | null = { id: 'user-1' };
 
 vi.mock('@/shared/api/planterClient', () => ({
   planter: {
@@ -25,8 +26,8 @@ vi.mock('@/shared/api/planterClient', () => ({
 }));
 
 // Mock useAuth
-vi.mock('@/shared/contexts/AuthContext', () => ({
-  useAuth: () => ({ user: { id: 'user-1' } }),
+vi.mock('@/shared/contexts/auth-context', () => ({
+  useAuth: () => ({ user: mockAuthUser }),
 }));
 
 function createWrapper() {
@@ -42,6 +43,7 @@ function createWrapper() {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mockAuthUser = { id: 'user-1' };
   // Default: return empty data
   mockListByCreator.mockResolvedValue([]);
   mockTaskFilter.mockResolvedValue([]);
@@ -161,10 +163,7 @@ describe('useTaskQuery', () => {
   });
 
   it('disables queries when currentUserId is null', async () => {
-    // Re-mock useAuth to return null user for this test
-    const authModule = await import('@/shared/contexts/AuthContext');
-    const originalUseAuth = authModule.useAuth;
-    (authModule as unknown as { useAuth: typeof authModule.useAuth }).useAuth = () => ({ user: null });
+    mockAuthUser = null;
 
     const { Wrapper } = createWrapper();
     const { result } = renderHook(() => useTaskQuery(), { wrapper: Wrapper });
@@ -173,7 +172,6 @@ describe('useTaskQuery', () => {
     expect(result.current.currentUserId).toBeNull();
     expect(mockListByCreator).not.toHaveBeenCalled();
 
-    // Restore
-    (authModule as unknown as { useAuth: typeof authModule.useAuth }).useAuth = originalUseAuth;
+    mockAuthUser = { id: 'user-1' };
   });
 });

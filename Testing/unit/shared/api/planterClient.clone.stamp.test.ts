@@ -121,6 +121,35 @@ describe('Task.clone — spawnedFromTemplate stamping (Wave 22)', () => {
     });
   });
 
+  it('skips the follow-up update when the RPC already stamped clone provenance', async () => {
+    const rpcResult = { new_root_id: 'cloned-root-uuid', tasks_cloned: 1 };
+    mockRpc.mockResolvedValueOnce({ data: rpcResult, error: null });
+
+    const existingRow = makeTask({
+      id: 'cloned-root-uuid',
+      settings: {
+        spawnedFromTemplate: 'tmpl-xyz',
+        cloned_from_template_version: 7,
+      },
+    });
+    const getChain = createChain({ data: existingRow, error: null });
+    const templateLookupChain = createChain({
+      data: { ...makeTask({ id: 'tmpl-xyz', origin: 'template' }), template_version: 7 },
+      error: null,
+    });
+    mockFrom
+      .mockReturnValueOnce(getChain)
+      .mockReturnValueOnce(templateLookupChain);
+
+    const result = await planter.entities.Task.clone('tmpl-xyz', null, 'instance', 'user-1');
+
+    expect(result.error).toBeNull();
+    expect(result.data).toEqual(existingRow);
+    expect(getChain.update).not.toHaveBeenCalled();
+    expect(templateLookupChain.update).not.toHaveBeenCalled();
+    expect(mockFrom).toHaveBeenCalledTimes(2);
+  });
+
   it('still returns a successful clone when the follow-up stamp update fails', async () => {
     const rpcResult = { new_root_id: 'cloned-root-uuid', tasks_cloned: 1 };
     mockRpc.mockResolvedValueOnce({ data: rpcResult, error: null });

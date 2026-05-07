@@ -7,13 +7,19 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "typecheck:agent": "node scripts/tsc-agent.cjs",
-    "verify-architecture": "bash scripts/verify-architecture.sh",
+    "db:local:bootstrap": "node scripts/supabase-local-bootstrap.cjs --fresh",
+    "db:local:bootstrap:fresh": "node scripts/supabase-local-bootstrap.cjs --fresh",
+    "db:local:test": "npm run db:local:bootstrap && npx --no-install supabase test db",
+    "db:local:test:fresh": "npm run db:local:bootstrap:fresh && npx --no-install supabase test db",
+    "verify-dependencies": "node scripts/verify-dependency-guardrails.cjs",
+    "verify-architecture": "node scripts/verify-architecture.cjs",
     "verify-e2e": "bash scripts/verify-e2e.sh",
-    "test:e2e": "npx bddgen --config Testing/e2e/playwright.config.ts && npx playwright test --config Testing/e2e/playwright.config.ts",
-    "test:e2e:mobile": "npx bddgen --config Testing/e2e/playwright.config.ts && npx playwright test --config Testing/e2e/playwright.config.ts --project=mobile-chrome",
-    "test:e2e:headed": "npx bddgen --config Testing/e2e/playwright.config.ts && npx playwright test --config Testing/e2e/playwright.config.ts --headed",
-    "test:e2e:vision": "npx bddgen --config Testing/e2e/playwright.config.ts && npx playwright test --config Testing/e2e/playwright.config.ts --grep @vision",
-    "test:e2e:a11y": "npx bddgen --config Testing/e2e/playwright.config.ts && npx playwright test --config Testing/e2e/playwright.config.ts --project=accessibility",
+    "test:e2e": "node scripts/run-e2e.cjs",
+    "test:e2e:release": "node scripts/run-e2e.cjs --grep @release",
+    "test:e2e:mobile": "node scripts/run-e2e.cjs --project=mobile-chrome",
+    "test:e2e:headed": "node scripts/run-e2e.cjs --headed",
+    "test:e2e:vision": "node scripts/run-e2e.cjs --grep @vision",
+    "test:e2e:a11y": "node scripts/run-e2e.cjs --project=accessibility",
     "lint": "eslint .",
     "test": "vitest --run",
     "preview": "vite preview"
@@ -78,9 +84,15 @@
     "globals": "^17.5.0",
     "jsdom": "^29.0.2",
     "playwright-bdd": "^8.4.2",
+    "supabase": "2.95.2",
     "typescript": "~6.0.3",
     "typescript-eslint": "^8.48.0",
     "vite": "^8.0.8",
     "vitest": "^4.0.18"
+  },
+  "overrides": {
+    "@cucumber/messages@27.2.0": {
+      "uuid": "11.1.1"
+    }
   }
 }

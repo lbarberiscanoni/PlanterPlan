@@ -2,11 +2,13 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 
 const mockUpdateProfile = vi.fn();
+const mockChangePassword = vi.fn();
 
 vi.mock('@/shared/api/planterClient', () => ({
   planter: {
     auth: {
       updateProfile: (...args: unknown[]) => mockUpdateProfile(...args),
+      changePassword: (...args: unknown[]) => mockChangePassword(...args),
     },
   },
 }));
@@ -27,7 +29,7 @@ const mockUser = {
   },
 };
 
-vi.mock('@/shared/contexts/AuthContext', () => ({
+vi.mock('@/shared/contexts/auth-context', () => ({
   useAuth: () => ({ user: mockUser }),
 }));
 
@@ -38,6 +40,7 @@ describe('useSettings', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockUpdateProfile.mockResolvedValue({});
+    mockChangePassword.mockResolvedValue(undefined);
   });
 
   it('initializes profile from user metadata', () => {
@@ -185,6 +188,70 @@ describe('useSettings', () => {
       });
 
       expect(result.current.state.profile.full_name).toBe('New Name');
+    });
+  });
+
+  describe('handlePasswordChange', () => {
+    it('requires the current password before updating', async () => {
+      const { result } = renderHook(() => useSettings());
+
+      act(() => {
+        result.current.actions.setPasswordForm({
+          currentPassword: '',
+          newPassword: 'new-password-123',
+          confirmPassword: 'new-password-123',
+        });
+      });
+
+      await act(async () => {
+        await result.current.actions.handlePasswordChange();
+      });
+
+      expect(result.current.state.passwordError).toBe('Current password is required');
+      expect(mockChangePassword).not.toHaveBeenCalled();
+    });
+
+    it('requires password confirmation to match', async () => {
+      const { result } = renderHook(() => useSettings());
+
+      act(() => {
+        result.current.actions.setPasswordForm({
+          currentPassword: 'old-password',
+          newPassword: 'new-password-123',
+          confirmPassword: 'different-password',
+        });
+      });
+
+      await act(async () => {
+        await result.current.actions.handlePasswordChange();
+      });
+
+      expect(result.current.state.passwordError).toBe('Passwords do not match');
+      expect(mockChangePassword).not.toHaveBeenCalled();
+    });
+
+    it('passes current and new password to the auth client', async () => {
+      const { result } = renderHook(() => useSettings());
+
+      act(() => {
+        result.current.actions.setPasswordForm({
+          currentPassword: 'old-password',
+          newPassword: 'new-password-123',
+          confirmPassword: 'new-password-123',
+        });
+      });
+
+      await act(async () => {
+        await result.current.actions.handlePasswordChange();
+      });
+
+      expect(mockChangePassword).toHaveBeenCalledWith('old-password', 'new-password-123');
+      expect(toast.success).toHaveBeenCalledWith('Password updated', expect.any(Object));
+      expect(result.current.state.passwordForm).toEqual({
+        currentPassword: '',
+        newPassword: '',
+        confirmPassword: '',
+      });
     });
   });
 });

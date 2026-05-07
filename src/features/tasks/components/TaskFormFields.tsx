@@ -1,13 +1,12 @@
 import { useFormContext, useWatch } from 'react-hook-form';
 import { useMemo, type ReactNode } from 'react';
-import type { TaskFormData } from '@/shared/db/app.types';
+import type { TaskFormData, TeamMemberWithProfile } from '@/shared/db/app.types';
 import { Input } from '@/shared/ui/input';
 import { Label } from '@/shared/ui/label';
 import { Textarea } from '@/shared/ui/textarea';
 import { Button } from '@/shared/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/shared/ui/popover';
-import { useAuth } from '@/shared/contexts/AuthContext';
-import { useTeam } from '@/features/people/hooks/useTeam';
+import { useAuth } from '@/shared/contexts/auth-context';
 
 interface TaskFormFieldsProps {
  origin?: 'instance' | 'library' | string;
@@ -23,6 +22,13 @@ interface TaskFormFieldsProps {
  taskType?: string | null;
  /** Wave 29: the project root id — required for `useTeam(projectId)` when the Phase Lead picker renders. */
  projectId?: string | null;
+ /** Project team members supplied by the page/composition layer. */
+ teamMembers?: TeamMemberWithProfile[];
+}
+
+function getMemberLabel(member: TeamMemberWithProfile): string {
+ const email = typeof member.email === 'string' && member.email.length > 0 ? member.email : null;
+ return email ?? `User ${member.user_id.slice(0, 8)}`;
 }
 
 /**
@@ -31,13 +37,17 @@ interface TaskFormFieldsProps {
  * QueryClientProvider as a per-test optional dependency for pre-existing
  * TaskForm tests that don't exercise Phase Leads.
  */
-function PhaseLeadPicker({ projectId, taskType }: { projectId: string | null | undefined; taskType: string | null | undefined }) {
- // Wider props so the call site doesn't need TS-narrowing ceremony; we guard
- // AFTER hooks below to stay within rules-of-hooks. useTeam disables its
- // internal query when projectId is falsy, so the extra hook call is cheap.
+function PhaseLeadPicker({
+ projectId,
+ taskType,
+ teamMembers,
+}: {
+ projectId: string | null | undefined;
+ taskType: string | null | undefined;
+ teamMembers: TeamMemberWithProfile[];
+}) {
  const active = Boolean(projectId) && (taskType === 'phase' || taskType === 'milestone');
  const { setValue, control } = useFormContext<TaskFormData>();
- const { teamMembers } = useTeam(active ? projectId ?? null : null);
  const eligibleMembers = useMemo(
  () => teamMembers.filter((m) => m.role === 'viewer' || m.role === 'limited'),
  [teamMembers],
@@ -48,8 +58,7 @@ function PhaseLeadPicker({ projectId, taskType }: { projectId: string | null | u
  const selectedLabels = useMemo(() => {
  const byId = new Map<string, string>();
  for (const m of eligibleMembers) {
- const label = (m as unknown as { email?: string }).email ?? `User ${m.user_id.slice(0, 8)}`;
- byId.set(m.user_id, label);
+ byId.set(m.user_id, getMemberLabel(m));
  }
  return selectedLeads.map((id) => byId.get(id) ?? `User ${id.slice(0, 8)}`);
  }, [eligibleMembers, selectedLeads]);
@@ -93,8 +102,8 @@ function PhaseLeadPicker({ projectId, taskType }: { projectId: string | null | u
      </p>
     ) : (
      <ul className="flex flex-col gap-1">
-      {eligibleMembers.map((m) => {
-       const label = (m as unknown as { email?: string }).email ?? `User ${m.user_id.slice(0, 8)}`;
+     {eligibleMembers.map((m) => {
+       const label = getMemberLabel(m);
        const checked = selectedSet.has(m.user_id);
        return (
         <li key={m.user_id}>
@@ -119,16 +128,31 @@ function PhaseLeadPicker({ projectId, taskType }: { projectId: string | null | u
  );
 }
 
-const TaskFormFields = ({ origin, itemLabel = 'Task', renderExtraFields, membershipRole, taskType, projectId }: TaskFormFieldsProps) => {
+const TaskFormFields = ({
+ origin,
+ itemLabel = 'Task',
+ renderExtraFields,
+ membershipRole,
+ taskType,
+ projectId,
+ teamMembers = [],
+}: TaskFormFieldsProps) => {
  const {
  register,
  formState: { errors },
  } = useFormContext<TaskFormData>();
  const { user } = useAuth();
  const isAdmin = (user as { role?: string })?.role === 'admin';
- const canTagCoaching =
- origin === 'instance' && (membershipRole === 'owner' || membershipRole === 'editor');
- const canTagStrategy = canTagCoaching;
+ const canEditTemplateFlags =
+ origin === 'template'
+ && (
+ membershipRole === 'owner'
+ || membershipRole === 'editor'
+ || membershipRole === 'admin'
+ || isAdmin
+ );
+ const canTagCoaching = canEditTemplateFlags;
+ const canTagStrategy = canEditTemplateFlags;
  const canAssignPhaseLeads =
  origin === 'instance'
  && membershipRole === 'owner'
@@ -237,7 +261,7 @@ const TaskFormFields = ({ origin, itemLabel = 'Task', renderExtraFields, members
  Coaching task
  </Label>
  <p className="text-xs text-slate-500">
- Allow users with the Coach role on this project to edit this task.
+ Cloned project instances keep this as a coaching task for Coach-role progress updates.
  </p>
  </div>
  </div>
@@ -257,14 +281,14 @@ const TaskFormFields = ({ origin, itemLabel = 'Task', renderExtraFields, members
  Strategy template
  </Label>
  <p className="text-xs text-slate-500">
- Offer Master Library follow-ups when this task is completed.
+ Cloned project instances offer Master Library follow-ups when completed.
  </p>
  </div>
  </div>
  )}
 
  {canAssignPhaseLeads && (
- <PhaseLeadPicker projectId={projectId} taskType={taskType} />
+ <PhaseLeadPicker projectId={projectId} taskType={taskType} teamMembers={teamMembers} />
  )}
 
  {renderExtraFields && renderExtraFields()}

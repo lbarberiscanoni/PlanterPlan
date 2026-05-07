@@ -3,7 +3,7 @@ Feature: Invite Member
   Background:
     Given the user is logged in
 
-  Scenario: Invite button visible for owners and editors
+  Scenario: Invite button visible for owners
     Given the user is a project owner
     And the user is on a project page
     Then the invite button is visible

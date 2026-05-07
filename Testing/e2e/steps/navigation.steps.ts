@@ -65,6 +65,17 @@ Then('the user is navigated to the dashboard', async ({ page }) => {
   await expect(page).toHaveURL(/\/dashboard/);
 });
 
+Then('the user is navigated to the tasks creation action', async ({ page }) => {
+  await expect(page).toHaveURL(/\/tasks/);
+  await expect(page.locator('[data-testid="create-project-modal"]')).toBeVisible();
+});
+
+Then('the user is navigated to the tasks template action', async ({ page }) => {
+  await expect(page).toHaveURL(/\/tasks/);
+  await expect(page.locator('[role="dialog"]')).toBeVisible();
+  await expect(page.getByRole('heading', { name: /new template/i })).toBeVisible();
+});
+
 Then('additional projects are shown', async ({ page }) => {
   const projects = page.locator('[data-testid="project-switcher"]').getByRole('link');
   expect(await projects.count()).toBeGreaterThan(0);

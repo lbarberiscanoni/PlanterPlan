@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { makeTask } from '@test';
-import type { PersonInsert, PersonUpdate, PersonRow, TaskRow, UserMetadata } from '@/shared/db/app.types';
+import type { PersonInsert, PersonUpdate, PersonRow, TaskRow, TaskUpdate, UserMetadata } from '@/shared/db/app.types';
 
 // ---------------------------------------------------------------------------
 // Supabase mock — chainable query builder
@@ -26,6 +26,9 @@ const mockRpc = vi.fn();
 const mockGetUser = vi.fn();
 const mockSignOut = vi.fn();
 const mockUpdateUser = vi.fn();
+const mockSignInWithPassword = vi.fn();
+const mockResetPasswordForEmail = vi.fn();
+const mockFunctionsInvoke = vi.fn();
 
 vi.mock('@/shared/db/client', () => ({
   supabase: {
@@ -35,6 +38,11 @@ vi.mock('@/shared/db/client', () => ({
       getUser: (...args: unknown[]) => mockGetUser(...args),
       signOut: (...args: unknown[]) => mockSignOut(...args),
       updateUser: (...args: unknown[]) => mockUpdateUser(...args),
+      signInWithPassword: (...args: unknown[]) => mockSignInWithPassword(...args),
+      resetPasswordForEmail: (...args: unknown[]) => mockResetPasswordForEmail(...args),
+    },
+    functions: {
+      invoke: (...args: unknown[]) => mockFunctionsInvoke(...args),
     },
   },
 }));
@@ -107,6 +115,15 @@ describe('Base EntityClient CRUD (Person)', () => {
     expect(chain.eq).toHaveBeenCalledWith('id', 'p1');
   });
 
+  it('update(id, payload) reports an empty update result as not found', async () => {
+    const payload = { name: 'Missing' };
+    const chain = createChain({ data: [], error: null });
+    mockFrom.mockReturnValue(chain);
+
+    await expect(planter.entities.Person.update('missing-id', payload as PersonUpdate))
+      .rejects.toMatchObject({ status: 404 });
+  });
+
   it('delete(id) chains .delete().eq("id", id)', async () => {
     const chain = createChain({ data: null, error: null });
     mockFrom.mockReturnValue(chain);
@@ -126,6 +143,52 @@ describe('Base EntityClient CRUD (Person)', () => {
 
     expect(chain.eq).toHaveBeenCalledWith('project_id', 'proj-1');
     expect(chain.is).toHaveBeenCalledWith('status', null);
+  });
+
+  it('filter() ignores inherited enumerable properties', async () => {
+    const chain = createChain({ data: [{ id: 'p1' }], error: null });
+    mockFrom.mockReturnValue(chain);
+    const filters = Object.create({ role: 'admin' }) as Partial<PersonRow>;
+    filters.project_id = 'proj-1';
+
+    await planter.entities.Person.filter(filters);
+
+    expect(chain.eq).toHaveBeenCalledWith('project_id', 'proj-1');
+    expect(chain.eq).not.toHaveBeenCalledWith('role', 'admin');
+  });
+});
+
+describe('Task protected scaffold failure paths', () => {
+  it('surfaces DB trigger rejection from Task.update', async () => {
+    const chain = createChain({
+      data: null,
+      error: { message: 'protected template scaffold fields cannot be changed', code: 'P0001' },
+    });
+    mockFrom.mockReturnValue(chain);
+
+    await expect(
+      planter.entities.Task.update('protected-task', { title: 'Mutated' } as TaskUpdate),
+    ).rejects.toMatchObject({
+      name: 'PlanterError',
+      message: 'protected template scaffold fields cannot be changed',
+      status: 'P0001',
+    });
+    expect(chain.update).toHaveBeenCalledWith({ title: 'Mutated' });
+  });
+
+  it('surfaces DB trigger rejection from Task.delete', async () => {
+    const chain = createChain({
+      data: null,
+      error: { message: 'protected template scaffold tasks cannot be deleted', code: 'P0001' },
+    });
+    mockFrom.mockReturnValue(chain);
+
+    await expect(planter.entities.Task.delete('protected-task')).rejects.toMatchObject({
+      name: 'PlanterError',
+      message: 'protected template scaffold tasks cannot be deleted',
+      status: 'P0001',
+    });
+    expect(chain.delete).toHaveBeenCalled();
   });
 });
 
@@ -225,6 +288,35 @@ describe('Project entity', () => {
 
     expect(mockFrom).toHaveBeenCalledWith('project_members');
     expect(chain.insert).toHaveBeenCalledWith(member);
+  });
+
+  it('TeamMember.listByProjectWithProfiles() calls the profile hydration RPC', async () => {
+    mockRpc.mockResolvedValue({
+      data: [
+        {
+          id: 'm1',
+          project_id: 'proj-1',
+          user_id: 'user-2',
+          role: 'editor',
+          joined_at: '2026-05-07T00:00:00Z',
+          email: 'editor@example.com',
+          first_name: 'Ed',
+          last_name: 'Itor',
+          display_name: 'Ed Itor',
+          avatar_url: null,
+        },
+      ],
+      error: null,
+    });
+
+    const result = await planter.entities.TeamMember.listByProjectWithProfiles('proj-1');
+
+    expect(mockRpc).toHaveBeenCalledWith('list_project_members_with_profiles', { p_project_id: 'proj-1' });
+    expect(result[0]).toMatchObject({
+      id: 'm1',
+      email: 'editor@example.com',
+      display_name: 'Ed Itor',
+    });
   });
 });
 
@@ -387,6 +479,48 @@ describe('Auth', () => {
 
     expect(mockUpdateUser).toHaveBeenCalledWith({ data: attrs });
   });
+
+  it('changePassword() reauthenticates with the current password before updating', async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: 'user-1', email: 'test@example.com' } }, error: null });
+    mockSignInWithPassword.mockResolvedValue({ data: { session: {} }, error: null });
+    mockUpdateUser.mockResolvedValue({ data: { user: { id: 'user-1' } }, error: null });
+
+    await planter.auth.changePassword('old-password', 'new-password-123');
+
+    expect(mockSignInWithPassword).toHaveBeenCalledWith({
+      email: 'test@example.com',
+      password: 'old-password',
+    });
+    expect(mockUpdateUser).toHaveBeenCalledWith({ password: 'new-password-123' });
+  });
+
+  it('changePassword() does not update when current password verification fails', async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: 'user-1', email: 'test@example.com' } }, error: null });
+    mockSignInWithPassword.mockResolvedValue({ data: null, error: new Error('Invalid login credentials') });
+
+    await expect(planter.auth.changePassword('wrong-password', 'new-password-123'))
+      .rejects.toThrow('Invalid login credentials');
+
+    expect(mockUpdateUser).not.toHaveBeenCalled();
+  });
+
+  it('requestPasswordReset() sends Supabase recovery email with redirect URL', async () => {
+    mockResetPasswordForEmail.mockResolvedValue({ data: {}, error: null });
+
+    await planter.auth.requestPasswordReset('test@example.com', 'https://app.example.com/reset-password');
+
+    expect(mockResetPasswordForEmail).toHaveBeenCalledWith('test@example.com', {
+      redirectTo: 'https://app.example.com/reset-password',
+    });
+  });
+
+  it('completePasswordReset() updates the password for the recovery session', async () => {
+    mockUpdateUser.mockResolvedValue({ data: { user: { id: 'user-1' } }, error: null });
+
+    await planter.auth.completePasswordReset('new-password-123');
+
+    expect(mockUpdateUser).toHaveBeenCalledWith({ password: 'new-password-123' });
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -458,17 +592,42 @@ describe('Untested methods (Category A)', () => {
     expect(chain.update).toHaveBeenCalledWith(expect.objectContaining({ primary_resource_id: 'res-1' }));
   });
 
-  it('Project.addMemberByEmail() calls rpc("add_project_member_by_email")', async () => {
-    mockRpc.mockResolvedValue({ data: { id: 'member-1' }, error: null });
-
-    const result = await planter.entities.Project.addMemberByEmail('proj-1', 'test@example.com', 'editor');
-
-    expect(mockRpc).toHaveBeenCalledWith('add_project_member_by_email', {
-      p_project_id: 'proj-1',
-      p_email: 'test@example.com',
-      p_role: 'editor',
+  it('Project.inviteMemberByEmail() invokes invite-by-email edge function', async () => {
+    mockFunctionsInvoke.mockResolvedValue({
+      data: {
+        message: 'Invite processed successfully',
+        user: { id: 'member-1', email: 'test@example.com' },
+      },
+      error: null,
     });
-    expect(result.error).toBeNull();
+
+    const result = await planter.entities.Project.inviteMemberByEmail('proj-1', 'test@example.com', 'viewer');
+
+    expect(mockFunctionsInvoke).toHaveBeenCalledWith('invite-by-email', {
+      body: {
+        projectId: 'proj-1',
+        email: 'test@example.com',
+        role: 'viewer',
+      },
+    });
+    expect(result.user.id).toBe('member-1');
+  });
+
+  it('Project.inviteMemberByEmail() surfaces sanitized edge error bodies', async () => {
+    const response = new Response(JSON.stringify({ error: 'Forbidden: only project owners can invite users.' }), {
+      status: 403,
+      headers: { 'Content-Type': 'application/json' },
+    });
+    mockFunctionsInvoke.mockResolvedValue({
+      data: null,
+      error: Object.assign(new Error('Edge Function returned a non-2xx status code'), { context: response }),
+    });
+
+    await expect(
+      planter.entities.Project.inviteMemberByEmail('proj-1', 'test@example.com', 'viewer'),
+    ).rejects.toMatchObject({
+      message: 'Forbidden: only project owners can invite users.',
+    });
   });
 
   it('listTemplates() applies resourceType and userId filters', async () => {

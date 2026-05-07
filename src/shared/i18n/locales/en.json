@@ -25,8 +25,9 @@
     "view": "View",
     "clear_search": "Clear search",
     "search": "Search",
+    "export": "Export",
+    "invite": "Invite",
     "working": "Working…",
-    "soon": "Soon",
     "off": "Off",
     "daily": "Daily",
     "weekly": "Weekly",
@@ -41,9 +42,7 @@
     "enter_email": "Enter email"
   },
   "nav": {
-    "dashboard": "Dashboard",
-    "project_dashboard": "Project Dashboard",
-    "my_tasks": "My Tasks",
+    "my_tasks": "Tasks",
     "reports": "Reports",
     "team": "Team",
     "projects": "Projects",
@@ -61,6 +60,8 @@
     "current_project_heading": "Current Project",
     "view_project": "View Project →",
     "user_fallback": "User",
+    "command_title": "Command palette",
+    "command_description": "Search commands and projects.",
     "command_placeholder": "Type a command or search…",
     "command_empty": "No results found.",
     "command_suggestions": "Suggestions",
@@ -94,19 +95,39 @@
     "email_placeholder": "Enter your email",
     "password_label": "Password",
     "password_placeholder": "Enter your password",
+    "new_password_label": "New Password",
+    "new_password_placeholder": "Enter your new password",
+    "confirm_password_label": "Confirm Password",
+    "confirm_password_placeholder": "Re-enter your new password",
     "sign_in": "Sign In",
     "sign_up": "Sign Up",
+    "forgot_password": "Forgot password?",
+    "forgot_password_prompt": "Enter your email and we'll send you a secure reset link.",
+    "send_reset_link": "Send Reset Link",
+    "back_to_sign_in": "Back to sign in",
     "need_account": "Need an account? Sign up",
     "have_account": "Already have an account? Sign in",
     "auto_login": "(Auto-Login as Test User)",
     "loading_label": "Loading",
     "invalid_email": "Please enter a valid email address",
     "password_too_short": "Password must be at least 6 characters",
+    "password_reset_sent_title": "Password reset email sent",
+    "password_reset_sent_description": "Check your inbox for a link to set a new password.",
+    "password_reset_failed_title": "Could not send reset email",
+    "reset_password_heading": "Reset Password",
+    "reset_password_description": "Choose a new password for your account.",
+    "reset_password_submit": "Reset Password",
+    "reset_password_min_length": "Password must be at least 8 characters",
+    "reset_password_mismatch": "Passwords do not match",
+    "reset_password_invalid_session": "This reset link is invalid or expired. Request a new one from the login page.",
+    "reset_password_success_title": "Password reset",
+    "reset_password_success_description": "Your password has been updated. Sign in with the new password.",
+    "reset_password_failed_title": "Could not reset password",
     "unexpected_error": "An unexpected error occurred"
   },
   "tasks": {
-    "page_title": "My Tasks",
-    "page_subtitle": "Review and manage your assignments across all projects",
+    "page_title": "Tasks",
+    "page_subtitle": "Review and manage work across all projects",
     "delete_confirm_title": "Delete \"{{title}}\"?",
     "delete_confirm_description": "This also deletes every subtask under it. This action cannot be undone.",
     "delete_success": "Task deleted",
@@ -138,6 +159,12 @@
     "status_for_aria": "Status for {{title}}",
     "title_with_project_aria": "{{title}} — {{project}}",
     "view_label": "View",
+    "search_label": "Search",
+    "search_placeholder": "Search tasks or projects…",
+    "search_aria": "Search tasks and projects",
+    "search_empty": "No tasks match your search and filters.",
+    "clear_search": "Clear task search",
+    "result_count": "Showing {{shown}} of {{total}} work items",
     "view_list": "List View",
     "view_board": "Board View",
     "view_aria": "Task view",
@@ -174,7 +201,7 @@
       },
       "empty": {
         "my_tasks": "No tasks found across your projects.",
-        "priority": "No high-priority tasks right now.",
+        "priority": "No overdue, due-soon, or started tasks right now.",
         "overdue": "Nothing is overdue. Nice work.",
         "due_soon": "No tasks are due in the next few days.",
         "current": "No tasks are currently active.",
@@ -199,6 +226,10 @@
       "in_progress": "In Progress",
       "blocked": "Blocked",
       "completed": "Completed"
+    },
+    "comments": {
+      "deleted_author": "Deleted user",
+      "reply_button": "Reply"
     },
     "detail": {
       "select_task": "Select a task to view details",
@@ -245,7 +276,7 @@
       "email_body_empty_date": "—",
       "phase_lead_fallback": "User {{id}}",
       "template_delete_blocked_title": "Cannot delete template task",
-      "template_delete_blocked_description": "This task originated from the project template. Only the project owner can delete template-origin tasks.",
+      "template_delete_blocked_description": "This task originated from the project template. Template-origin scaffold tasks cannot be deleted from project workspaces.",
       "created": "Created",
       "updated": "Updated",
       "id_label": "ID",
@@ -266,6 +297,15 @@
       "collapse_aria": "Collapse",
       "incomplete_subtasks_confirm_one": "This task has {{count}} incomplete subtask. Mark all as complete?",
       "incomplete_subtasks_confirm_other": "This task has {{count}} incomplete subtasks. Mark all as complete?"
+    },
+    "strategy_follow_up": {
+      "search_label": "Search Master Library",
+      "search_results_aria": "Master Library search results",
+      "loading_templates": "Loading templates…",
+      "all_matching_added": "All matching templates are already added.",
+      "no_matching_templates": "No matching templates found.",
+      "no_templates_available": "No templates available.",
+      "copy_to_form": "Copy to form"
     },
     "search": {
       "tasks_placeholder": "Search tasks…",
@@ -291,6 +331,24 @@
     "generic": "{{action}} on {{entityType}}"
   },
   "projects": {
+    "new_project": "New Project",
+    "create_project_modal": {
+      "title": "Start New Project",
+      "subtitle": "Choose a template or start from scratch.",
+      "search_templates_placeholder": "Search templates…",
+      "new_church_plant": "New Church Plant",
+      "scaffold_description": "Comprehensive 24-month structured roadmap",
+      "continue_to_details": "Continue to Details",
+      "project_details": "Project Details",
+      "project_name": "Project Name",
+      "project_name_placeholder": "e.g. Hope City Launch",
+      "description": "Description",
+      "description_placeholder": "What's the vision for this project?",
+      "launch_date": "Launch Date",
+      "create_project": "Create Project",
+      "loading_templates": "Loading templates…",
+      "no_templates_match": "No templates match your search."
+    },
     "reports": {
       "title": "Reports & Analytics",
       "select_project": "Select a Project",
@@ -319,8 +377,7 @@
       "no_active_projects": "No active projects yet.",
       "project_picker_label": "Project",
       "select_project": "Select a project…",
-      "untitled_project": "(untitled project)",
-      "pdf_coming_soon": "PDF export coming soon"
+      "untitled_project": "(untitled project)"
     },
     "form": {
       "title_label": "Project Title",
@@ -364,8 +421,29 @@
     "task_save_failed_retry_toast": "Failed to save task. Please try again.",
     "task_update_failed_toast": "Failed to update task",
     "task_create_failed_toast": "Failed to create task",
+    "invalid_task_hierarchy_drop": "Subtasks cannot contain child tasks. Move the parent task first.",
     "search_template_phase_placeholder": "Search for a template phase to copy",
     "search_template_task_placeholder": "Start typing to copy an existing template task",
+    "header": {
+      "open_command_palette": "Open command palette",
+      "settings_aria": "Open settings for {{project}}",
+      "export_aria": "Export {{project}} as CSV",
+      "reports_aria": "Open reports for {{project}}",
+      "team_aria": "Open team roster for {{project}}",
+      "invite_aria": "Invite a member to {{project}}",
+      "export_fallback_name": "Project",
+      "launch_date": "Launch: {{date}}",
+      "team_members_one": "{{count}} team member",
+      "team_members_other": "{{count}} team members",
+      "progress_complete": "{{progress}}% complete"
+    },
+    "derived_state": {
+      "archived": "Archived",
+      "complete": "Complete",
+      "in_progress": "In progress",
+      "not_started": "Not started",
+      "empty": "No tasks"
+    },
     "invite_modal": {
       "title": "Invite Member",
       "description": "Invite a user to {{project}}.",
@@ -382,6 +460,37 @@
       "role_coach": "Coach (Comment & Review)",
       "role_editor": "Editor (Can edit tasks)",
       "role_limited": "Limited (Assigned tasks only)"
+    },
+    "team_page": {
+      "title": "Team",
+      "title_with_project": "{{project}} Team",
+      "subtitle": "Review project access, roles, and roster details.",
+      "project_label": "Project",
+      "project_placeholder": "Select a project…",
+      "untitled_project": "Untitled project",
+      "add_member": "Add Member",
+      "add_first_member": "Add First Member",
+      "select_heading": "Select a project",
+      "select_description": "Choose a project to view its roster.",
+      "empty_heading": "Build your team",
+      "empty_description": "No members are assigned to this project yet.",
+      "unknown_member": "Unknown member",
+      "email_unavailable": "Email unavailable",
+      "joined_known": "Joined {{date}}",
+      "joined_unknown": "Join date unavailable",
+      "remove_member_aria": "Remove {{name}}",
+      "remove_confirm_title": "Remove {{name}}?",
+      "remove_confirm_description": "This removes the member from the project. Their historical task and comment activity remains intact.",
+      "remove_success": "Member removed successfully",
+      "remove_failed": "Failed to remove member",
+      "project_required": "Select a project before inviting a member.",
+      "roles": {
+        "owner": "Owner",
+        "editor": "Editor",
+        "coach": "Coach",
+        "viewer": "Viewer",
+        "limited": "Limited"
+      }
     },
     "edit_modal": {
       "title": "Project Settings",
@@ -515,6 +624,19 @@
     }
   },
   "library": {
+    "new_template": "New Template",
+    "template_created_toast": "Template created",
+    "create_template_modal": {
+      "title": "New Template",
+      "subtitle": "Create a reusable template for your projects.",
+      "name_label": "Template Name",
+      "name_placeholder": "e.g. Church Plant Roadmap",
+      "description_label": "Description",
+      "description_placeholder": "What is this template for?",
+      "published_label": "Published",
+      "published_description": "Published templates are visible to all users in the library.",
+      "create": "Create Template"
+    },
     "master_library": "Master Library",
     "search_master_library": "Search Master Library",
     "clear_search": "Clear search",
@@ -538,43 +660,6 @@
       "no_tasks": "No tasks in the master library yet."
     }
   },
-  "dashboard": {
-    "title": "Project Dashboard",
-    "subtitle": "Manage your church planting projects",
-    "new_project": "New Project",
-    "new_template": "New Template",
-    "no_projects_title": "No projects yet",
-    "no_projects_description": "Start your church planting journey by creating your first project",
-    "create_first_project": "Create Your First Project",
-    "create_project_modal": {
-      "title": "Start New Project",
-      "subtitle": "Choose a template or start from scratch.",
-      "search_templates_placeholder": "Search templates…",
-      "new_church_plant": "New Church Plant",
-      "scaffold_description": "Comprehensive 24-month structured roadmap",
-      "continue_to_details": "Continue to Details",
-      "project_details": "Project Details",
-      "project_name": "Project Name",
-      "project_name_placeholder": "e.g. Hope City Launch",
-      "description": "Description",
-      "description_placeholder": "What's the vision for this project?",
-      "create_project": "Create Project",
-      "loading_templates": "Loading templates…",
-      "no_templates_match": "No templates match your search."
-    },
-    "template_created_toast": "Template created",
-    "create_template_modal": {
-      "title": "New Template",
-      "subtitle": "Create a reusable template for your projects.",
-      "name_label": "Template Name",
-      "name_placeholder": "e.g. Church Plant Roadmap",
-      "description_label": "Description",
-      "description_placeholder": "What is this template for?",
-      "published_label": "Published",
-      "published_description": "Published templates are visible to all users in the library.",
-      "create": "Create Template"
-    }
-  },
   "settings": {
     "page_title": "Settings",
     "page_subtitle": "Manage your account and app preferences",
@@ -594,17 +679,33 @@
       "organization_placeholder": "e.g. Hope City Church",
       "language_heading": "Language",
       "locale_label": "Language",
+      "locale_beta_badge": "Beta",
+      "locale_review_required_note": "Human review required before marketing or launch claims.",
       "email_preferences_heading": "Email Preferences",
       "weekly_digest": "Weekly Digest",
-      "weekly_digest_description": "Get a summary of your tasks every Monday"
+      "weekly_digest_description": "Get a summary of your tasks every Monday",
+      "avatar_url_invalid": "Please enter a valid URL (https://...)",
+      "save_success_title": "Settings saved",
+      "save_success_description": "Your profile has been updated successfully.",
+      "save_failed_title": "Error",
+      "save_failed_description": "Failed to update settings. Please try again."
     },
     "security": {
       "change_password_heading": "Change Password",
       "change_password_description": "Update your password to keep your account secure.",
+      "current_password_label": "Current Password",
+      "current_password_placeholder": "Enter your current password",
+      "current_password_required": "Current password is required",
       "new_password_label": "New Password",
       "new_password_placeholder": "Enter new password (min. 8 characters)",
       "confirm_password_label": "Confirm New Password",
       "confirm_password_placeholder": "Re-enter new password",
+      "password_min_length": "Password must be at least 8 characters",
+      "passwords_mismatch": "Passwords do not match",
+      "password_updated_title": "Password updated",
+      "password_updated_description": "Your password has been changed successfully.",
+      "password_update_failed_title": "Error",
+      "password_update_failed_description": "Failed to change password. Please verify your current password and try again.",
       "change_password_button": "Change Password"
     }
   },
@@ -664,7 +765,7 @@
     "login_failed": "Login failed",
     "user_must_be_logged_in": "User must be logged in",
     "project_not_found_or_no_access": "This project doesn't exist, or you no longer have access to it.",
-    "back_to_dashboard": "Back to dashboard"
+    "back_to_tasks": "Back to tasks"
   },
   "ics": {
     "card_title": "Calendar feeds (ICS)",
@@ -817,6 +918,7 @@
     "templates_clones_empty": "No instances cloned from this template.",
     "templates_cloned_from": "Cloned from v{{version}}",
     "templates_stale_badge": "stale",
+    "templates_stale_explanation": "Template changed; existing projects are not auto-updated.",
     "analytics_title": "Admin Analytics",
     "analytics_subtitle": "Cross-tenant snapshot. Refreshed every 5 minutes.",
     "analytics_loading": "Loading snapshot…",

@@ -26,8 +26,9 @@ export class DashboardPage {
   }
 
   async goto() {
-    await this.page.goto('/dashboard');
+    await this.page.goto('/tasks');
     await this.page.waitForLoadState('networkidle');
+    await this.dismissOnboardingIfVisible();
   }
 
   async clickNewProject() {
@@ -52,6 +53,17 @@ export class DashboardPage {
 
   async isOnboardingVisible() {
     return this.page.getByText(/Welcome|Get Started/i).isVisible().catch(() => false);
+  }
+
+  async dismissOnboardingIfVisible() {
+    const onboardingDialog = this.page.getByRole('dialog', { name: /welcome to planterplan/i });
+    if (await onboardingDialog.isVisible().catch(() => false)) {
+      await this.page.keyboard.press('Escape');
+      if (await onboardingDialog.isVisible().catch(() => false)) {
+        await onboardingDialog.getByRole('button', { name: /^close$/i }).first().click({ force: true });
+      }
+      await onboardingDialog.waitFor({ state: 'hidden' });
+    }
   }
 
   async searchProjects(query: string) {

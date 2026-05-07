@@ -21,10 +21,13 @@ export interface PendingMentionRow {
     user_id: string
     event_type: 'mention_pending'
     payload: {
+        recipient_id?: string
+        actor_id?: string
+        author_id?: string
         comment_id?: string
         task_id?: string
+        project_id?: string
         root_id?: string
-        author_id?: string
         body_preview?: string
     }
 }
@@ -205,7 +208,7 @@ export async function dispatchPendingMentions(
         const preview = row.payload?.body_preview ?? ''
         const title = 'New mention on PlanterPlan'
         const body = preview || 'Someone mentioned you in a comment.'
-        const projectId = row.payload?.root_id ?? row.payload?.task_id
+        const projectId = row.payload?.project_id ?? row.payload?.root_id ?? row.payload?.task_id
         const url = projectId ? `/project/${projectId}` : '/'
 
         let emailSucceeded: boolean | null = null

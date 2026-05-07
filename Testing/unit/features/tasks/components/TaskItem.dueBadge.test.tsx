@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
-import { screen, within } from '@testing-library/react';
+import { fireEvent, screen, within } from '@testing-library/react';
 import { DndContext } from '@dnd-kit/core';
 import type { ReactNode } from 'react';
 
@@ -28,7 +28,23 @@ function DndWrapper({ children }: { children: ReactNode }) {
 }
 
 function renderTaskItem(task: TaskItemData) {
-    return renderWithProviders(<TaskItem task={task} />, { wrapper: DndWrapper });
+    return renderWithProviders(<DndWrapper><TaskItem task={task} /></DndWrapper>);
+}
+
+function renderTaskItemWithStatusPermission(task: TaskItemData, opts: { canUpdateStatus: boolean; onStatusChange: (id: string, status: string) => void }) {
+    return renderWithProviders(
+        <DndWrapper>
+            <TaskItem task={task} canUpdateStatus={opts.canUpdateStatus} onStatusChange={opts.onStatusChange} />
+        </DndWrapper>,
+    );
+}
+
+function renderTaskItemWithChildAction(task: TaskItemData, opts: { level: number; onAddChildTask: (task: TaskItemData) => void }) {
+    return renderWithProviders(
+        <DndWrapper>
+            <TaskItem task={task} level={opts.level} onAddChildTask={opts.onAddChildTask} />
+        </DndWrapper>,
+    );
 }
 
 describe('TaskItem due-date badge (Wave 33)', () => {
@@ -113,5 +129,52 @@ describe('TaskItem due-date badge (Wave 33)', () => {
         // Status select renders a combobox / role=combobox per Radix Select
         const row = screen.getByTestId('task-row-tmpl-status');
         expect(within(row).queryByRole('combobox')).not.toBeInTheDocument();
+    });
+
+    it('disables the status select when the caller cannot update task progress', () => {
+        const onStatusChange = vi.fn();
+        const task = makeTask({ id: 'locked-status', title: 'Locked Status', origin: 'instance' }) as TaskItemData;
+        renderTaskItemWithStatusPermission(task, { canUpdateStatus: false, onStatusChange });
+
+        const select = screen.getByRole('combobox');
+        expect(select).toBeDisabled();
+        fireEvent.change(select, { target: { value: 'completed' } });
+        expect(onStatusChange).not.toHaveBeenCalled();
+    });
+
+    it('keeps the status select interactive for permitted progress updates', () => {
+        const onStatusChange = vi.fn();
+        const task = makeTask({ id: 'editable-status', title: 'Editable Status', origin: 'instance' }) as TaskItemData;
+        renderTaskItemWithStatusPermission(task, { canUpdateStatus: true, onStatusChange });
+
+        const select = screen.getByRole('combobox');
+        expect(select).not.toBeDisabled();
+        fireEvent.change(select, { target: { value: 'completed' } });
+        expect(onStatusChange).toHaveBeenCalledWith('editable-status', 'completed');
+    });
+
+    it('shows add-subtask controls only on task rows, not subtask rows', () => {
+        const onAddChildTask = vi.fn();
+        const task = makeTask({ id: 'task-parent', title: 'Parent task', origin: 'instance' }) as TaskItemData;
+        const { rerender } = renderTaskItemWithChildAction(task, { level: 0, onAddChildTask });
+
+        expect(screen.getByRole('button', { name: /add subtask under parent task/i })).toBeInTheDocument();
+
+        rerender(
+            <DndWrapper>
+                <TaskItem task={task} level={1} onAddChildTask={onAddChildTask} />
+            </DndWrapper>,
+        );
+
+        expect(screen.queryByRole('button', { name: /add subtask under parent task/i })).not.toBeInTheDocument();
+    });
+
+    it('hides row action controls when no backed handlers are provided', () => {
+        const task = makeTask({ id: 'actions-hidden', title: 'Actionless task', origin: 'instance' }) as TaskItemData;
+        renderTaskItem(task);
+
+        expect(screen.queryByRole('button', { name: /edit actionless task/i })).not.toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: /add subtask under actionless task/i })).not.toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: /invite member to actionless task/i })).not.toBeInTheDocument();
     });
 });

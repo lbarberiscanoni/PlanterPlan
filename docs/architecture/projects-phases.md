@@ -14,7 +14,7 @@ This domain defines the highest-level structural containers of the application. 
 ### Project Instantiation Lifecycle
 1. **Creation:** Template tree cloned, textual data copied, dates/states mapped to `Target Launch Date`.
 2. **Active:** Standard operation. Completing tasks triggers upward recalculation of Milestone and Project completeness.
-3. **Deletion:** Triggers a cascading hard delete of all nested descendants and scrubs from dashboards.
+3. **Deletion:** Triggers a cascading hard delete of all nested descendants and removes the project from navigation, task, report, and admin analytics surfaces.
 
 ### Checkpoint-Based Projects (Wave 29 — Implementation Complete)
 
@@ -41,16 +41,23 @@ _Historical lifecycle summary:_
 * **Strict Hierarchy Invariant:** `Project -> Phases -> Milestones -> Tasks -> Subtasks`.
 * **Deprecation:** Project `Location` field is officially deprecated.
 
-## Archive & Completion Semantics
+## Archive & Derived State Semantics
+* **No manual lifecycle pipeline:** `/dashboard` and the drag/drop project
+  pipeline were removed in PR D. Users no longer move projects through
+  Planning / In Progress / Launched / Paused root-status columns.
+* **Derived project state:** `deriveProjectState` in
+  `src/features/projects/lib/derived-project-state.ts` derives the read-only
+  project badge from child task state: archived, complete, in progress, not
+  started, or empty.
 * **Archived project:** Root task carries `status = 'archived'` (set/cleared via the Archive / Unarchive action in `EditProjectModal`). Archiving is reversible and **never cascades** to descendants — children keep their own status and continue to resolve dates normally.
-* **Active project:** Any project root where `status !== 'archived'` **and** `is_complete !== true`. This is the default-visible set for `useDashboard`, `ProjectSidebar`, and `ProjectSwitcher`.
+* **Active project:** Any project root where `status !== 'archived'` **and** `is_complete !== true`. This is the default-visible set for `ProjectSidebar`, `ProjectSwitcher`, and project pickers.
 * **Completed project:** Indicated by `is_complete = true` on the root task (and `status !== 'archived'`). Wave 23's `sync_task_completion_flags` DB trigger makes `is_complete === (status === 'completed')` an unconditional invariant (see `tasks-subtasks.md`); the `updateStatus` bubble-up logic keeps the value propagating up the tree. The UI filter inspects `is_complete` only.
 * **No auto-archive:** Completing a project does not archive it; archive remains an explicit user action.
 * **Reachable behind toggles (Wave 25):** `ProjectSwitcher` exposes two independent toggles — "Show archived" (Wave 21.5) and "Show completed" (Wave 25) — so users can navigate back to either subset without leaving the header dropdown. Toggles are independent: a project that is **both** archived **and** completed is classified as archived by the component's filters, and therefore appears only when "Show archived" is on. Defaults stay OFF; active behavior is unchanged.
 
 ## Integration Points
-* **Dashboard & Analytics:** Dashboard heavily queries Project completeness metrics to render the Pipeline Board.
+* **Reports & Analytics:** Reports and admin analytics query project/task completeness metrics without owning user-facing lifecycle state.
 * **Date Engine:** Project settings define the bounds and horizons applied to all child elements.
 
 ## Known Gaps / Technical Debt
-* **Template Immutability (resolved Wave 36)**: `public.tasks.cloned_from_task_id uuid REFERENCES public.tasks(id) ON DELETE SET NULL` (migration `docs/db/migrations/2026_04_18_task_template_origin.sql`). Stamped server-side during `clone_project_template`; NULL means "post-instantiation custom addition" (freely deletable). App-side UI guard in `TaskDetailsView` blocks non-owners from deleting template-origin rows via a Shadcn `<Dialog>` ("Cannot delete template task" / "Only the project owner can delete template-origin tasks"). Owners bypass the modal and delete directly. `TaskItem` renders a small indigo "T" badge (with a Wave 33 Radix tooltip reading "From template") on every template-origin row. **Server-side enforcement is deliberately NOT attempted for v1** — a per-row RLS policy would be brittle and the owner-bypass behavior is clearer in app code.
+* **Template Immutability (resolved Wave 36, hardened PR 2)**: `public.tasks.cloned_from_task_id uuid REFERENCES public.tasks(id) ON DELETE SET NULL` (migration `docs/db/migrations/2026_04_18_task_template_origin.sql`). Stamped server-side during `clone_project_template`; NULL means "post-instantiation custom addition" (freely deletable). PR 2 adds `trg_enforce_template_scaffold_immutability`, which blocks app-role deletes plus structural/content/protected-template-settings updates on cloned instance scaffold rows while still allowing runtime workflow fields such as status/completion, assignments, priority, dates, notes, primary resources, lock state, supervisor report delivery, and non-protected project settings. Explicit postgres/service-role maintenance bypass remains available for audited repair work. `TaskDetailsView` mirrors the DB rule by blocking delete attempts for all cloned template-origin rows. `TaskItem` renders a small indigo "T" badge (with a Wave 33 Radix tooltip reading "From template") on every template-origin row.

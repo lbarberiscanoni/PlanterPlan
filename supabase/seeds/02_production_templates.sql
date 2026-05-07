@@ -13,15 +13,15 @@ DECLARE
 BEGIN
 
   -- 1. "Launch Large" Template
-  INSERT INTO public.tasks (id, title, description, origin, status, template, is_premium)
+  INSERT INTO public.tasks (id, title, description, origin, status, is_premium, settings)
   VALUES (
     v_launch_large_id,
     'Launch Large',
     'Comprehensive 6-phase plan for launching a fully staffed church.',
     'template',
     'not_started',
-    'launch_large',
-    false
+    false,
+    '{"published": true, "seed_key": "launch_large"}'::jsonb
   );
 
   -- Phase 1: Discovery (Free)
@@ -54,15 +54,15 @@ BEGIN
 
 
   -- 2. "Multisite Launch" Template (Fully Premium)
-  INSERT INTO public.tasks (id, title, description, origin, status, template, is_premium)
+  INSERT INTO public.tasks (id, title, description, origin, status, is_premium, settings)
   VALUES (
     v_multisite_id,
     'Multisite Campus',
     'Streamlined process for launching a new campus of an existing church.',
     'template',
     'not_started',
-    'multisite',
-    true
+    true,
+    '{"published": true, "seed_key": "multisite"}'::jsonb
   );
 
   -- Phases for Multisite

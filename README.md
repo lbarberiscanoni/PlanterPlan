@@ -12,6 +12,7 @@ PlanterPlan's business logic, state machines, and data models are strictly defin
 * [Projects & Phases](docs/architecture/projects-phases.md)
 * [Tasks & Subtasks](docs/architecture/tasks-subtasks.md)
 * [Team Management](docs/architecture/team-management.md)
+* [Product Specification](spec.md)
 
 ## ⚙️ Operations & Database
 Guidelines for local development, database structure, and safe deployment protocols.
@@ -27,8 +28,10 @@ Directives and context constraints specifically formatted for AI agents and auto
 * [Repository Context Map](repo-context.yaml)
 
 ## 🧪 Testing & Validation
-* [Testing Strategy](TESTING_STRATEGY.md)
-* [Testing Implementation Plan](TESTING_IMPLEMENTATION_PLAN.md)
+* [Testing Documentation Index](docs/testing/README.md)
+* [Testing Strategy](docs/testing/strategy.md)
+* [Testing Implementation Plan](docs/testing/implementation-plan.md)
+* [Testing Gap Findings](docs/testing/gap-findings.md)
 
 ## 🚀 Quick Start
 ```bash

@@ -2,16 +2,25 @@ import { useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { useAuth } from '@/shared/contexts/AuthContext';
+import { useAuth } from '@/shared/contexts/auth-context';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Loader2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { planter } from '@/shared/api/planterClient';
+
+type AuthMode = 'signIn' | 'signUp' | 'forgotPassword';
+type LoginFormValues = {
+ email: string;
+ password: string | undefined;
+};
 
 const LoginForm = () => {
  const { t } = useTranslation();
- const [isSignUp, setIsSignUp] = useState(false);
+ const [mode, setMode] = useState<AuthMode>('signIn');
  const [loading, setLoading] = useState(false);
+ const isSignUp = mode === 'signUp';
+ const isForgotPassword = mode === 'forgotPassword';
 
  const { signIn, signUp } = useAuth();
  const navigate = useNavigate();
@@ -20,16 +29,18 @@ const LoginForm = () => {
   () =>
    z.object({
     email: z.string().email(t('auth.invalid_email')),
-    password: z.string().min(6, t('auth.password_too_short')),
+    password: isForgotPassword
+     ? z.string().optional()
+     : z.string().min(6, t('auth.password_too_short')),
    }),
-  [t],
+  [isForgotPassword, t],
  );
 
  const {
  register,
  handleSubmit,
  formState: { errors },
- } = useForm({
+ } = useForm<LoginFormValues>({
  resolver: zodResolver(loginSchema),
  defaultValues: {
  email: '',
@@ -37,24 +48,39 @@ const LoginForm = () => {
  },
  });
 
- const onSubmit = async (data: z.infer<typeof loginSchema>) => {
+ const onSubmit = async (data: LoginFormValues) => {
  setLoading(true);
 
  try {
+ if (isForgotPassword) {
+ const redirectTo = `${window.location.origin}/reset-password`;
+ await planter.auth.requestPasswordReset(data.email, redirectTo);
+ toast.success(t('auth.password_reset_sent_title'), {
+ description: t('auth.password_reset_sent_description'),
+ });
+ return;
+ }
+
  let result;
+ const password = data.password ?? '';
  if (isSignUp) {
- result = await signUp(data.email, data.password);
+ result = await signUp(data.email, password);
  } else {
- result = await signIn(data.email, data.password);
+ result = await signIn(data.email, password);
  }
 
  if (result.error) {
  throw result.error;
  } else {
- navigate('/dashboard');
+ navigate('/tasks');
  }
  } catch (err: unknown) {
- toast.error(isSignUp ? t('errors.signup_failed') : t('errors.login_failed'), {
+ const title = isForgotPassword
+ ? t('auth.password_reset_failed_title')
+ : isSignUp
+  ? t('errors.signup_failed')
+  : t('errors.login_failed');
+ toast.error(title, {
  description: err instanceof Error ? err.message : t('auth.unexpected_error'),
  });
  } finally {
@@ -68,11 +94,11 @@ const LoginForm = () => {
  <div>
  <h2 className="mt-6 text-center text-3xl font-extrabold text-brand-600">{t('auth.app_name')}</h2>
  <p className="mt-2 text-center text-sm text-slate-600">
- {isSignUp ? t('auth.create_account') : t('auth.sign_in_prompt')}
+ {isForgotPassword ? t('auth.forgot_password_prompt') : isSignUp ? t('auth.create_account') : t('auth.sign_in_prompt')}
  </p>
  </div>
 
- <form className="bg-white py-8 px-4 shadow sm:rounded-lg sm:px-10" onSubmit={handleSubmit(onSubmit)}>
+	 <form className="bg-white py-8 px-4 shadow sm:rounded-lg sm:px-10" onSubmit={handleSubmit(onSubmit)} noValidate>
  <div className="space-y-6">
  <div>
  <label htmlFor="email" className="block text-sm font-medium text-slate-700">
@@ -96,6 +122,7 @@ const LoginForm = () => {
  )}
  </div>
 
+ {!isForgotPassword && (
  <div>
  <label htmlFor="password" className="block text-sm font-medium text-slate-700">
  {t('auth.password_label')}
@@ -114,6 +141,7 @@ const LoginForm = () => {
  <p id="password-error" data-testid="password-error" role="alert" aria-live="polite" className="mt-1 text-sm text-red-600">{errors.password.message}</p>
  )}
  </div>
+ )}
 
  <div>
  <button
@@ -122,11 +150,11 @@ const LoginForm = () => {
  aria-busy={loading}
  className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-brand-600 hover:bg-brand-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-500/20 disabled:opacity-50 transition-colors shadow-sm"
  >
- {loading ? <Loader2 className="w-5 h-5 animate-spin" data-testid="loading-spinner" aria-label={t('auth.loading_label')} /> : (isSignUp ? t('auth.sign_up') : t('auth.sign_in'))}
+ {loading ? <Loader2 className="w-5 h-5 animate-spin" data-testid="loading-spinner" aria-label={t('auth.loading_label')} /> : (isForgotPassword ? t('auth.send_reset_link') : isSignUp ? t('auth.sign_up') : t('auth.sign_in'))}
  </button>
  </div>
 
- {String(import.meta.env.VITE_E2E_MODE) === 'true' && (
+ {String(import.meta.env.VITE_E2E_MODE) === 'true' && !isForgotPassword && (
  <button
  type="button"
  className="mt-4 w-full text-sm text-slate-500 hover:text-slate-700 underline"
@@ -141,13 +169,22 @@ const LoginForm = () => {
  </button>
  )}
 
- <div className="text-center">
+ <div className="space-y-3 text-center">
+ {!isSignUp && !isForgotPassword && (
+ <button
+ type="button"
+ className="block w-full text-sm text-slate-600 hover:text-slate-800 underline"
+ onClick={() => setMode('forgotPassword')}
+ >
+ {t('auth.forgot_password')}
+ </button>
+ )}
  <button
  type="button"
  className="text-sm text-brand-600 hover:text-brand-500 font-medium"
- onClick={() => setIsSignUp(!isSignUp)}
+ onClick={() => setMode(isForgotPassword || isSignUp ? 'signIn' : 'signUp')}
  >
- {isSignUp ? t('auth.have_account') : t('auth.need_account')}
+ {isForgotPassword ? t('auth.back_to_sign_in') : isSignUp ? t('auth.have_account') : t('auth.need_account')}
  </button>
  </div>
 

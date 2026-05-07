@@ -15,7 +15,7 @@ const USER_ID = 'user-1';
 //   │                   have pulled this into the 'milestones' filter.)
 //   ├─ phase-2   (task_type='phase')
 //   │   └─ m-current   (task_type='milestone', due 2026-05-20)
-//   ├─ t-priority      (task_type='task', priority='high', status='todo', due 2026-05-20)
+//   ├─ t-priority      (task_type='task', status='todo', start 2026-04-01, due 2026-05-20)
 //   ├─ t-future        (task_type='task', status='todo', start 2026-05-01, due 2026-05-10)
 //   ├─ t-done          (task_type='task', status='completed', is_complete=true, due 2026-03-15)
 //   └─ t-current       (task_type='task', status='in_progress', due 2026-05-15)
@@ -97,6 +97,7 @@ function buildFixture() {
   status: 'todo',
   priority: 'high',
   assignee_id: USER_ID,
+  start_date: '2026-04-01',
   due_date: '2026-05-20',
  });
  const taskFuture = makeTask({
@@ -194,7 +195,7 @@ describe('filterAndSortTasks — views', () => {
   expect(result).toEqual([]);
  });
 
- it("'priority' keeps only priority==='high' and excludes completed", () => {
+ it("'priority' keeps overdue, due-soon, or started tasks and excludes completed", () => {
   const tasks = buildFixture();
   const result = filterAndSortTasks({ tasks, filter: 'priority', sort: 'chronological', now: NOW });
   expect(result.map((t) => t.id)).toEqual(['t-priority']);
@@ -206,7 +207,7 @@ describe('filterAndSortTasks — views', () => {
   expect(result.map((t) => t.id)).toEqual(['m-overdue']);
  });
 
- it("'due_soon' keeps tasks within the default 3-day window", () => {
+ it("'due_soon' keeps tasks within the default 3-business-day window", () => {
   const tasks = buildFixture();
   const result = filterAndSortTasks({ tasks, filter: 'due_soon', sort: 'chronological', now: NOW });
   expect(result.map((t) => t.id)).toEqual(['m-soon']);
@@ -324,6 +325,68 @@ describe('filterAndSortTasks — per-project threshold', () => {
    now: NOW,
   });
   expect(result.map((t) => t.id)).toEqual(['c2']);
+ });
+
+ it('counts due_soon_threshold in date-project business days', () => {
+  const project = makeProject({
+   id: 'p-business',
+   origin: 'instance',
+   settings: { due_soon_threshold: 2 },
+  });
+  const mondayAfterWeekend = makeTask({
+   id: 'business-soon',
+   parent_task_id: 'p-business',
+   root_id: 'p-business',
+   origin: 'instance',
+   due_date: '2026-04-20',
+  });
+  const tuesdayOutsideWindow = makeTask({
+   id: 'business-current',
+   parent_task_id: 'p-business',
+   root_id: 'p-business',
+   origin: 'instance',
+   due_date: '2026-04-21',
+  });
+
+  const result = filterAndSortTasks({
+   tasks: [project, mondayAfterWeekend, tuesdayOutsideWindow],
+   filter: 'due_soon',
+   sort: 'chronological',
+   now: NOW,
+  });
+
+  expect(result.map((t) => t.id)).toEqual(['business-soon']);
+ });
+
+ it('suppresses due-date urgency for checkpoint roots', () => {
+  const checkpointProject = makeProject({
+   id: 'checkpoint-project',
+   origin: 'instance',
+   settings: { project_kind: 'checkpoint', due_soon_threshold: 3 },
+  });
+  const checkpointTask = makeTask({
+   id: 'checkpoint-task',
+   parent_task_id: 'checkpoint-project',
+   root_id: 'checkpoint-project',
+   origin: 'instance',
+   due_date: '2026-04-10',
+  });
+
+  const dueSoon = filterAndSortTasks({
+   tasks: [checkpointProject, checkpointTask],
+   filter: 'due_soon',
+   sort: 'chronological',
+   now: NOW,
+  });
+  const notYetDue = filterAndSortTasks({
+   tasks: [checkpointProject, checkpointTask],
+   filter: 'not_yet_due',
+   sort: 'chronological',
+   now: NOW,
+  });
+
+  expect(dueSoon).toEqual([]);
+  expect(notYetDue.map((t) => t.id)).toEqual(['checkpoint-task']);
  });
 });
 

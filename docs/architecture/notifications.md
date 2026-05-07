@@ -39,16 +39,22 @@ inserts a row:
 ```
 notification_log (user_id, channel, event_type, payload)
 VALUES (mention_uuid, 'email', 'mention_pending',
-        jsonb_build_object('comment_id', NEW.id, 'task_id', NEW.task_id,
+        jsonb_build_object('recipient_id', mention_uuid,
+                           'actor_id', NEW.author_id,
                            'author_id', NEW.author_id,
+                           'comment_id', NEW.id,
+                           'task_id', NEW.task_id,
+                           'project_id', NEW.root_id,
+                           'root_id', NEW.root_id,
                            'body_preview', substring(NEW.body, 1, 140)))
 ```
 
 The `channel` column is a placeholder — the dispatcher decides per
 recipient whether email, push, or both fire. The trigger coerces
-`mentions` strings to uuid via regex guard, silently dropping entries
-that aren't uuid-shaped (happens when `resolveMentions` falls through
-verbatim because the RPC errored).
+`mentions` strings to uuid via regex guard and logs a warning when invalid
+entries are supplied. `resolveMentions` now returns an empty array and emits a
+client warning when the handle RPC fails, so mention misses are observable
+instead of being hidden by trigger-side invalid-value drops.
 
 ## Mention resolution
 
@@ -60,7 +66,8 @@ extractMentions(body: string): string[]
 
 resolveMentions(handles: string[]): Promise<string[]>
   → RPC 'resolve_user_handles' → uuid[]
-  → on RPC error, passes handles through verbatim (trigger ignores)
+  → on RPC error, logs and returns [] so the comment still posts without
+    silently enqueueing malformed mention payload
 ```
 
 `CommentComposer.tsx` calls both in sequence on submit:

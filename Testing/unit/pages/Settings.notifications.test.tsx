@@ -50,7 +50,7 @@ vi.mock('@/features/settings/hooks/useSettings', () => ({
             profile: { avatar_url: '', full_name: '', role: '', organization: '', email_frequency: 'never' },
             loading: false,
             avatarError: null,
-            passwordForm: { newPassword: '', confirmPassword: '' },
+            passwordForm: { currentPassword: '', newPassword: '', confirmPassword: '' },
             passwordError: null,
             passwordLoading: false,
         },
@@ -92,6 +92,16 @@ describe('Settings — Notifications tab (Wave 30)', () => {
         await waitFor(() => {
             expect(screen.getByTestId('settings-notifications')).toBeInTheDocument();
         });
+    });
+
+    it('does not label live settings tabs as coming soon', () => {
+        renderSettings();
+
+        expect(screen.getByRole('button', { name: /notifications/i })).toBeEnabled();
+        expect(screen.getByRole('button', { name: /integrations/i })).toBeEnabled();
+        expect(screen.getByRole('button', { name: /security/i })).toBeEnabled();
+        expect(screen.queryByText(/coming soon/i)).not.toBeInTheDocument();
+        expect(screen.queryByText(/^soon$/i)).not.toBeInTheDocument();
     });
 
     it('mutates when the user flips the Email Mentions switch', async () => {

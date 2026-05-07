@@ -24,7 +24,7 @@ vi.mock('@/features/tasks/hooks/useTaskComments', () => ({
 vi.mock('@/features/tasks/hooks/useTaskCommentsRealtime', () => ({
     useTaskCommentsRealtime: () => undefined,
 }));
-vi.mock('@/features/projects/hooks/useProjectActivity', () => ({
+vi.mock('@/shared/hooks/useActivityLog', () => ({
     useProjectActivity: () => ({ data: [], isLoading: false }),
     useTaskActivity: () => ({ data: [], isLoading: false }),
 }));
@@ -38,9 +38,9 @@ vi.mock('@/shared/db/client', () => ({
 vi.mock('@/shared/api/auth', () => ({
     authApi: { checkIsAdmin: vi.fn().mockResolvedValue(false) },
 }));
-vi.mock('@/shared/contexts/AuthContext', async () => {
-    const actual = await vi.importActual<typeof import('@/shared/contexts/AuthContext')>(
-        '@/shared/contexts/AuthContext',
+vi.mock('@/shared/contexts/auth-context', async () => {
+    const actual = await vi.importActual<typeof import('@/shared/contexts/auth-context')>(
+        '@/shared/contexts/auth-context',
     );
     return {
         ...actual,
@@ -63,7 +63,13 @@ vi.mock('@/features/people/hooks/useTeam', () => ({
 
 import TaskDetailsView from '@/features/tasks/components/TaskDetailsView';
 
-function renderView(task: TaskItemData, opts: { membershipRole?: string; onDeleteTask?: (t: TaskItemData) => void }) {
+function renderView(task: TaskItemData, opts: {
+    allProjectTasks?: TaskItemData[];
+    canEdit?: boolean;
+    membershipRole?: string;
+    onAddChildTask?: (t: TaskItemData) => void;
+    onDeleteTask?: (t: TaskItemData) => void;
+}) {
     const queryClient = new QueryClient({
         defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
     });
@@ -71,7 +77,10 @@ function renderView(task: TaskItemData, opts: { membershipRole?: string; onDelet
         <QueryClientProvider client={queryClient}>
             <TaskDetailsView
                 task={task}
+                allProjectTasks={opts.allProjectTasks}
+                canEdit={opts.canEdit}
                 membershipRole={opts.membershipRole}
+                onAddChildTask={opts.onAddChildTask}
                 onDeleteTask={opts.onDeleteTask}
             />
         </QueryClientProvider>,
@@ -94,8 +103,8 @@ function makeTemplateOriginTask(overrides: TemplateTaskOverrides = {}): TaskItem
     } as Partial<TaskItemData>) as unknown as TaskItemData;
 }
 
-describe('TaskDetailsView — template-origin delete guard (Wave 36 Task 2)', () => {
-    it('opens the guard dialog for a non-owner trying to delete a template-origin task', async () => {
+describe('TaskDetailsView — template-origin delete guard', () => {
+    it('opens the guard dialog for an editor trying to delete a template-origin task', async () => {
         const onDelete = vi.fn();
         const task = makeTemplateOriginTask({ cloned_from_task_id: 'tpl-source-1' });
         renderView(task, { membershipRole: 'editor', onDeleteTask: onDelete });
@@ -107,15 +116,16 @@ describe('TaskDetailsView — template-origin delete guard (Wave 36 Task 2)', ()
         expect(onDelete).not.toHaveBeenCalled();
     });
 
-    it('owner bypasses the guard and the delete handler fires directly', async () => {
+    it('opens the guard dialog for an owner trying to delete a template-origin task', async () => {
         const onDelete = vi.fn();
         const task = makeTemplateOriginTask({ cloned_from_task_id: 'tpl-source-1' });
         renderView(task, { membershipRole: 'owner', onDeleteTask: onDelete });
 
         await userEvent.setup().click(screen.getByTestId('delete-task-btn'));
 
-        expect(onDelete).toHaveBeenCalledTimes(1);
-        expect(screen.queryByTestId('template-origin-delete-guard')).not.toBeInTheDocument();
+        expect(screen.getByTestId('template-origin-delete-guard')).toBeInTheDocument();
+        expect(screen.getByText(/cannot be deleted from project workspaces/i)).toBeInTheDocument();
+        expect(onDelete).not.toHaveBeenCalled();
     });
 
     it('does not show the guard for post-instantiation custom tasks (cloned_from_task_id is null)', async () => {
@@ -127,5 +137,46 @@ describe('TaskDetailsView — template-origin delete guard (Wave 36 Task 2)', ()
 
         expect(onDelete).toHaveBeenCalledTimes(1);
         expect(screen.queryByTestId('template-origin-delete-guard')).not.toBeInTheDocument();
+    });
+
+    it('shows Add Child Task for task-depth rows', () => {
+        const onAddChildTask = vi.fn();
+        const project = makeTask({ id: 'project', parent_task_id: null, task_type: 'project' }) as unknown as TaskItemData;
+        const phase = makeTask({ id: 'phase', parent_task_id: 'project', task_type: 'phase' }) as unknown as TaskItemData;
+        const milestone = makeTask({ id: 'milestone', parent_task_id: 'phase', task_type: 'milestone' }) as unknown as TaskItemData;
+        const task = makeTemplateOriginTask({
+            id: 'task-depth-row',
+            parent_task_id: 'milestone',
+            task_type: 'task',
+        });
+
+        renderView(task, {
+            allProjectTasks: [project, phase, milestone, task],
+            canEdit: true,
+            onAddChildTask,
+        });
+
+        expect(screen.getByRole('button', { name: /\+ add child task/i })).toBeInTheDocument();
+    });
+
+    it('hides Add Child Task for final-level subtasks', () => {
+        const onAddChildTask = vi.fn();
+        const project = makeTask({ id: 'project', parent_task_id: null, task_type: 'project' }) as unknown as TaskItemData;
+        const phase = makeTask({ id: 'phase', parent_task_id: 'project', task_type: 'phase' }) as unknown as TaskItemData;
+        const milestone = makeTask({ id: 'milestone', parent_task_id: 'phase', task_type: 'milestone' }) as unknown as TaskItemData;
+        const parentTask = makeTask({ id: 'parent-task', parent_task_id: 'milestone', task_type: 'task' }) as unknown as TaskItemData;
+        const subtask = makeTemplateOriginTask({
+            id: 'subtask-row',
+            parent_task_id: 'parent-task',
+            task_type: 'subtask',
+        });
+
+        renderView(subtask, {
+            allProjectTasks: [project, phase, milestone, parentTask, subtask],
+            canEdit: true,
+            onAddChildTask,
+        });
+
+        expect(screen.queryByRole('button', { name: /\+ add child task/i })).not.toBeInTheDocument();
     });
 });

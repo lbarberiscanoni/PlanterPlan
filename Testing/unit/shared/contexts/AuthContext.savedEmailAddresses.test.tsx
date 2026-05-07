@@ -16,7 +16,7 @@ vi.mock('@/shared/api/auth', () => ({
   authApi: { checkIsAdmin: vi.fn().mockResolvedValue(false) },
 }));
 
-import { mergeSavedEmailAddress } from '@/shared/contexts/AuthContext';
+import { mergeSavedEmailAddress } from '@/shared/contexts/saved-email-addresses';
 
 describe('mergeSavedEmailAddress', () => {
   it('adds a new address to the front of an empty list', () => {

@@ -10,25 +10,35 @@ import {
  DropdownMenuSeparator,
 } from '@/shared/ui/dropdown-menu';
 import { Button } from '@/shared/ui/button';
-import { useTaskQuery } from '@/features/tasks/hooks/useTaskQuery';
 import { PROJECT_STATUS } from '@/shared/constants/domain';
-import type { Project, Task } from '@/shared/db/app.types';
 
-const isArchived = (p: Project | Task) => p.status === PROJECT_STATUS.ARCHIVED;
-const isCompleted = (p: Project | Task) => !isArchived(p) && p.is_complete === true;
-const isActive = (p: Project | Task) => !isArchived(p) && !p.is_complete;
+export interface ProjectSwitcherProject {
+ id: string;
+ title?: string | null;
+ origin?: string | null;
+ status?: string | null;
+ is_complete?: boolean | null;
+}
 
-const ProjectSwitcher = () => {
+const isArchived = (p: ProjectSwitcherProject) => p.status === PROJECT_STATUS.ARCHIVED;
+const isCompleted = (p: ProjectSwitcherProject) => !isArchived(p) && p.is_complete === true;
+const isActive = (p: ProjectSwitcherProject) => !isArchived(p) && !p.is_complete;
+
+interface ProjectSwitcherProps {
+ projects?: ProjectSwitcherProject[];
+ projectsLoading?: boolean;
+}
+
+const ProjectSwitcher = ({ projects = [], projectsLoading = false }: ProjectSwitcherProps) => {
  const navigate = useNavigate();
  const { projectId } = useParams<{ projectId: string }>();
  const [showArchived, setShowArchived] = useState(false);
  // Wave 25: independent "Show completed" toggle mirroring the archived pattern.
  const [showCompleted, setShowCompleted] = useState(false);
- const { tasks = [], projectsLoading } = useTaskQuery();
 
  const instanceProjects = useMemo(
- () => tasks.filter((t) => t.origin === 'instance') as (Project | Task)[],
- [tasks]
+ () => projects.filter((t) => t.origin === 'instance'),
+ [projects]
  );
 
  const activeProjects = useMemo(

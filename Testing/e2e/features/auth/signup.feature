@@ -9,12 +9,13 @@ Feature: User Sign Up
     Then the subtitle reads "Create your account"
     And the submit button reads "Sign Up"
 
+  @release
   Scenario: Successful sign up with valid credentials
     When the user clicks the toggle mode button
     And the user enters email "newuser@example.com"
     And the user enters password "password123"
     And the user clicks the sign in button
-    Then the user is redirected to "/dashboard"
+    Then the user is redirected to "/tasks"
 
   Scenario: Sign up fails for duplicate email
     When the user clicks the toggle mode button

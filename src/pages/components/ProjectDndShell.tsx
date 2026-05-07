@@ -8,10 +8,11 @@ interface Props {
     tasks: TaskRow[];
     onTaskUpdate: (id: string, updates: Record<string, unknown>) => void;
     onToggleExpand: (task: TaskRow, expanded: boolean) => void;
+    onInvalidDrop?: () => void;
     children: (dropIndicator: DropIndicator) => React.ReactNode;
 }
 
-export function ProjectDndShell({ tasks, onTaskUpdate, onToggleExpand, children }: Props) {
+export function ProjectDndShell({ tasks, onTaskUpdate, onToggleExpand, onInvalidDrop, children }: Props) {
     const {
         activeDragId,
         dropIndicator,
@@ -20,7 +21,7 @@ export function ProjectDndShell({ tasks, onTaskUpdate, onToggleExpand, children 
         handleDragStart,
         handleDragOver,
         handleDragEnd,
-    } = useProjectDnd(tasks, onTaskUpdate, onToggleExpand);
+    } = useProjectDnd(tasks, onTaskUpdate, onToggleExpand, onInvalidDrop);
 
     return (
         <DndContext

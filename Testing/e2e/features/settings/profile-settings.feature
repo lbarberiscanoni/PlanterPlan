@@ -47,5 +47,6 @@ Feature: Profile Settings
 
   Scenario: Settings sidebar shows Profile active
     Then the "Profile" tab is marked as active
-    And "Notifications" shows "Coming Soon"
-    And "Security" shows "Coming Soon"
+    And the "Notifications" tab is available
+    And the "Security" tab is available
+    And no settings tab shows "Coming Soon"

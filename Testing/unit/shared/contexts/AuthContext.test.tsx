@@ -33,7 +33,9 @@ vi.mock('@/shared/api/auth', () => ({
   },
 }));
 
-import { AuthProvider, useAuth } from '@/shared/contexts/AuthContext';
+import { AuthProvider } from '@/shared/contexts/AuthContext';
+import { requireAuthContext, useAuth } from '@/shared/contexts/auth-context';
+import { hasPasswordRecoverySession } from '@/shared/lib/password-recovery';
 
 // Test consumer component that renders auth state
 function AuthConsumer() {
@@ -80,11 +82,9 @@ describe('AuthContext', () => {
 
   describe('useAuth', () => {
     it('throws when used outside AuthProvider', () => {
-      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-      expect(() => render(React.createElement(AuthConsumer))).toThrow(
+      expect(() => requireAuthContext(null)).toThrow(
         'useAuth must be used within an AuthProvider',
       );
-      consoleSpy.mockRestore();
     });
   });
 
@@ -140,6 +140,24 @@ describe('AuthContext', () => {
       await waitFor(() => {
         expect(screen.getByTestId('loading').textContent).toBe('false');
         expect(screen.getByTestId('user').textContent).toBe('null');
+      });
+    });
+
+    it('marks recovery sessions and clears them on sign-out', async () => {
+      render(
+        <AuthProvider><AuthConsumer /></AuthProvider>,
+      );
+
+      act(() => { authStateCallback?.('PASSWORD_RECOVERY', fakeSession()); });
+
+      await waitFor(() => {
+        expect(hasPasswordRecoverySession()).toBe(true);
+      });
+
+      act(() => { authStateCallback?.('SIGNED_OUT', null); });
+
+      await waitFor(() => {
+        expect(hasPasswordRecoverySession()).toBe(false);
       });
     });
   });

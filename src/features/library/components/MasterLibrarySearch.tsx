@@ -2,7 +2,7 @@ import { useId, useMemo, useRef, useState, useCallback } from 'react';
 import type { ChangeEvent, KeyboardEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ChevronDown, X } from 'lucide-react';
-import useMasterLibrarySearch from '@/features/library/hooks/useMasterLibrarySearch';
+import useMasterLibrarySearch from '@/shared/hooks/useMasterLibrarySearch';
 
 interface SearchTask {
  id: string;

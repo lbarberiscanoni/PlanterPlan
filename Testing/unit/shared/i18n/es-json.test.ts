@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { SUPPORTED_LOCALES } from '@/shared/i18n';
 import en from '@/shared/i18n/locales/en.json';
 import es from '@/shared/i18n/locales/es.json';
 
@@ -32,6 +33,18 @@ describe('es.json', () => {
     expect(meta.review_required_before_marketing).toBe(true);
     expect(typeof meta.status).toBe('string');
     expect(typeof meta.translated_against_en_version).toBe('string');
+  });
+
+  it('keeps Spanish runtime metadata gated until human review clears marketing readiness', () => {
+    const meta = (es as JsonObject)._meta as JsonObject;
+    const spanishLocale = SUPPORTED_LOCALES.find((locale) => locale.code === 'es');
+
+    expect(spanishLocale).toMatchObject({
+      code: 'es',
+      launchStatus: 'review_required',
+      marketingReady: false,
+      reviewRequiredBeforeMarketing: meta.review_required_before_marketing,
+    });
   });
 
   it('no empty string values outside _meta', () => {

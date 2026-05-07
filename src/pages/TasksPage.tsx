@@ -9,14 +9,15 @@ import { planter } from '@/shared/api/planterClient';
 import { STALE_TIMES } from '@/shared/lib/react-query-config';
 import TaskItem from '@/features/tasks/components/TaskItem';
 import TaskDetailsPanel from '@/features/tasks/components/TaskDetailsPanel';
-import { Loader2, List, LayoutGrid, X } from 'lucide-react';
+import { Loader2, List, LayoutGrid, Search, X } from 'lucide-react';
 import { Button } from '@/shared/ui/button';
+import { Input } from '@/shared/ui/input';
 import ProjectBoardView from '@/features/tasks/components/board/ProjectBoardView';
-import { useAuth } from '@/shared/contexts/AuthContext';
+import { useAuth } from '@/shared/contexts/auth-context';
 import { useTeam } from '@/features/people/hooks/useTeam';
 import { ROLES } from '@/shared/constants';
 import { useDeleteTask } from '@/features/tasks/hooks/useTaskMutations';
-import { useConfirm } from '@/shared/ui/confirm-dialog';
+import { useConfirm } from '@/shared/ui/confirm-dialog-context';
 import { toast } from 'sonner';
 import {
        useTaskFilters,
@@ -24,6 +25,7 @@ import {
        type TaskFilterKey,
        type TaskSortKey,
 } from '@/features/tasks/hooks/useTaskFilters';
+import { buildPriorityTaskGroups } from '@/features/tasks/lib/priority-tasks';
 import {
        Select,
        SelectContent,
@@ -31,6 +33,16 @@ import {
        SelectTrigger,
        SelectValue,
 } from '@/shared/ui/select';
+import {
+       canDeleteTask as canDeleteTaskForRole,
+       canEditTaskContent,
+} from '@/features/tasks/lib/task-permissions';
+import {
+       Dialog,
+       DialogContent,
+       DialogHeader,
+       DialogTitle,
+} from '@/shared/ui/dialog';
 
 const FILTER_KEYS: TaskFilterKey[] = [
        'my_tasks', 'priority', 'overdue', 'due_soon', 'current', 'not_yet_due', 'completed', 'all_tasks', 'milestones',
@@ -51,16 +63,18 @@ export default function TasksPage() {
        const invalidateTasks = useCallback(() => queryClient.invalidateQueries({ queryKey: ['tasks'] }), [queryClient]);
 
        const [viewMode, setViewMode] = useState('list');
-       const [filter, setFilter] = useState<TaskFilterKey>('my_tasks');
+       const [filter, setFilter] = useState<TaskFilterKey>('all_tasks');
        const [sort, setSort] = useState<TaskSortKey>('chronological');
        const [selectedTask, setSelectedTask] = useState<TaskRow | null>(null);
        const [dueStart, setDueStart] = useState<string>('');
        const [dueEnd, setDueEnd] = useState<string>('');
+       const [searchQuery, setSearchQuery] = useState<string>('');
        const dueDateRange = useMemo<DueDateRange>(
               () => ({ start: dueStart || null, end: dueEnd || null }),
               [dueStart, dueEnd],
        );
        const hasDueRange = dueDateRange.start !== null || dueDateRange.end !== null;
+       const effectiveSort: TaskSortKey = filter === 'priority' ? 'chronological' : sort;
        const clearDueRange = useCallback(() => {
               setDueStart('');
               setDueEnd('');
@@ -100,7 +114,6 @@ export default function TasksPage() {
        const handleStatusChange = useCallback((id: string, status: string) => {
               updateTask(id, { status });
        }, [updateTask]);
-       const handleNoop = useCallback(() => { }, []);
        const handleTaskClick = useCallback((task: TaskRow) => {
               setSelectedTask(task);
        }, []);
@@ -185,8 +198,10 @@ export default function TasksPage() {
               }
               return undefined;
        }, [currentSelectedTask, selectedTeamMembers, selectedProjectRoot, currentUserId]);
-
-       const visibleTasks = useTaskFilters({ tasks, filter, sort, dueDateRange, currentUserId });
+       const selectedCanEdit = canEditTaskContent(selectedMembershipRole);
+       const selectedCanDelete = selectedTaskForPanel
+              ? canDeleteTaskForRole(selectedMembershipRole, selectedTaskForPanel)
+              : false;
 
        // Wave 33: map of root-task-id → project title, used to reveal each task's
        // parent-project name in a hover tooltip on the row. Projects live in the
@@ -200,6 +215,34 @@ export default function TasksPage() {
               }
               return map;
        }, [tasks]);
+       const actionableTaskCount = useMemo(
+              () => tasks.filter((task) => task.origin === 'instance' && task.parent_task_id !== null).length,
+              [tasks],
+       );
+       const filteredTasks = useTaskFilters({ tasks, filter, sort: effectiveSort, dueDateRange, currentUserId });
+       const normalizedSearchQuery = searchQuery.trim().toLowerCase();
+       const visibleTasks = useMemo(() => {
+              if (!normalizedSearchQuery) return filteredTasks;
+
+              return filteredTasks.filter((task) => {
+                     const projectTitle = task.root_id ? projectTitleByRootId.get(task.root_id) : null;
+                     const haystack = [
+                            task.title,
+                            task.description,
+                            projectTitle,
+                     ]
+                            .filter((value): value is string => typeof value === 'string' && value.length > 0)
+                            .join(' ')
+                            .toLowerCase();
+                     return haystack.includes(normalizedSearchQuery);
+              });
+       }, [filteredTasks, normalizedSearchQuery, projectTitleByRootId]);
+       const priorityGroups = useMemo(
+              () => filter === 'priority' && viewMode === 'list'
+                     ? buildPriorityTaskGroups({ tasks, candidateTasks: visibleTasks })
+                     : [],
+              [filter, tasks, viewMode, visibleTasks],
+       );
 
        const sensors = useSensors(
               useSensor(PointerSensor, {
@@ -268,9 +311,38 @@ export default function TasksPage() {
                                                  <div>
                                                         <h1 className="text-3xl font-bold text-slate-900 tracking-tight">{t(`tasks.filters.labels.${filter}`)}</h1>
                                                         <p className="text-muted-foreground mt-1">{t('tasks.page_subtitle')}</p>
+                                                        <p className="mt-2 text-sm text-muted-foreground" aria-live="polite">
+                                                               {t('tasks.result_count', { shown: visibleTasks.length, total: actionableTaskCount })}
+                                                        </p>
                                                  </div>
 
                                                  <div className="flex flex-wrap items-center gap-3">
+                                                        <div className="flex flex-col gap-1">
+                                                               <label htmlFor="task-search" className="text-xs font-medium text-muted-foreground">{t('tasks.search_label')}</label>
+                                                               <div className="relative">
+                                                                      <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+                                                                      <Input
+                                                                             id="task-search"
+                                                                             type="search"
+                                                                             value={searchQuery}
+                                                                             onChange={(event) => setSearchQuery(event.target.value)}
+                                                                             placeholder={t('tasks.search_placeholder')}
+                                                                             aria-label={t('tasks.search_aria')}
+                                                                             className="w-56 bg-card pl-9 pr-9"
+                                                                      />
+                                                                      {searchQuery && (
+                                                                             <button
+                                                                                    type="button"
+                                                                                    onClick={() => setSearchQuery('')}
+                                                                                    className="absolute right-2 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded text-muted-foreground hover:text-card-foreground"
+                                                                                    aria-label={t('tasks.clear_search')}
+                                                                             >
+                                                                                    <X className="h-4 w-4" aria-hidden="true" />
+                                                                             </button>
+                                                                      )}
+                                                               </div>
+                                                        </div>
+
                                                         <div className="flex flex-col gap-1">
                                                                <label htmlFor="task-filter" className="text-xs font-medium text-muted-foreground">{t('tasks.view_label')}</label>
                                                                <Select value={filter} onValueChange={(v) => setFilter(v as TaskFilterKey)}>
@@ -285,18 +357,20 @@ export default function TasksPage() {
                                                                </Select>
                                                         </div>
 
-                                                        <div className="flex flex-col gap-1">
-                                                               <label htmlFor="task-sort" className="text-xs font-medium text-muted-foreground">{t('tasks.sort_label')}</label>
-                                                               <Select value={sort} onValueChange={(v) => setSort(v as TaskSortKey)}>
-                                                                      <SelectTrigger id="task-sort" className="w-[180px] bg-card" aria-label={t('tasks.sort_aria')}>
-                                                                             <SelectValue />
-                                                                      </SelectTrigger>
-                                                                      <SelectContent>
-                                                                             <SelectItem value="chronological">{t('tasks.sort_chronological')}</SelectItem>
-                                                                             <SelectItem value="alphabetical">{t('tasks.sort_alphabetical')}</SelectItem>
-                                                                      </SelectContent>
-                                                               </Select>
-                                                        </div>
+                                                        {filter !== 'priority' && (
+                                                               <div className="flex flex-col gap-1">
+                                                                      <label htmlFor="task-sort" className="text-xs font-medium text-muted-foreground">{t('tasks.sort_label')}</label>
+                                                                      <Select value={sort} onValueChange={(v) => setSort(v as TaskSortKey)}>
+                                                                             <SelectTrigger id="task-sort" className="w-[180px] bg-card" aria-label={t('tasks.sort_aria')}>
+                                                                                    <SelectValue />
+                                                                             </SelectTrigger>
+                                                                             <SelectContent>
+                                                                                    <SelectItem value="chronological">{t('tasks.sort_chronological')}</SelectItem>
+                                                                                    <SelectItem value="alphabetical">{t('tasks.sort_alphabetical')}</SelectItem>
+                                                                             </SelectContent>
+                                                                      </Select>
+                                                               </div>
+                                                        )}
 
                                                         <div className="flex flex-col gap-1">
                                                                <span className="text-xs font-medium text-muted-foreground">
@@ -364,33 +438,85 @@ export default function TasksPage() {
                                           <div className="h-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-8 w-full">
                                                  {visibleTasks.length === 0 ? (
                                                         <div className="bg-card rounded-xl border border-border shadow-sm p-12 text-center">
-                                                               <p className="text-muted-foreground">{t(`tasks.filters.empty.${filter}`)}</p>
+                                                               <p className="text-muted-foreground">
+                                                                      {normalizedSearchQuery
+                                                                             ? t('tasks.search_empty')
+                                                                             : t(`tasks.filters.empty.${filter}`)}
+                                                               </p>
                                                         </div>
                                                  ) : (
                                                         viewMode === 'list' ? (
                                                                <div className="space-y-6 overflow-y-auto h-full pb-20">
-                                                                      <div className="flex flex-col gap-2">
-                                                                             {visibleTasks.map(task => {
-                                                                                    const projectTitle = task.root_id && task.root_id !== task.id
-                                                                                           ? projectTitleByRootId.get(task.root_id) ?? null
-                                                                                           : null;
-                                                                                    return (
-                                                                                           <TaskItem
-                                                                                                  key={task.id}
-                                                                                                  task={task}
-                                                                                                  level={0}
-                                                                                                  onStatusChange={handleStatusChange}
-                                                                                                  hideExpansion={true}
-                                                                                                  disableDrag={true}
-                                                                                                  onTaskClick={handleTaskClick}
-                                                                                                  onAddChildTask={handleNoop}
-                                                                                                  onInviteMember={handleNoop}
-                                                                                                  selectedTaskId={selectedTaskId}
-                                                                                                  parentProjectTitle={projectTitle}
-                                                                                           />
-                                                                                    );
-                                                                             })}
-                                                                      </div>
+                                                                      {filter === 'priority' ? (
+                                                                             priorityGroups.map((group) => (
+                                                                                    <section
+                                                                                           key={group.id}
+                                                                                           className="rounded-xl border border-border bg-card p-4 shadow-sm"
+                                                                                           data-testid={`priority-task-group-${group.id}`}
+                                                                                    >
+                                                                                           <div className="mb-3 border-b border-border pb-3">
+                                                                                                  <h2
+                                                                                                         id={`priority-group-heading-${group.id}`}
+                                                                                                         className="text-base font-semibold text-card-foreground"
+                                                                                                  >
+                                                                                                         {group.title}
+                                                                                                  </h2>
+                                                                                                  {group.projectTitle && (
+                                                                                                         <p className="text-sm text-muted-foreground">{group.projectTitle}</p>
+                                                                                                  )}
+                                                                                           </div>
+                                                                                           <div
+                                                                                                  role="tree"
+                                                                                                  aria-labelledby={`priority-group-heading-${group.id}`}
+                                                                                                  className="flex flex-col gap-2"
+                                                                                           >
+                                                                                                  {group.tasks.map(({ task, displayNumber }) => (
+                                                                                                         <div key={task.id} className="flex min-w-0 gap-3">
+                                                                                                                <span
+                                                                                                                       className="mt-5 w-10 flex-shrink-0 text-right font-mono text-xs font-semibold text-muted-foreground"
+                                                                                                                       aria-hidden="true"
+                                                                                                                >
+                                                                                                                       {displayNumber}
+                                                                                                                </span>
+                                                                                                                <div className="min-w-0 flex-1">
+                                                                                                                       <TaskItem
+                                                                                                                              task={task}
+                                                                                                                              level={0}
+                                                                                                                              onStatusChange={handleStatusChange}
+                                                                                                                              hideExpansion={true}
+                                                                                                                              disableDrag={true}
+                                                                                                                              onTaskClick={handleTaskClick}
+                                                                                                                              selectedTaskId={selectedTaskId}
+                                                                                                                              parentProjectTitle={group.projectTitle}
+                                                                                                                       />
+                                                                                                                </div>
+                                                                                                         </div>
+                                                                                                  ))}
+                                                                                           </div>
+                                                                                    </section>
+                                                                             ))
+                                                                      ) : (
+                                                                             <div className="flex flex-col gap-2">
+                                                                                    {visibleTasks.map(task => {
+                                                                                           const projectTitle = task.root_id && task.root_id !== task.id
+                                                                                                  ? projectTitleByRootId.get(task.root_id) ?? null
+                                                                                                  : null;
+                                                                                           return (
+                                                                                                  <TaskItem
+                                                                                                         key={task.id}
+                                                                                                         task={task}
+                                                                                                         level={0}
+                                                                                                         onStatusChange={handleStatusChange}
+                                                                                                         hideExpansion={true}
+                                                                                                         disableDrag={true}
+                                                                                                         onTaskClick={handleTaskClick}
+                                                                                                         selectedTaskId={selectedTaskId}
+                                                                                                         parentProjectTitle={projectTitle}
+                                                                                                  />
+                                                                                           );
+                                                                                    })}
+                                                                             </div>
+                                                                      )}
                                                                </div>
                                                         ) : (
                                                                <div className="h-full">
@@ -407,16 +533,34 @@ export default function TasksPage() {
                             </div>
                      </DndContext>
 
-                     {selectedTaskForPanel && (
-                            <TaskDetailsPanel
-                                   showForm={false}
-                                   selectedTask={selectedTaskForPanel}
-                                   allProjectTasks={selectedProjectTasks}
-                                   membershipRole={selectedMembershipRole}
-                                   onClose={closeDetailsPanel}
-                                   onDeleteTaskWrapper={handleDeleteTaskById}
-                            />
-                     )}
+                     <Dialog
+                            open={selectedTaskForPanel !== null}
+                            onOpenChange={(open) => {
+                                   if (!open) closeDetailsPanel();
+                            }}
+                     >
+                            <DialogContent
+                                   hideClose
+                                   className="h-full max-h-screen max-w-3xl overflow-hidden p-0 sm:h-5/6"
+                            >
+                                   <DialogHeader className="sr-only">
+                                          <DialogTitle>{selectedTaskForPanel?.title ?? t('tasks.panel.details')}</DialogTitle>
+                                   </DialogHeader>
+                                   {selectedTaskForPanel && (
+                                          <TaskDetailsPanel
+                                                 showForm={false}
+                                                 selectedTask={selectedTaskForPanel}
+                                                 allProjectTasks={selectedProjectTasks}
+                                                 membershipRole={selectedMembershipRole}
+                                                 teamMembers={selectedTeamMembers}
+                                                 onClose={closeDetailsPanel}
+                                                 canEdit={selectedCanEdit}
+                                                 onDeleteTaskWrapper={selectedCanDelete ? handleDeleteTaskById : undefined}
+                                                 className="w-full border-l-0 shadow-none sm:w-full sm:min-w-0 sm:max-w-none"
+                                          />
+                                   )}
+                            </DialogContent>
+                     </Dialog>
               </>
        );
 }

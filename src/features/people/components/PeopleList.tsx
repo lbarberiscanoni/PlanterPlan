@@ -10,7 +10,7 @@ import AddPersonModal from './AddPersonModal';
 import { toast } from 'sonner';
 import { planter } from '@/shared/api/planterClient';
 import { compareDateDesc } from '@/shared/lib/date-engine';
-import { useConfirm } from '@/shared/ui/confirm-dialog';
+import { useConfirm } from '@/shared/ui/confirm-dialog-context';
 import { safeUrl } from '@/shared/lib/safe-url';
 import { STALE_TIMES } from '@/shared/lib/react-query-config';
 import type { PersonRow, PersonInsert } from '@/shared/db/app.types';

@@ -1,5 +1,7 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useId, useCallback } from 'react';
+import type { ChangeEvent, KeyboardEvent } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import {
     Dialog,
@@ -10,11 +12,17 @@ import {
     DialogFooter,
 } from '@/shared/ui/dialog';
 import { Button } from '@/shared/ui/button';
-import MasterLibrarySearch from '@/features/library/components/MasterLibrarySearch';
-import useRelatedTemplates from '@/features/library/hooks/useRelatedTemplates';
-import { useAuth } from '@/shared/contexts/AuthContext';
+import useMasterLibrarySearch from '@/shared/hooks/useMasterLibrarySearch';
+import useRelatedTemplates from '@/shared/hooks/useRelatedTemplates';
+import { useAuth } from '@/shared/contexts/auth-context';
 import { planter } from '@/shared/api/planterClient';
 import type { TaskRow } from '@/shared/db/app.types';
+
+interface TemplateSearchResult {
+    id: string;
+    title?: string | null;
+    description?: string | null;
+}
 
 interface StrategyFollowUpDialogProps {
     /** The strategy-template task that just flipped to `completed`. */
@@ -29,6 +37,143 @@ interface StrategyFollowUpDialogProps {
      * `MasterLibrarySearch` so the combobox hides them (Wave 22 dedupe convention).
      */
     excludeTemplateIds?: readonly string[];
+}
+
+function StrategyTemplateSearch({
+    onSelect,
+    excludeTemplateIds,
+}: {
+    onSelect: (selected: TemplateSearchResult) => void;
+    excludeTemplateIds: readonly string[];
+}) {
+    const { t } = useTranslation();
+    const [query, setQuery] = useState('');
+    const [isOpen, setIsOpen] = useState(false);
+    const [activeIndex, setActiveIndex] = useState(-1);
+    const listboxId = useId();
+    const { results, isLoading, hasResults, exclusionDrained } = useMasterLibrarySearch({
+        query,
+        excludeTemplateIds,
+    });
+
+    const handleQueryChange = useCallback((event: ChangeEvent<HTMLInputElement>) => {
+        setQuery(event.target.value);
+        setIsOpen(true);
+        setActiveIndex(-1);
+    }, []);
+
+    const handleSelect = useCallback((template: TemplateSearchResult) => {
+        onSelect(template);
+        setQuery(template.title ?? '');
+        setIsOpen(false);
+        setActiveIndex(-1);
+    }, [onSelect]);
+
+    const handleKeyDown = useCallback((event: KeyboardEvent<HTMLInputElement>) => {
+        if (event.key === 'ArrowDown') {
+            event.preventDefault();
+            setIsOpen(true);
+            setActiveIndex((prev) => (
+                results.length === 0 ? -1 : (prev + 1 >= results.length ? 0 : prev + 1)
+            ));
+        } else if (event.key === 'ArrowUp') {
+            event.preventDefault();
+            setActiveIndex((prev) => (prev - 1 < 0 ? results.length - 1 : prev - 1));
+        } else if (event.key === 'Enter' && activeIndex >= 0 && activeIndex < results.length) {
+            event.preventDefault();
+            handleSelect(results[activeIndex]);
+        } else if (event.key === 'Escape') {
+            setIsOpen(false);
+            setActiveIndex(-1);
+        }
+    }, [activeIndex, handleSelect, results]);
+
+    const activeResultId = useMemo(() => {
+        if (activeIndex < 0 || activeIndex >= results.length) return undefined;
+        return `${listboxId}-item-${results[activeIndex].id}`;
+    }, [activeIndex, listboxId, results]);
+
+    return (
+        <div className="relative space-y-1">
+            <label
+                className="block text-sm font-medium text-slate-600"
+                htmlFor={`strategy-template-search-${listboxId}`}
+            >
+                {t('tasks.strategy_follow_up.search_label')}
+            </label>
+            <input
+                id={`strategy-template-search-${listboxId}`}
+                type="text"
+                className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-base shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-brand-500 md:text-sm"
+                placeholder={t('tasks.search.template_placeholder')}
+                value={query}
+                onChange={handleQueryChange}
+                onFocus={() => setIsOpen(true)}
+                onBlur={() => {
+                    setTimeout(() => setIsOpen(false), 200);
+                }}
+                onKeyDown={handleKeyDown}
+                role="combobox"
+                aria-autocomplete="list"
+                aria-controls={isOpen ? listboxId : undefined}
+                aria-activedescendant={activeResultId}
+                aria-expanded={isOpen && hasResults}
+                aria-haspopup="listbox"
+            />
+
+            {isOpen && (
+                <div
+                    id={listboxId}
+                    role="listbox"
+                    aria-label={t('tasks.strategy_follow_up.search_results_aria')}
+                    className="absolute z-50 mt-1 w-full max-h-64 overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-lg"
+                >
+                    {isLoading && (
+                        <div className="px-4 py-3 text-sm text-slate-500">
+                            {t('tasks.strategy_follow_up.loading_templates')}
+                        </div>
+                    )}
+
+                    {!isLoading && results.length === 0 && (
+                        <div className="px-4 py-3 text-sm text-slate-500">
+                            {exclusionDrained
+                                ? t('tasks.strategy_follow_up.all_matching_added')
+                                : query
+                                    ? t('tasks.strategy_follow_up.no_matching_templates')
+                                    : t('tasks.strategy_follow_up.no_templates_available')}
+                        </div>
+                    )}
+
+                    {results.map((template, index) => {
+                        const isActive = index === activeIndex;
+                        return (
+                            <button
+                                key={template.id}
+                                type="button"
+                                id={`${listboxId}-item-${template.id}`}
+                                role="option"
+                                aria-selected={isActive}
+                                onMouseDown={(event) => event.preventDefault()}
+                                onClick={() => handleSelect(template)}
+                                data-testid={`strategy-followup-search-row-${template.id}`}
+                                className={`w-full text-left px-4 py-2.5 border-b border-slate-200 last:border-b-0 focus:outline-none ${
+                                    isActive ? 'bg-brand-50' : 'hover:bg-slate-50'
+                                }`}
+                            >
+                                <p className="text-sm font-medium text-slate-900 truncate">{template.title}</p>
+                                {template.description && (
+                                    <p className="text-xs text-slate-600 truncate mt-0.5">{template.description}</p>
+                                )}
+                                <span className="text-xs text-brand-600">
+                                    {t('tasks.strategy_follow_up.copy_to_form')}
+                                </span>
+                            </button>
+                        );
+                    })}
+                </div>
+            )}
+        </div>
+    );
 }
 
 /**
@@ -56,7 +201,7 @@ const StrategyFollowUpDialog = ({
     const parentId = task.parent_task_id ?? null;
     const rootId = task.root_id ?? task.id;
 
-    const handleSelect = async (selected: { id: string; title?: string }) => {
+    const handleSelect = async (selected: TemplateSearchResult) => {
         if (!user?.id) {
             toast.error('Not signed in');
             return;
@@ -149,11 +294,8 @@ const StrategyFollowUpDialog = ({
                     </div>
                 )}
                 <div className="py-2">
-                    <MasterLibrarySearch
+                    <StrategyTemplateSearch
                         onSelect={handleSelect}
-                        mode="copy"
-                        label="Search Master Library"
-                        placeholder="Search by title or description…"
                         excludeTemplateIds={excludeSet}
                     />
                 </div>

@@ -1,9 +1,9 @@
 import { useCallback, useMemo, useState } from 'react';
 import { Button } from '@/shared/ui/button';
-import { formatDisplayDate, addDaysToDate } from '@/shared/lib/date-engine';
+import { formatDisplayDate, addDaysToDate, formatDate, getNow } from '@/shared/lib/date-engine';
 import { planter } from '@/shared/api/planterClient';
-import { useProjectActivity } from '@/features/projects/hooks/useProjectActivity';
-import { ActivityRow } from './ActivityRow';
+import { useProjectActivity } from '@/shared/hooks/useActivityLog';
+import { ActivityRow } from '@/shared/ui/ActivityRow';
 import type { ActivityLogWithActor } from '@/shared/db/app.types';
 
 interface ProjectActivityTabProps {
@@ -21,20 +21,12 @@ const FILTERS: ReadonlyArray<{ key: Filter; label: string }> = [
 
 const PAGE_SIZE = 50;
 
-function sameLocalDay(a: Date, b: Date): boolean {
-    return (
-        a.getFullYear() === b.getFullYear() &&
-        a.getMonth() === b.getMonth() &&
-        a.getDate() === b.getDate()
-    );
-}
-
 function dayLabel(isoString: string): string {
-    const today = new Date();
-    const rowDay = new Date(isoString);
-    if (sameLocalDay(rowDay, today)) return 'Today';
+    const today = getNow();
+    const rowDayKey = formatDate(isoString, 'yyyy-MM-dd');
+    if (rowDayKey && rowDayKey === formatDate(today, 'yyyy-MM-dd')) return 'Today';
     const yesterday = addDaysToDate(today, -1);
-    if (yesterday && sameLocalDay(rowDay, yesterday)) return 'Yesterday';
+    if (yesterday && rowDayKey === formatDate(yesterday, 'yyyy-MM-dd')) return 'Yesterday';
     return formatDisplayDate(isoString);
 }
 

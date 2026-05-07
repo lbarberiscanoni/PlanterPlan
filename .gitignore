@@ -14,13 +14,14 @@ build
 *.local
 .env*
 !.env.example
-package-lock.json
 .ai-ignore/
 /archive/*
+.vercel/
 
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
+PlanterPlan.code-workspace
 .idea
 .DS_Store
 *.suo
@@ -32,13 +33,14 @@ package-lock.json
 # Playwright
 /test-results/
 /playwright-report/
-Testing/e2e/.features-gen/
+/Testing/e2e/.features-gen/
 /e2e/.auth/
 /blob-report/
 /playwright/.cache/
 /playwright/.auth/
 
 # Test artifacts
+/coverage/
 rls-results-current.json
 vitest-results-*.json
 playwright-report/
@@ -88,3 +90,6 @@ src/shared/db/database.types.ts
 .claude/skills/
 skills/
 skills-lock.json
+
+# Supabase Studio local scratch queries
+supabase/snippets/

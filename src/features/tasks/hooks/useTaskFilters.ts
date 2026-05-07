@@ -1,6 +1,13 @@
 import { useMemo } from 'react';
 import type { TaskRow } from '@/shared/db/app.types';
-import { deriveUrgency, compareDateAsc, toIsoDate } from '@/shared/lib/date-engine/index';
+import {
+ deriveUrgencyForProject,
+ compareDateAsc,
+ getNow,
+ toIsoDate,
+ type CheckpointRootLike,
+} from '@/shared/lib/date-engine/index';
+import { filterPriorityTasks } from '@/features/tasks/lib/priority-tasks';
 
 export type TaskFilterKey =
  | 'my_tasks'
@@ -47,6 +54,13 @@ const buildThresholdMap = (tasks: TaskRow[]): Map<string, number> => {
  return map;
 };
 
+const toCheckpointRootLike = (task: TaskRow): CheckpointRootLike => {
+ const settings = task.settings && typeof task.settings === 'object' && !Array.isArray(task.settings)
+  ? task.settings as Record<string, unknown>
+  : null;
+ return { parent_task_id: task.parent_task_id, settings };
+};
+
 export interface UseTaskFiltersArgs {
  tasks: TaskRow[];
  filter: TaskFilterKey;
@@ -76,10 +90,16 @@ export const filterAndSortTasks = ({
  filter,
  sort,
  currentUserId = null,
- now = new Date(),
+ now = getNow(),
  dueDateRange,
 }: UseTaskFiltersArgs): TaskRow[] => {
  const thresholds = buildThresholdMap(tasks);
+ const rootById = new Map<string, CheckpointRootLike>();
+ for (const task of tasks) {
+  if (task.parent_task_id === null) {
+   rootById.set(task.id, toCheckpointRootLike(task));
+  }
+ }
 
  const instanceChildren = tasks.filter(
   (t) => t.parent_task_id !== null && t.origin === 'instance',
@@ -87,7 +107,8 @@ export const filterAndSortTasks = ({
 
  const urgencyOf = (t: TaskRow) => {
   const threshold = t.root_id ? thresholds.get(t.root_id) ?? DEFAULT_DUE_SOON_THRESHOLD : DEFAULT_DUE_SOON_THRESHOLD;
-  return deriveUrgency(t, threshold, now);
+  const rootTask = t.root_id ? rootById.get(t.root_id) ?? null : null;
+  return deriveUrgencyForProject(t, rootTask, threshold, now);
  };
 
  let filtered: TaskRow[];
@@ -100,7 +121,7 @@ export const filterAndSortTasks = ({
     : [];
    break;
   case 'priority':
-   filtered = instanceChildren.filter((t) => t.priority === 'high' && !isCompleted(t));
+   filtered = filterPriorityTasks(tasks, now);
    break;
   case 'overdue':
    filtered = instanceChildren.filter((t) => urgencyOf(t) === 'overdue');
@@ -163,7 +184,7 @@ export const FILTER_LABELS: Record<TaskFilterKey, string> = {
 
 export const EMPTY_STATE_COPY: Record<TaskFilterKey, string> = {
  my_tasks: 'No tasks found across your projects.',
- priority: 'No high-priority tasks right now.',
+ priority: 'No overdue, due-soon, or started tasks right now.',
  overdue: 'Nothing is overdue. Nice work.',
  due_soon: 'No tasks are due in the next few days.',
  current: 'No tasks are currently active.',

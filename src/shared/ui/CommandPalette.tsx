@@ -2,11 +2,10 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
- LayoutDashboard,
  FolderOpen,
  Settings,
  User,
- Calendar
+ Calendar,
 } from 'lucide-react';
 
 import {
@@ -69,10 +68,6 @@ export function CommandPalette({ projects = [] }: CommandPaletteProps) {
  <CommandEmpty>{t('nav.command_empty')}</CommandEmpty>
 
  <CommandGroup heading={t('nav.command_suggestions')}>
- <CommandItem onSelect={() => runCommand(() => navigate('/dashboard'))}>
- <LayoutDashboard className="mr-2 h-4 w-4" />
- <span>{t('nav.project_dashboard')}</span>
- </CommandItem>
  <CommandItem onSelect={() => runCommand(() => navigate('/tasks'))}>
  <Calendar className="mr-2 h-4 w-4" />
  <span>{t('nav.my_tasks')}</span>

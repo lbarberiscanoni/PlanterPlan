@@ -8,12 +8,16 @@ import type {
     Task,
     TaskInsert,
     TaskUpdate,
+    JsonObject,
     TaskResourceRow,
     ResourceWithTask,
     TaskRelationshipRow,
     PersonRow,
     TeamMemberRow,
+    TeamMemberWithProfile,
+    ProjectInviteResult,
     UserMetadata,
+    TaskCommentInsert,
     TaskCommentRow,
     TaskCommentWithAuthor,
     ActivityLogWithActor,
@@ -60,12 +64,181 @@ export class PlanterError extends Error {
     }
 }
 
+type ListTaskCommentsWithAuthorsRow =
+    Database['public']['Functions']['list_task_comments_with_authors']['Returns'][number];
+type ListProjectMembersWithProfilesRow =
+    Database['public']['Functions']['list_project_members_with_profiles']['Returns'][number];
+
+/**
+ * Narrow an unknown value to a plain object record before reading hydrated DTO
+ * fields.
+ *
+ * @param value - Candidate value returned from the RPC payload.
+ * @returns True when the value is a non-array object record.
+ */
+function isObjectRecord(value: unknown): value is Record<string, unknown> {
+    return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+async function getEdgeFunctionErrorMessage(error: unknown, fallback: string): Promise<string> {
+    if (isObjectRecord(error)) {
+        const context = error.context;
+        if (context instanceof Response) {
+            try {
+                const body: unknown = await context.clone().json();
+                if (isObjectRecord(body) && typeof body.error === 'string' && body.error.length > 0) {
+                    return body.error;
+                }
+            } catch {
+                // Keep the fallback when the function did not return JSON.
+            }
+        }
+
+        if (typeof error.message === 'string' && error.message.length > 0) {
+            return error.message;
+        }
+    }
+
+    return fallback;
+}
+
+/**
+ * Normalize a hydrated comment-author payload into the client DTO shape,
+ * treating malformed or missing author data as an intentional null author.
+ *
+ * @param commentId - Comment ID used for diagnostic warnings.
+ * @param authorId - Stored comment author ID, or null for deleted/anonymized authors.
+ * @param rawAuthor - Raw `author` JSON payload returned by the comment RPC.
+ * @returns A normalized author DTO, or null when the author is absent or invalid.
+ */
+function normalizeTaskCommentAuthor(
+    commentId: string,
+    authorId: string | null,
+    rawAuthor: ListTaskCommentsWithAuthorsRow['author'],
+): TaskCommentWithAuthor['author'] {
+    if (rawAuthor === null) {
+        if (authorId !== null) {
+            console.warn('[planter.TaskComment] author payload missing for non-null author_id', {
+                commentId,
+                authorId,
+            });
+        }
+        return null;
+    }
+
+    if (!isObjectRecord(rawAuthor)) {
+        console.warn('[planter.TaskComment] author payload was not an object', {
+            commentId,
+            authorId,
+            rawAuthor,
+        });
+        return null;
+    }
+
+    const id = rawAuthor.id;
+    if (typeof id !== 'string' || id.length === 0) {
+        console.warn('[planter.TaskComment] author payload missing string id', {
+            commentId,
+            authorId,
+            rawAuthor,
+        });
+        return null;
+    }
+
+    if (authorId !== null && id !== authorId) {
+        console.warn('[planter.TaskComment] author payload id did not match author_id', {
+            commentId,
+            authorId,
+            hydratedAuthorId: id,
+        });
+        return null;
+    }
+
+    const email = typeof rawAuthor.email === 'string' ? rawAuthor.email : null;
+    const metadata = isObjectRecord(rawAuthor.user_metadata)
+        ? rawAuthor.user_metadata as UserMetadata
+        : null;
+
+    if (rawAuthor.user_metadata !== null && rawAuthor.user_metadata !== undefined && metadata === null) {
+        console.warn('[planter.TaskComment] author user_metadata was not an object', {
+            commentId,
+            authorId,
+        });
+    }
+
+    return { id, email, user_metadata: metadata };
+}
+
+/**
+ * Convert one RPC result row into the public comment DTO consumed by task
+ * comment UI and notification flows.
+ *
+ * @param row - Row returned by `list_task_comments_with_authors`.
+ * @returns A task comment with a normalized `author` property.
+ */
+function normalizeTaskCommentWithAuthor(row: ListTaskCommentsWithAuthorsRow): TaskCommentWithAuthor {
+    return {
+        id: row.id,
+        task_id: row.task_id,
+        root_id: row.root_id,
+        parent_comment_id: row.parent_comment_id,
+        author_id: row.author_id,
+        body: row.body,
+        mentions: row.mentions,
+        created_at: row.created_at,
+        updated_at: row.updated_at,
+        edited_at: row.edited_at,
+        deleted_at: row.deleted_at,
+        author: normalizeTaskCommentAuthor(row.id, row.author_id, row.author),
+    };
+}
+
+/**
+ * Build a comment DTO for the rare create fallback where the inserted row
+ * cannot be re-read through the hydrated-author RPC.
+ *
+ * @param row - Raw task comment row returned by the insert mutation.
+ * @returns A task comment DTO with `author` intentionally set to null.
+ */
+function commentRowWithoutHydratedAuthor(row: TaskCommentRow): TaskCommentWithAuthor {
+    if (row.author_id !== null) {
+        console.warn('[planter.TaskComment] returning comment without hydrated author after RPC miss', {
+            commentId: row.id,
+            authorId: row.author_id,
+        });
+    }
+    return { ...row, author: null };
+}
+
+/**
+ * Normalize a hydrated project-member row into the client DTO shape.
+ *
+ * @param row - Raw row returned by the profile-hydration RPC.
+ * @returns A team member DTO with safe display fields for the roster UI.
+ */
+function normalizeTeamMemberWithProfile(row: ListProjectMembersWithProfilesRow): TeamMemberWithProfile {
+    return {
+        id: row.id,
+        project_id: row.project_id,
+        user_id: row.user_id,
+        role: row.role,
+        joined_at: row.joined_at,
+        email: row.email,
+        first_name: row.first_name,
+        last_name: row.last_name,
+        display_name: row.display_name,
+        avatar_url: row.avatar_url,
+    };
+}
+
 export interface PlanterClient {
     auth: {
         me: () => Promise<AuthUser | null>;
         signOut: () => Promise<void>;
         updateProfile: (attributes: UserMetadata) => Promise<AuthUser>;
-        changePassword: (newPassword: string) => Promise<void>;
+        changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
+        requestPasswordReset: (email: string, redirectTo?: string) => Promise<void>;
+        completePasswordReset: (newPassword: string) => Promise<void>;
     };
     entities: {
         Project: ProjectEntityClient;
@@ -79,7 +252,7 @@ export interface PlanterClient {
             listAllVisibleTemplates: (viewerId?: string) => Promise<Task[]>;
         };
         TaskResource: TaskResourceEntityClient;
-        TeamMember: EntityClient<TeamMemberRow, Database['public']['Tables']['project_members']['Insert'], Database['public']['Tables']['project_members']['Update']>;
+        TeamMember: TeamMemberEntityClient;
         Person: EntityClient<PersonRow, Database['public']['Tables']['people']['Insert'], Database['public']['Tables']['people']['Update']>;
         TaskComment: TaskCommentEntityClient;
         ActivityLog: ActivityLogEntityClient;
@@ -139,7 +312,7 @@ export interface PlanterClient {
     integrations: {
         /** List the current user's ICS tokens (active + revoked). */
         listIcsFeedTokens: () => Promise<IcsFeedTokenRow[]>;
-        /** Create a new ICS token. Client generates the random token value via crypto.randomUUID(). */
+        /** Create a new ICS token. Client generates the random token value via Web Crypto. */
         createIcsFeedToken: (input: CreateIcsFeedTokenInput) => Promise<IcsFeedTokenRow>;
         /** Soft-revoke a token (sets revoked_at = now). */
         revokeIcsFeedToken: (id: string) => Promise<IcsFeedTokenRow>;
@@ -162,13 +335,23 @@ interface TaskResourceEntityClient extends EntityClient<TaskResourceRow, Databas
     listByProject: (projectId: string, options?: { signal?: AbortSignal }) => Promise<ResourceWithTask[]>;
 }
 
+interface TeamMemberEntityClient extends EntityClient<TeamMemberRow, Database['public']['Tables']['project_members']['Insert'], Database['public']['Tables']['project_members']['Update']> {
+    /**
+     * Fetches the project roster hydrated with safe auth profile fields.
+     *
+     * @param projectId - The project root task ID.
+     * @returns Hydrated team member rows visible to the current user.
+     */
+    listByProjectWithProfiles: (projectId: string) => Promise<TeamMemberWithProfile[]>;
+}
+
 interface ProjectEntityClient extends Omit<EntityClient<Project, TaskInsert, TaskUpdate>, 'create' | 'listByCreator'> {
     create: (projectData: CreateProjectPayload & { creator?: string; _token?: string }) => Promise<Project>;
     listByCreator: (userId: string, page?: number, pageSize?: number, options?: { signal?: AbortSignal }) => Promise<Project[]>;
     listJoined: (userId: string) => Promise<Project[]>;
     getWithStats: (projectId: string) => Promise<{ data: Project & { children: Task[], stats: { totalTasks: number; completedTasks: number; progress: number } }, error: Error | null }>;
     addMember: (projectId: string, userId: string, role: string) => Promise<{ data: TeamMemberRow | undefined, error: Error | null }>;
-    addMemberByEmail: (projectId: string, email: string, role: string) => Promise<{ data: TeamMemberRow | undefined, error: Error | null }>;
+    inviteMemberByEmail: (projectId: string, email: string, role: string) => Promise<ProjectInviteResult>;
 }
 
 interface TaskEntityClient extends EntityClient<Task, TaskInsert, TaskUpdate> {
@@ -277,71 +460,100 @@ interface PushSubscriptionEntityClient {
 // ---------------------------------------------------------------------------
 
 /**
- * Wraps `supabase.from(name)` with a name-literal constraint. The union
- * includes both public tables AND views (e.g. `tasks_with_primary_resource`)
- * so read-only view access type-checks too. Catches typos like
- * `.from('taks')` at compile time — the previous `(name: string) =>
- * supabase.from(name as any)` bypassed the whole name-literal union.
+ * Wraps `supabase.from(name)` with a name-literal constraint for public
+ * tables. View reads use direct typed calls at their specialized call sites.
+ * Catches typos like `.from('taks')` at compile time — the previous string
+ * wrapper bypassed the whole name-literal union.
  *
  * The `createEntityClient` generic crosses boundaries across dozens of
  * (T, TInsert, TUpdate) shapes — Supabase's generated types can't model
  * that variance, so we erase the query back to a permissive shape inside
  * the wrapper once the NAME itself is validated. Individual callers that
- * use `fromTable` directly (outside createEntityClient) still get the
- * full row-typed return.
+ * use direct Supabase calls outside createEntityClient still get the full
+ * row-typed return.
  */
 type PublicTableName =
-    | keyof Database['public']['Tables']
-    | keyof Database['public']['Views'];
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const fromTable = <T extends PublicTableName>(name: T) => supabase.from(name as any);
+    keyof Database['public']['Tables'];
 
-type WithAbortSignal = { abortSignal(signal: AbortSignal): unknown };
-const applySignal = <Q>(query: Q, signal?: AbortSignal): Q => {
-    if (signal) (query as unknown as WithAbortSignal).abortSignal(signal);
-    return query;
-};
+type QueryError = { message: string; code?: string };
+type EntityFilterValue = string | number | boolean | null;
+
+interface EntityQuery<T> extends PromiseLike<{ data: T | T[] | null; error: QueryError | null }> {
+    select(columns: string): EntityQuery<T>;
+    eq(column: string, value: EntityFilterValue): EntityQuery<T>;
+    neq(column: string, value: EntityFilterValue): EntityQuery<T>;
+    is(column: string, value: null): EntityQuery<T>;
+    order(column: string, options?: { ascending?: boolean }): EntityQuery<T>;
+    range(from: number, to: number): EntityQuery<T>;
+    maybeSingle(): EntitySingleQuery<T>;
+    abortSignal?: (signal: AbortSignal) => EntityQuery<T>;
+}
+
+interface EntitySingleQuery<T> extends PromiseLike<{ data: T | null; error: QueryError | null }> {
+    abortSignal?: (signal: AbortSignal) => EntitySingleQuery<T>;
+}
+
+interface EntityTableQuery<T, TInsert, TUpdate> {
+    select(columns: string): EntityQuery<T>;
+    insert(payload: TInsert | TInsert[]): EntityQuery<T>;
+    update(payload: TUpdate): EntityQuery<T>;
+    delete(): EntityQuery<T>;
+    upsert(payload: TInsert | TInsert[], options?: { onConflict?: string; ignoreDuplicates?: boolean }): EntityQuery<T>;
+}
+
+const entityTable = <T, TInsert, TUpdate>(name: PublicTableName): EntityTableQuery<T, TInsert, TUpdate> => (
+    supabase.from(name) as EntityTableQuery<T, TInsert, TUpdate>
+);
+
+type AbortSignalQuery<Q> = { abortSignal?: (signal: AbortSignal) => Q };
+const applySignal = <Q extends AbortSignalQuery<Q>>(query: Q, signal?: AbortSignal): Q => (
+    signal && query.abortSignal ? query.abortSignal(signal) : query
+);
 
 const createEntityClient = <T, TInsert, TUpdate>(tableName: PublicTableName, select = '*'): EntityClient<T, TInsert, TUpdate> => ({
     list: async (opts) => {
         return retry(async () => {
-            const query = fromTable(tableName).select(select);
+            const query = entityTable<T, TInsert, TUpdate>(tableName).select(select);
             applySignal(query, opts?.signal);
             const { data, error } = await query;
             if (error) throw new PlanterError(error.message, error.code ?? '500');
-            return (data as T[]) || [];
+            return Array.isArray(data) ? data : (data ? [data] : []);
         });
     },
     get: async (id: string, opts) => {
         return retry(async () => {
-            const query = fromTable(tableName).select(select).eq('id', id).maybeSingle();
+            const query = entityTable<T, TInsert, TUpdate>(tableName).select(select).eq('id', id).maybeSingle();
             applySignal(query, opts?.signal);
             const { data, error } = await query;
             if (error) throw new PlanterError(error.message, error.code ?? '500');
-            return (data as T) || null;
+            return data || null;
         });
     },
     create: async (payload: TInsert | TInsert[], opts) => {
         return retry(async () => {
-            const query = fromTable(tableName).insert(payload as Record<string, unknown>).select(select);
+            const query = entityTable<T, TInsert, TUpdate>(tableName).insert(payload).select(select);
             applySignal(query, opts?.signal);
             const { data, error } = await query;
             if (error) throw new PlanterError(error.message, error.code ?? '500');
-            return (data as T[])?.[0] || (data as T);
+            const first = Array.isArray(data) ? data[0] : data;
+            if (!first) throw new PlanterError(`Insert into ${tableName} returned no data`, 500);
+            return first;
         });
     },
     update: async (id: string, payload: TUpdate, opts) => {
         return retry(async () => {
-            const query = fromTable(tableName).update(payload as Record<string, unknown>).eq('id', id).select(select);
+            const query = entityTable<T, TInsert, TUpdate>(tableName).update(payload).eq('id', id).select(select);
             applySignal(query, opts?.signal);
             const { data, error } = await query;
             if (error) throw new PlanterError(error.message, error.code ?? '500');
-            return (data as T[])?.[0] || (data as T);
+            const first = Array.isArray(data) ? data[0] : data;
+            if (!first) throw new PlanterError(`No ${tableName} row found for update id ${id}`, 404);
+            return first;
         });
     },
     delete: async (id: string, opts) => {
         return retry(async () => {
-            const query = fromTable(tableName).delete().eq('id', id);
+            const query = entityTable<T, TInsert, TUpdate>(tableName).delete().eq('id', id);
             applySignal(query, opts?.signal);
             const { error } = await query;
             if (error) throw new PlanterError(error.message, error.code ?? '500');
@@ -350,42 +562,44 @@ const createEntityClient = <T, TInsert, TUpdate>(tableName: PublicTableName, sel
     },
     filter: async (filters: Partial<Record<keyof T, string | number | boolean | null>>, opts) => {
         return retry(async () => {
-            let query = fromTable(tableName).select(select);
+            let query = entityTable<T, TInsert, TUpdate>(tableName).select(select);
             applySignal(query, opts?.signal);
 
-            Object.entries(filters).forEach(([key, val]) => {
+            for (const key of Object.keys(filters) as Array<Extract<keyof T, string>>) {
+                const val = filters[key];
+                if (val === undefined) continue;
                 if (val === null) {
                     query = query.is(key, null);
                 } else {
-                    query = query.eq(key, val as string | number);
+                    query = query.eq(key, val);
                 }
-            });
+            }
 
             const { data, error } = await query;
             if (error) throw new PlanterError(error.message, error.code ?? '500');
-            return (data as T[]) || [];
+            return Array.isArray(data) ? data : (data ? [data] : []);
         });
     },
     listByCreator: async (userId: string, opts) => {
         return retry(async () => {
-            const query = fromTable(tableName).select(select).eq('creator', userId);
+            const query = entityTable<T, TInsert, TUpdate>(tableName).select(select).eq('creator', userId);
             applySignal(query, opts?.signal);
             const { data, error } = await query;
             if (error) throw new PlanterError(error.message, error.code ?? '500');
-            return (data as T[]) || [];
+            return Array.isArray(data) ? data : (data ? [data] : []);
         });
     },
     upsert: async (payload: TInsert | TInsert[], options: { onConflict?: string; ignoreDuplicates?: boolean; signal?: AbortSignal } = {}) => {
         return retry(async () => {
             const onConflict = options.onConflict || 'id';
-            let query = fromTable(tableName).upsert(payload as Record<string, unknown>, {
+            let query = entityTable<T, TInsert, TUpdate>(tableName).upsert(payload, {
                 onConflict,
                 ignoreDuplicates: options.ignoreDuplicates,
             }).select(select);
-            if (options.signal) query = query.abortSignal(options.signal);
+            query = applySignal(query, options.signal);
             const { data, error } = await query;
             if (error) throw new PlanterError(error.message, error.code ?? '500');
-            return { data: data as T | T[], error: null };
+            return { data, error: null };
         });
     }
 });
@@ -421,7 +635,31 @@ export const planter: PlanterClient = {
                 return data.user as AuthUser;
             });
         },
-        changePassword: async (newPassword: string): Promise<void> => {
+        changePassword: async (currentPassword: string, newPassword: string): Promise<void> => {
+            return retry(async () => {
+                const { data: { user }, error: userError } = await supabase.auth.getUser();
+                if (userError) throw userError;
+                const email = user?.email;
+                if (!email) throw new Error('Unable to verify current password for this account.');
+
+                const { error: signInError } = await supabase.auth.signInWithPassword({
+                    email,
+                    password: currentPassword,
+                });
+                if (signInError) throw signInError;
+
+                const { error } = await supabase.auth.updateUser({ password: newPassword });
+                if (error) throw error;
+            });
+        },
+        requestPasswordReset: async (email: string, redirectTo?: string): Promise<void> => {
+            return retry(async () => {
+                const options = redirectTo ? { redirectTo } : undefined;
+                const { error } = await supabase.auth.resetPasswordForEmail(email, options);
+                if (error) throw error;
+            });
+        },
+        completePasswordReset: async (newPassword: string): Promise<void> => {
             return retry(async () => {
                 const { error } = await supabase.auth.updateUser({ password: newPassword });
                 if (error) throw error;
@@ -487,7 +725,7 @@ export const planter: PlanterClient = {
                         .select('*');
 
                     if (error) throw new PlanterError(error.message, error.code ?? '500');
-                    const project = Array.isArray(data) ? (data[0] as Project) : (data as unknown as Project);
+                    const project = Array.isArray(data) ? data[0] : data;
 
                     if (!project?.id) {
                         throw new Error('Project creation failed: no ID returned from database.');
@@ -612,16 +850,21 @@ export const planter: PlanterClient = {
                 if (error) throw new PlanterError(error.message, error.code ?? '500');
                 return { data: (data as TeamMemberRow[])?.[0], error: null };
             },
-            addMemberByEmail: async (projectId: string, email: string, role: string): Promise<{ data: TeamMemberRow | undefined, error: Error | null }> => {
+            inviteMemberByEmail: async (projectId: string, email: string, role: string): Promise<ProjectInviteResult> => {
                 return retry(async () => {
-                    // @ts-expect-error RPC name validated at runtime
-                    const { data, error } = await supabase.rpc('add_project_member_by_email', {
-                        p_project_id: projectId,
-                        p_email: email,
-                        p_role: role,
+                    const { data, error } = await supabase.functions.invoke<ProjectInviteResult & { error?: string }>('invite-by-email', {
+                        body: { projectId, email, role },
                     });
-                    if (error) throw new PlanterError(error.message, error.code ?? '500');
-                    return { data: data as TeamMemberRow | undefined, error: null };
+                    if (error) {
+                        throw new PlanterError(
+                            await getEdgeFunctionErrorMessage(error, 'Invite failed'),
+                            400,
+                        );
+                    }
+                    if (!data || data.error) {
+                        throw new PlanterError(data?.error || 'Invite failed', 400);
+                    }
+                    return data;
                 });
             },
         },
@@ -810,7 +1053,10 @@ export const planter: PlanterClient = {
                             // null here (transient error / RLS) would otherwise clobber
                             // any settings the RPC populated.
                             if (existing) {
-                                const prevSettings = (existing.settings ?? {}) as Record<string, unknown>;
+                                const prevSettings: JsonObject =
+                                    existing.settings && typeof existing.settings === 'object' && !Array.isArray(existing.settings)
+                                        ? { ...existing.settings }
+                                        : {};
                                 // Wave 36 Task 1: stamp the source template's current
                                 // template_version onto the instance root so admins can
                                 // spot clones stuck on older template iterations. Look
@@ -826,15 +1072,24 @@ export const planter: PlanterClient = {
                                     console.warn('[PlanterClient.clone] template_version lookup failed', srcLookupErr);
                                 }
 
-                                const mergedSettings: Record<string, unknown> = {
+                                const mergedSettings: JsonObject = {
                                     ...prevSettings,
                                     spawnedFromTemplate: templateId,
                                 };
                                 if (templateVersionStamp !== undefined) {
                                     mergedSettings.cloned_from_template_version = templateVersionStamp;
                                 }
+                                const alreadyStamped =
+                                    prevSettings.spawnedFromTemplate === templateId
+                                    && (
+                                        templateVersionStamp === undefined
+                                        || prevSettings.cloned_from_template_version === templateVersionStamp
+                                    );
+                                if (alreadyStamped) {
+                                    return { data: existing as Task, error: null };
+                                }
                                 const updated = await planter.entities.Task.update(newRootId, {
-                                    settings: mergedSettings as unknown as TaskUpdate['settings'],
+                                    settings: mergedSettings,
                                 });
                                 return { data: (updated ?? existing) as Task, error: null };
                             }
@@ -880,7 +1135,6 @@ export const planter: PlanterClient = {
         Phase: createEntityClient<Task, TaskInsert, TaskUpdate>('tasks'),
         Milestone: createEntityClient<Task, TaskInsert, TaskUpdate>('tasks'),
         TaskWithResources: {
-            ...createEntityClient<unknown, unknown, unknown>('tasks_with_primary_resource'),
             listTemplates: async ({ from = 0, limit = 25, resourceType = null as string | null, userId, viewerId, signal }: { from?: number, limit?: number, resourceType?: string | null, userId?: string, viewerId?: string, signal?: AbortSignal } = {}): Promise<{ data: Task[], error: Error | null }> => {
                 return retry(async () => {
                     const end = from + limit - 1;
@@ -1021,47 +1275,83 @@ export const planter: PlanterClient = {
                 },
             };
         })(),
-        TeamMember: createEntityClient<TeamMemberRow, Database['public']['Tables']['project_members']['Insert'], Database['public']['Tables']['project_members']['Update']>('project_members'),
+        TeamMember: {
+            ...createEntityClient<TeamMemberRow, Database['public']['Tables']['project_members']['Insert'], Database['public']['Tables']['project_members']['Update']>('project_members'),
+            /**
+             * Fetches the project roster hydrated with safe auth profile fields.
+             * The SECURITY DEFINER RPC gates access to project members and global admins.
+             *
+             * @param projectId - The project root task ID.
+             * @returns Hydrated team member rows visible to the current user.
+             */
+            listByProjectWithProfiles: async (projectId: string): Promise<TeamMemberWithProfile[]> => {
+                return retry(async () => {
+                    const { data, error } = await supabase
+                        .rpc('list_project_members_with_profiles', {
+                            p_project_id: projectId,
+                        });
+                    if (error) throw new PlanterError(error.message, error.code ?? '500');
+                    return (data ?? []).map(normalizeTeamMemberWithProfile);
+                });
+            },
+        },
         Person: createEntityClient<PersonRow, Database['public']['Tables']['people']['Insert'], Database['public']['Tables']['people']['Update']>('people'),
 
         // -----------------------------------------------------------------
         // TaskComment (Wave 26)
         // -----------------------------------------------------------------
         TaskComment: {
-            // The author join points at auth.users across a schema boundary. PostgREST
-            // handles it at runtime but the generated types don't model the cross-schema
-            // FK, so the cast to unknown sidesteps the typed-client's SelectQueryError.
-            //
+            // Author hydration is intentionally routed through a SECURITY
+            // DEFINER RPC. That keeps the auth.users join gated in Postgres and
+            // avoids fragile cross-schema PostgREST select strings in the UI.
             // Returns soft-deleted rows too — the UI renders tombstones so reply chains
             // stay intact when an ancestor is soft-deleted. `softDelete` blanks body, so
             // no content leaks via this query.
             listByTask: async (taskId: string): Promise<TaskCommentWithAuthor[]> => {
                 return retry(async () => {
                     const { data, error } = await supabase
-                        .from('task_comments')
-                        .select('*, author:users(id, email, user_metadata)')
-                        .eq('task_id', taskId)
-                        .order('created_at', { ascending: true });
+                        .rpc('list_task_comments_with_authors', {
+                            p_task_id: taskId,
+                            p_comment_id: null,
+                        });
                     if (error) throw new PlanterError(error.message, error.code ?? '500');
-                    return ((data as unknown) as TaskCommentWithAuthor[]) || [];
+                    return (data ?? []).map(normalizeTaskCommentWithAuthor);
                 });
             },
             create: async (payload): Promise<TaskCommentWithAuthor> => {
                 return retry(async () => {
-                    const insert: Database['public']['Tables']['task_comments']['Insert'] = {
+                    const insert = {
                         task_id: payload.task_id,
                         author_id: payload.author_id,
                         parent_comment_id: payload.parent_comment_id ?? null,
                         body: payload.body,
                         mentions: payload.mentions ?? [],
-                    };
+                    } satisfies Omit<TaskCommentInsert, 'root_id'>;
                     const { data, error } = await supabase
                         .from('task_comments')
-                        .insert(insert)
-                        .select('*, author:users(id, email, user_metadata)')
-                        .single();
+                        // `root_id` is required in generated DB types but is set
+                        // by `trg_task_comments_set_root_id` before insert checks.
+                        .insert(insert as TaskCommentInsert)
+                        .select('*')
+                        .single()
+                        .overrideTypes<TaskCommentRow, { merge: false }>();
                     if (error) throw new PlanterError(error.message, error.code ?? '500');
-                    return (data as unknown) as TaskCommentWithAuthor;
+                    if (!data) throw new PlanterError('Inserted task comment was not returned', 500);
+                    const { data: hydrated, error: hydrateError } = await supabase
+                        .rpc('list_task_comments_with_authors', {
+                            p_task_id: payload.task_id,
+                            p_comment_id: data.id,
+                        });
+                    if (hydrateError) {
+                        console.warn('[planter.TaskComment] failed to hydrate inserted comment author', {
+                            commentId: data.id,
+                            taskId: payload.task_id,
+                            error: hydrateError.message,
+                        });
+                        return commentRowWithoutHydratedAuthor(data);
+                    }
+                    const row = hydrated?.[0];
+                    return row ? normalizeTaskCommentWithAuthor(row) : commentRowWithoutHydratedAuthor(data);
                 });
             },
             updateBody: async (commentId: string, payload: { body: string; mentions?: string[] }): Promise<TaskCommentRow> => {
@@ -1121,15 +1411,11 @@ export const planter: PlanterClient = {
                         .limit(opts?.limit ?? 50);
                     if (opts?.before) query = query.lt('created_at', opts.before);
                     if (opts?.entityTypes && opts.entityTypes.length > 0) {
-                        // Supabase's typed `.in()` expects its literal enum union.
-                        // Route through unknown to keep the runtime call happy.
-                        query = (query as unknown as {
-                            in: (c: string, v: readonly string[]) => typeof query;
-                        }).in('entity_type', opts.entityTypes);
+                        query = query.in('entity_type', opts.entityTypes);
                     }
-                    const { data, error } = await query;
+                    const { data, error } = await query.overrideTypes<ActivityLogWithActor[], { merge: false }>();
                     if (error) throw new PlanterError(error.message, error.code ?? '500');
-                    return ((data as unknown) as ActivityLogWithActor[]) || [];
+                    return data || [];
                 });
             },
             listByEntity: async (
@@ -1144,9 +1430,10 @@ export const planter: PlanterClient = {
                         .eq('entity_type', entityType)
                         .eq('entity_id', entityId)
                         .order('created_at', { ascending: false })
-                        .limit(opts?.limit ?? 20);
+                        .limit(opts?.limit ?? 20)
+                        .overrideTypes<ActivityLogWithActor[], { merge: false }>();
                     if (error) throw new PlanterError(error.message, error.code ?? '500');
-                    return ((data as unknown) as ActivityLogWithActor[]) || [];
+                    return data || [];
                 });
             },
         } satisfies ActivityLogEntityClient,
@@ -1516,9 +1803,8 @@ export const planter: PlanterClient = {
          *
          * @param input `{ label?, project_filter? }`. `project_filter` narrows
          *   the feed to tasks whose `root_id IN (...)`; null for all projects.
-         * @returns The inserted row, including the plaintext token (the only
-         *   time the token is returned to the client; subsequent reads see
-         *   it masked by convention — clients should persist/display only once).
+         * @returns The inserted row, including the plaintext token. The token
+         *   is needed for copy/rotate UX and must be treated as a credential.
          */
         createIcsFeedToken: async (input: CreateIcsFeedTokenInput): Promise<IcsFeedTokenRow> => {
             return retry(async () => {

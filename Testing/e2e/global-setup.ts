@@ -16,9 +16,11 @@ async function globalSetup(_config: FullConfig) {
   // Create authenticated storage state for the primary test user
   await createAuthState(browser, TEST_USER.email, TEST_USER.password, `${AUTH_DIR}/user.json`);
 
-  // Create per-role storage states for RBAC testing
-  for (const [role, creds] of Object.entries(ROLE_USERS)) {
-    await createAuthState(browser, creds.email, creds.password, `${AUTH_DIR}/${role}.json`);
+  if (process.env.E2E_CREATE_ROLE_STATES === 'true') {
+    // Create per-role storage states for RBAC tests when local role fixtures exist.
+    for (const [role, creds] of Object.entries(ROLE_USERS)) {
+      await createAuthState(browser, creds.email, creds.password, `${AUTH_DIR}/${role}.json`);
+    }
   }
 
   await browser.close();
@@ -42,8 +44,8 @@ async function createAuthState(
     await page.fill('#password', password);
     await page.click('button[type="submit"]');
 
-    // Wait for navigation to dashboard (successful auth)
-    await page.waitForURL('**/dashboard', { timeout: 15000 });
+    // Wait for the current post-login route before persisting auth state.
+    await page.waitForURL('**/tasks', { timeout: 15000 });
 
     // Save storage state
     await context.storageState({ path: storagePath });

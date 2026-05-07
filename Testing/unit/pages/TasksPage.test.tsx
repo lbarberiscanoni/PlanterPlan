@@ -15,7 +15,7 @@ vi.mock('@/shared/db/client', () => ({
 // Wave 33 + 36: TasksPage now calls useAuth() + useTeam() to resolve the
 // caller's membership role for the delete guard. Stub both — neither is
 // exercised by the tests below but their absence would throw at mount.
-vi.mock('@/shared/contexts/AuthContext', () => ({
+vi.mock('@/shared/contexts/auth-context', () => ({
     useAuth: () => ({
         user: { id: 'u1', email: 'me@example.com', role: 'owner' },
         savedEmailAddresses: [],
@@ -46,28 +46,79 @@ vi.mock('@/shared/api/planterClient', () => {
             task_type: 'project',
         },
         {
+            id: 'phase-alpha',
+            title: 'Launch Phase',
+            parent_task_id: 'p-alpha',
+            root_id: 'p-alpha',
+            origin: 'instance',
+            creator: 'u1',
+            status: 'in_progress',
+            task_type: 'phase',
+        },
+        {
+            id: 'm-empty',
+            title: 'Empty Milestone',
+            parent_task_id: 'phase-alpha',
+            root_id: 'p-alpha',
+            origin: 'instance',
+            creator: 'u1',
+            status: 'todo',
+            task_type: 'milestone',
+            position: 1,
+        },
+        {
+            id: 'm-launch',
+            title: 'Launch Milestone',
+            parent_task_id: 'phase-alpha',
+            root_id: 'p-alpha',
+            origin: 'instance',
+            creator: 'u1',
+            status: 'todo',
+            task_type: 'milestone',
+            position: 2,
+        },
+        {
             id: 't-1',
             title: 'Buy a domain',
-            parent_task_id: 'p-alpha',
+            parent_task_id: 'm-launch',
             root_id: 'p-alpha',
             origin: 'instance',
             creator: 'u1',
             assignee_id: 'u1',
             status: 'in_progress',
             task_type: 'task',
+            start_date: '2026-04-01',
             due_date: '2026-04-22',
+            position: 1,
         },
         {
             id: 't-2',
             title: 'Write welcome letter',
-            parent_task_id: 'p-alpha',
+            description: 'Draft the first-time guest follow-up copy',
+            parent_task_id: 'm-launch',
             root_id: 'p-alpha',
             origin: 'instance',
             creator: 'u2',
             assignee_id: 'u1',
             status: 'in_progress',
             task_type: 'task',
+            start_date: '2026-04-01',
             due_date: '2026-05-10',
+            position: 2,
+        },
+        {
+            id: 't-hidden',
+            title: 'Future hidden task',
+            parent_task_id: 'm-launch',
+            root_id: 'p-alpha',
+            origin: 'instance',
+            creator: 'u2',
+            assignee_id: 'u1',
+            status: 'todo',
+            task_type: 'task',
+            start_date: '2099-01-01',
+            due_date: '2099-01-08',
+            position: 3,
         },
         {
             id: 't-1-child',
@@ -145,9 +196,21 @@ function renderTasksPage() {
     );
 }
 
-describe('TasksPage — click-to-details + tooltip wiring (Wave 33)', () => {
+describe('TasksPage — global tasks view + details dialog', () => {
     beforeEach(() => {
         vi.clearAllMocks();
+        if (!HTMLElement.prototype.hasPointerCapture) {
+            HTMLElement.prototype.hasPointerCapture = vi.fn(() => false);
+        }
+        if (!HTMLElement.prototype.setPointerCapture) {
+            HTMLElement.prototype.setPointerCapture = vi.fn();
+        }
+        if (!HTMLElement.prototype.releasePointerCapture) {
+            HTMLElement.prototype.releasePointerCapture = vi.fn();
+        }
+        if (!HTMLElement.prototype.scrollIntoView) {
+            HTMLElement.prototype.scrollIntoView = vi.fn();
+        }
     });
 
     it('does not render the details panel until a task is clicked', async () => {
@@ -156,16 +219,87 @@ describe('TasksPage — click-to-details + tooltip wiring (Wave 33)', () => {
         expect(screen.queryByTestId('tasks-page-details-panel')).not.toBeInTheDocument();
     });
 
-    it('opens the details panel with the clicked task', async () => {
+    it('defaults to all actionable work and excludes root project rows', async () => {
+        renderTasksPage();
+
+        expect(await screen.findByRole('heading', { name: 'All Tasks' })).toBeInTheDocument();
+        expect(screen.getByText('Showing 7 of 7 work items')).toBeInTheDocument();
+        expect(screen.getByText('Empty Milestone')).toBeInTheDocument();
+        expect(screen.getByText('Future hidden task')).toBeInTheDocument();
+        expect(screen.getByLabelText('Sort order')).toBeInTheDocument();
+        expect(screen.queryByTestId('task-row-p-alpha')).not.toBeInTheDocument();
+    });
+
+    it('keeps priority available as an explicit quick filter', async () => {
+        const user = userEvent.setup();
+        renderTasksPage();
+
+        await screen.findByRole('heading', { name: 'All Tasks' });
+
+        await user.click(screen.getByRole('combobox', { name: 'Task view' }));
+        await user.click(await screen.findByRole('option', { name: 'Priority' }));
+
+        expect(await screen.findByRole('heading', { name: 'Priority' })).toBeInTheDocument();
+        expect(screen.getByTestId('priority-task-group-milestone-m-launch')).toBeInTheDocument();
+        expect(screen.getByText('Launch Milestone')).toBeInTheDocument();
+        expect(screen.queryByText('Empty Milestone')).not.toBeInTheDocument();
+        expect(screen.queryByText('Future hidden task')).not.toBeInTheDocument();
+        expect(screen.queryByLabelText('Sort order')).not.toBeInTheDocument();
+    });
+
+    it('searches title, description, and project context inside the RLS-visible task list', async () => {
+        const user = userEvent.setup();
+        renderTasksPage();
+
+        await screen.findByText('Buy a domain');
+        const search = screen.getByRole('searchbox', { name: 'Search tasks and projects' });
+
+        await user.type(search, 'guest follow-up');
+        expect(await screen.findByText('Write welcome letter')).toBeInTheDocument();
+        expect(screen.queryByText('Buy a domain')).not.toBeInTheDocument();
+
+        await user.click(screen.getByRole('button', { name: 'Clear task search' }));
+        await user.type(search, 'Alpha Project');
+        expect(await screen.findByText('Buy a domain')).toBeInTheDocument();
+        expect(screen.getByText('Future hidden task')).toBeInTheDocument();
+
+        await user.clear(search);
+        await user.type(search, 'does-not-exist');
+        expect(await screen.findByText('No tasks match your search and filters.')).toBeInTheDocument();
+    });
+
+    it('opens the details dialog with the clicked task', async () => {
         const user = userEvent.setup();
         renderTasksPage();
 
         const row = await screen.findByTestId('task-row-t-1');
         await user.click(row);
 
+        expect(await screen.findByRole('dialog', { name: 'Buy a domain' })).toBeInTheDocument();
         const panel = await screen.findByTestId('tasks-page-details-panel');
         expect(panel).toBeInTheDocument();
         expect(screen.getByTestId('tasks-page-details-panel-title')).toHaveTextContent('Buy a domain');
+    });
+
+    it('does not expose no-op row action controls on the unified tasks list', async () => {
+        renderTasksPage();
+
+        await screen.findByTestId('task-row-t-1');
+
+        expect(screen.queryByRole('button', { name: /edit buy a domain/i })).not.toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: /add subtask under buy a domain/i })).not.toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: /invite member to buy a domain/i })).not.toBeInTheDocument();
+    });
+
+    it('opens the details dialog from the keyboard', async () => {
+        const user = userEvent.setup();
+        renderTasksPage();
+
+        const row = await screen.findByTestId('task-row-t-1');
+        row.focus();
+        await user.keyboard('{Enter}');
+
+        expect(await screen.findByRole('dialog', { name: 'Buy a domain' })).toBeInTheDocument();
     });
 
     it('hydrates the clicked task with project context for the details panel', async () => {
@@ -175,7 +309,7 @@ describe('TasksPage — click-to-details + tooltip wiring (Wave 33)', () => {
         await user.click(await screen.findByTestId('task-row-t-1'));
 
         expect(await screen.findByTestId('tasks-page-details-panel-child-count')).toHaveTextContent('1');
-        expect(screen.getByTestId('tasks-page-details-panel-project-task-count')).toHaveTextContent('4');
+        expect(screen.getByTestId('tasks-page-details-panel-project-task-count')).toHaveTextContent('8');
     });
 
     it('closes the details panel via onClose', async () => {

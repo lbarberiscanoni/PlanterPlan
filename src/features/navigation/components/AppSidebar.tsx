@@ -3,7 +3,7 @@ import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { cn } from '@/shared/lib/utils';
 import { Button } from '@/shared/ui/button';
-import { LayoutDashboard, BarChart3, Settings, HelpCircle, ChevronLeft, Calendar } from 'lucide-react';
+import { BarChart3, Settings, HelpCircle, ChevronLeft, Calendar } from 'lucide-react';
 import type { TaskRow } from '@/shared/db/app.types';
 
 interface AppSidebarProps {
@@ -20,7 +20,6 @@ export default function AppSidebar({ onClose, currentProject, className }: AppSi
   {
    title: t('nav.section_main'),
    items: [
-    { name: t('nav.project_dashboard'), icon: LayoutDashboard, path: 'Dashboard' },
     { name: t('nav.my_tasks'), icon: Calendar, path: 'tasks' },
     { name: t('nav.reports'), icon: BarChart3, path: 'Reports' },
    ],

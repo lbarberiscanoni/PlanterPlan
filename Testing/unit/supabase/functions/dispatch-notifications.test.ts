@@ -161,7 +161,16 @@ function basePending(overrides: Partial<LogRow> = {}): LogRow {
         id: 'log-1',
         user_id: 'u-1',
         event_type: 'mention_pending',
-        payload: { comment_id: 'c-1', task_id: 't-1', root_id: 'p-1', author_id: 'u-other', body_preview: 'Hello' },
+        payload: {
+            recipient_id: 'u-1',
+            actor_id: 'u-other',
+            author_id: 'u-other',
+            comment_id: 'c-1',
+            task_id: 't-1',
+            project_id: 'p-1',
+            root_id: 'p-1',
+            body_preview: 'Hello',
+        },
         ...overrides,
     };
 }
@@ -204,6 +213,29 @@ describe('dispatchPendingMentions (Wave 30 Task 3)', () => {
         expect(pushInvoker).toHaveBeenCalledWith(expect.objectContaining({ url: '/project/p-1' }));
         expect(db.notification_log[0].event_type).toBe('mention_sent');
         expect(db.notification_log[0].provider_id).toBe('resend-msg-1');
+    });
+
+    it('uses project_id from the hardened mention payload when root_id is absent', async () => {
+        const db: FakeDb = {
+            notification_log: [basePending({
+                payload: {
+                    recipient_id: 'u-1',
+                    actor_id: 'u-other',
+                    author_id: 'u-other',
+                    comment_id: 'c-1',
+                    task_id: 't-1',
+                    project_id: 'project-from-payload',
+                    body_preview: 'Hello',
+                },
+            })],
+            notification_preferences: [basePrefs({ email_mentions: false, push_mentions: true })],
+            users_public: [{ id: 'u-1', email: 'u1@example.com' }],
+        };
+        const supabase = makeSupabase(db);
+
+        await dispatchPendingMentions(supabase, baseNow, emailSender, pushInvoker);
+
+        expect(pushInvoker).toHaveBeenCalledWith(expect.objectContaining({ url: '/project/project-from-payload' }));
     });
 
     it('skips to mention_skipped with pref_disabled when both email and push are off', async () => {

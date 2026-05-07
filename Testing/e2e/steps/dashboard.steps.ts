@@ -1,6 +1,14 @@
 import { createBdd } from 'playwright-bdd';
-import { expect } from '@playwright/test';
+import { expect, type Page } from '@playwright/test';
 import { DashboardPage } from '../pages/DashboardPage';
+import {
+  countMilestoneLeafTasks,
+  fetchProjectRows,
+  fetchTemplateRows,
+  getProjectIdFromUrl,
+  getSettingString,
+  waitForProjectRowCount,
+} from '../helpers/project-creation-db';
 
 const { Given, When, Then } = createBdd();
 
@@ -26,17 +34,25 @@ When('the user clicks the {string} button', async ({ page }, buttonText: string)
 });
 
 When('the user opens the create project modal', async ({ page }) => {
-  await page.getByRole('button', { name: /New Project/i }).click();
+  await page.goto('/tasks?action=new-project');
   await expect(page.locator('[role="dialog"]')).toBeVisible();
 });
 
 When('the user opens the create template modal', async ({ page }) => {
-  await page.getByRole('button', { name: /New Template/i }).click();
+  await page.goto('/tasks?action=new-template');
   await expect(page.locator('[role="dialog"]')).toBeVisible();
 });
 
 When('the user creates a new project {string}', async ({ page }, name: string) => {
-  await page.getByRole('button', { name: /New Project/i }).click();
+  await page.goto('/tasks?action=new-project');
+  await completeNewProjectModal(page, name);
+});
+
+When('the user completes the new project modal with {string}', async ({ page }, name: string) => {
+  await completeNewProjectModal(page, name);
+});
+
+async function completeNewProjectModal(page: Page, name: string) {
   await page.locator('[role="dialog"]').waitFor();
   // Select scratch or default template
   const continueBtn = page.getByRole('button', { name: /continue/i });
@@ -46,10 +62,19 @@ When('the user creates a new project {string}', async ({ page }, name: string) =
   await page.locator('[role="dialog"]').getByLabel(/title|name/i).fill(name);
   await page.getByRole('button', { name: /create project/i }).click();
   await page.waitForURL(/\/project\//);
+}
+
+When('the user selects the {string} project template', async ({ page }, templateName: string) => {
+  const dialog = page.locator('[role="dialog"]');
+  await expect(dialog).toBeVisible();
+  const templateCard = dialog.locator('[data-testid="template-card"]').filter({ hasText: templateName }).first();
+  await expect(templateCard).toBeVisible({ timeout: 10000 });
+  await templateCard.click();
+  await expect(templateCard).toHaveAttribute('data-selected', 'true');
 });
 
 When('the user creates a new template {string}', async ({ page }, name: string) => {
-  await page.getByRole('button', { name: /New Template/i }).click();
+  await page.goto('/tasks?action=new-template');
   await page.locator('[role="dialog"]').waitFor();
   await page.locator('[role="dialog"]').getByLabel(/title|name/i).fill(name);
   await page.getByRole('button', { name: /create/i }).click();
@@ -154,7 +179,45 @@ Then('the user is redirected to a project page', async ({ page }) => {
 });
 
 Then('the project title {string} is visible', async ({ page }, title: string) => {
-  await expect(page.getByText(title)).toBeVisible();
+  await expect(page.getByRole('heading', { level: 1, name: title })).toBeVisible();
+});
+
+Then('the blank project scaffold baseline is imported', async ({ page }) => {
+  const projectId = getProjectIdFromUrl(page);
+  await waitForProjectRowCount(projectId, 51);
+
+  const rows = await fetchProjectRows(projectId);
+  expect(rows.filter((row) => row.parent_task_id === projectId)).toHaveLength(6);
+  expect(countMilestoneLeafTasks(rows, projectId)).toBe(26);
+  expect(rows.some((row) => row.title === 'Discovery')).toBeTruthy();
+  expect(rows.some((row) => row.title === 'Personal Assessment')).toBeTruthy();
+  expect(rows.some((row) => row.title === 'Review and complete assessment')).toBeTruthy();
+
+  await expect(page.getByText('Discovery', { exact: true }).first()).toBeVisible();
+  await expect(page.getByText('Personal Assessment', { exact: true })).toBeVisible();
+  await expect(page.getByText('Review and complete assessment', { exact: true })).toBeVisible();
+});
+
+Then('the project imports the {string} template baseline without copied notes', async ({ page }, templateTitle: string) => {
+  const projectId = getProjectIdFromUrl(page);
+  const template = await fetchTemplateRows(templateTitle);
+
+  await waitForProjectRowCount(projectId, template.rows.length);
+
+  const rows = await fetchProjectRows(projectId);
+  const root = rows.find((row) => row.id === projectId);
+  expect(root?.origin).toBe('instance');
+  expect(getSettingString(root, 'spawnedFromTemplate')).toBe(template.root.id);
+  expect(rows.filter((row) => row.cloned_from_task_id !== null)).toHaveLength(template.rows.length);
+  expect(rows.filter((row) => row.parent_task_id === projectId)).toHaveLength(6);
+  expect(rows.some((row) => row.title === 'Phase 1: Discovery')).toBeTruthy();
+  expect(rows.some((row) => row.title === 'Assessment')).toBeTruthy();
+  expect(rows.some((row) => row.title === 'Complete planter assessment')).toBeTruthy();
+  expect(rows.filter((row) => (row.notes ?? '').trim().length > 0)).toEqual([]);
+
+  await expect(page.getByText('Phase 1: Discovery', { exact: true }).first()).toBeVisible();
+  await expect(page.getByText('Assessment', { exact: true })).toBeVisible();
+  await expect(page.getByText('Complete planter assessment', { exact: true })).toBeVisible();
 });
 
 Then('{string} appears in the sidebar templates section', async ({ page }, name: string) => {

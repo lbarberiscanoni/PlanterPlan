@@ -3,28 +3,20 @@ import { pointerWithin, closestCorners, closestCenter, useSensor, useSensors, Po
 import type { DragEndEvent, DragStartEvent, DragOverEvent, CollisionDetection } from '@dnd-kit/core';
 import { POSITION_STEP } from '@/shared/constants';
 import type { TaskRow } from '@/shared/db/app.types';
+import { canReparentTask } from '@/features/tasks/lib/task-hierarchy';
 
 export type DropIndicator = { parentId: string; beforeTaskId: string | null; nestInId?: string } | null;
-
-function isDescendant(taskId: string, targetId: string, allTasks: TaskRow[]): boolean {
-    const visited = new Set<string>();
-    const check = (id: string): boolean => {
-        if (visited.has(id)) return false;
-        visited.add(id);
-        const children = allTasks.filter(t => t.parent_task_id === id);
-        return children.some(c => c.id === targetId || check(c.id));
-    };
-    return check(taskId);
-}
 
 export function useProjectDnd(
     tasks: TaskRow[],
     onTaskUpdate: (id: string, updates: Record<string, unknown>) => void,
     onToggleExpand: (task: TaskRow, expanded: boolean) => void,
+    onInvalidDrop?: () => void,
 ) {
     const [activeDragId, setActiveDragId] = useState<string | null>(null);
     const [dropIndicator, setDropIndicator] = useState<DropIndicator>(null);
     const pointerYRef = useRef<number>(0);
+    const invalidDropRef = useRef(false);
 
     useEffect(() => {
         const handler = (e: PointerEvent) => { pointerYRef.current = e.clientY; };
@@ -38,6 +30,17 @@ export function useProjectDnd(
 
     const handleDragStart = (event: DragStartEvent) => {
         setActiveDragId(event.active.id as string);
+        setDropIndicator(null);
+        invalidDropRef.current = false;
+    };
+
+    const setValidDropIndicator = (indicator: NonNullable<DropIndicator>) => {
+        invalidDropRef.current = false;
+        setDropIndicator(indicator);
+    };
+
+    const rejectDropIndicator = () => {
+        invalidDropRef.current = true;
         setDropIndicator(null);
     };
 
@@ -82,30 +85,37 @@ export function useProjectDnd(
             if (isWithinTask) {
                 const relativeY = (pointerY - overRect.top) / overRect.height;
                 if (relativeY < 0.25) {
-                    setDropIndicator({ parentId, beforeTaskId: overTask.id });
+                    setValidDropIndicator({ parentId, beforeTaskId: overTask.id });
                 } else if (relativeY > 0.75) {
                     const nextSibling = siblings[overIndex + 1];
-                    setDropIndicator({ parentId, beforeTaskId: nextSibling?.id ?? null });
+                    setValidDropIndicator({ parentId, beforeTaskId: nextSibling?.id ?? null });
                 } else {
-                    const canNest = !isDescendant(active.id as string, overTask.id, tasks) && active.id !== overTask.id;
+                    const canNest = canReparentTask(active.id as string, overTask.id, tasks);
                     if (canNest) {
-                        setDropIndicator({ parentId, beforeTaskId: null, nestInId: overTask.id });
+                        setValidDropIndicator({ parentId, beforeTaskId: null, nestInId: overTask.id });
+                    } else {
+                        rejectDropIndicator();
                     }
                 }
             } else {
                 const overMidY = overRect.top + overRect.height / 2;
                 if (pointerY < overMidY) {
-                    setDropIndicator({ parentId, beforeTaskId: overTask.id });
+                    setValidDropIndicator({ parentId, beforeTaskId: overTask.id });
                 } else {
                     const nextSibling = siblings[overIndex + 1];
-                    setDropIndicator({ parentId, beforeTaskId: nextSibling?.id ?? null });
+                    setValidDropIndicator({ parentId, beforeTaskId: nextSibling?.id ?? null });
                 }
             }
         } else if (overData.type === 'container' && overData.parentId) {
-            setDropIndicator({
-                parentId: overData.parentId as string,
-                beforeTaskId: null,
-            });
+            const targetParentId = overData.parentId as string;
+            if (canReparentTask(active.id as string, targetParentId, tasks)) {
+                setValidDropIndicator({
+                    parentId: targetParentId,
+                    beforeTaskId: null,
+                });
+            } else {
+                rejectDropIndicator();
+            }
         } else {
             setDropIndicator(null);
         }
@@ -133,22 +143,34 @@ export function useProjectDnd(
 
     const handleDragEnd = (event: DragEndEvent) => {
         const savedIndicator = dropIndicator;
+        const hadInvalidDrop = invalidDropRef.current;
         setActiveDragId(null);
         setDropIndicator(null);
+        invalidDropRef.current = false;
 
         const { active, over } = event;
-        if (!over) return;
+        if (!over) {
+            if (hadInvalidDrop) onInvalidDrop?.();
+            return;
+        }
         if (active.id === over.id && !savedIndicator?.nestInId) return;
 
         const overData = over.data.current;
         const activeTask = tasks.find(t => t.id === active.id);
         if (!activeTask) return;
+        if (!savedIndicator && hadInvalidDrop) {
+            onInvalidDrop?.();
+            return;
+        }
 
         // Nest as subtask (middle zone drop)
         if (savedIndicator?.nestInId) {
             const nestTargetId = savedIndicator.nestInId;
             if (nestTargetId === active.id) return;
-            if (isDescendant(active.id as string, nestTargetId, tasks)) return;
+            if (!canReparentTask(active.id as string, nestTargetId, tasks)) {
+                onInvalidDrop?.();
+                return;
+            }
             onTaskUpdate(active.id as string, { parent_task_id: nestTargetId });
             const nestTarget = tasks.find(t => t.id === nestTargetId);
             if (nestTarget) onToggleExpand(nestTarget, true);
@@ -162,7 +184,10 @@ export function useProjectDnd(
             const targetParentId = overData.parentId as string;
             if (targetParentId === active.id) return;
             if (activeTask.parent_task_id !== targetParentId) {
-                if (isDescendant(active.id as string, targetParentId, tasks)) return;
+                if (!canReparentTask(active.id as string, targetParentId, tasks)) {
+                    onInvalidDrop?.();
+                    return;
+                }
                 onTaskUpdate(active.id as string, { parent_task_id: targetParentId });
                 const targetParent = tasks.find(t => t.id === targetParentId);
                 if (targetParent) onToggleExpand(targetParent, true);
@@ -196,6 +221,10 @@ export function useProjectDnd(
 
             const updates: Record<string, unknown> = { position: newPosition };
             if (activeTask.parent_task_id !== targetParentId) {
+                if (!canReparentTask(active.id as string, targetParentId, tasks)) {
+                    onInvalidDrop?.();
+                    return;
+                }
                 updates.parent_task_id = targetParentId;
             }
             onTaskUpdate(active.id as string, updates);

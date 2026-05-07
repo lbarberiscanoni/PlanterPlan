@@ -41,22 +41,18 @@ export default function Settings() {
  { label: t('settings.tab_notifications'), icon: Bell, tab: 'notifications' as SettingsTab },
  { label: t('settings.tab_integrations'), icon: Calendar, tab: 'integrations' as SettingsTab },
  { label: t('settings.tab_security'), icon: Lock, tab: 'security' as SettingsTab },
- ] as Array<{ label: string; icon: React.ElementType; tab?: SettingsTab; comingSoon?: boolean }>).map((item) => (
+ ] as Array<{ label: string; icon: React.ElementType; tab: SettingsTab }>).map((item) => (
  <Button
  key={item.label}
  variant="ghost"
- disabled={item.comingSoon}
- onClick={() => item.tab && setActiveTab(item.tab)}
+ onClick={() => setActiveTab(item.tab)}
  className={`w-full justify-start ${activeTab === item.tab
  ? 'text-brand-600 bg-brand-50 font-semibold'
  : 'text-muted-foreground'
- } ${item.comingSoon ? 'cursor-not-allowed opacity-70' : 'hover:text-foreground hover:bg-muted'}`}
+ } hover:text-foreground hover:bg-muted`}
  >
  <item.icon className="w-4 h-4 mr-2" />
  {item.label}
- {item.comingSoon && (
- <span className="ml-auto text-xs bg-muted text-muted-foreground px-1.5 py-0.5 rounded">{t('common.soon')}</span>
- )}
  </Button>
  ))}
  </div>
@@ -120,7 +116,7 @@ export default function Settings() {
  className={`mt-1 bg-background border-border ${avatarError ? 'border-destructive focus:ring-destructive' : ''}`}
  placeholder={t('settings.profile.avatar_url_placeholder')}
  />
- {avatarError && <p className="text-xs text-destructive">{avatarError}</p>}
+ {avatarError && <p className="text-xs text-destructive" data-testid="avatar-error">{avatarError}</p>}
  </div>
 
  <div className="grid grid-cols-2 gap-4">
@@ -174,7 +170,7 @@ export default function Settings() {
  type="button"
  className="bg-brand-600 hover:bg-brand-700 text-white"
  >
- {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+ {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" data-testid="loading-spinner" />}
  {t('common.save_changes')}
  </Button>
  </div>
@@ -204,6 +200,20 @@ export default function Settings() {
  onSubmit={(e) => { e.preventDefault(); actions.handlePasswordChange(); }}
  className="space-y-4"
  >
+ <div className="space-y-2">
+ <Label htmlFor="current_password" className="text-foreground">{t('settings.security.current_password_label')}</Label>
+ <Input
+ id="current_password"
+ type="password"
+ value={passwordForm.currentPassword}
+ onChange={(e) => actions.setPasswordForm({ ...passwordForm, currentPassword: e.target.value })}
+ onFocus={() => { if (passwordError) actions.setPasswordError(''); }}
+ placeholder={t('settings.security.current_password_placeholder')}
+ className={`bg-background border-border ${passwordError ? 'border-destructive focus:ring-destructive' : ''}`}
+ autoComplete="current-password"
+ />
+ </div>
+
  <div className="space-y-2">
  <Label htmlFor="new_password" className="text-foreground">{t('settings.security.new_password_label')}</Label>
  <Input
@@ -238,7 +248,7 @@ export default function Settings() {
  <div className="pt-6 border-t border-border flex justify-end">
  <Button
  type="submit"
- disabled={passwordLoading || !passwordForm.newPassword}
+ disabled={passwordLoading || !passwordForm.currentPassword || !passwordForm.newPassword}
           className="bg-brand-500 hover:bg-brand-600 text-white"
  >
  {passwordLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}

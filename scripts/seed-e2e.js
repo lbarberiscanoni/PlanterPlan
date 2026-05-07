@@ -1,8 +1,14 @@
 import { createClient } from '@supabase/supabase-js';
+import { createRequire } from 'node:module';
 
-const supabase = createClient('http://127.0.0.1:54321', 'sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH');
+const require = createRequire(import.meta.url);
+const { redactE2EEnvForLog, resolveE2EEnv } = require('./e2e-env.cjs');
+const e2eEnv = resolveE2EEnv();
+const supabase = createClient(e2eEnv.VITE_SUPABASE_URL, e2eEnv.VITE_SUPABASE_ANON_KEY);
 
 async function seed() {
+  console.log('[seed-e2e] Using local E2E environment:', JSON.stringify(redactE2EEnvForLog(e2eEnv)));
+
   const { data, error } = await supabase.auth.signUp({
     email: 'test@example.com',
     password: 'password123',

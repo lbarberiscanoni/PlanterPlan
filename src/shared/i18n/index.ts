@@ -4,6 +4,25 @@ import LanguageDetector from 'i18next-browser-languagedetector';
 import en from './locales/en.json';
 import es from './locales/es.json';
 
+export const SUPPORTED_LOCALES = [
+  {
+    code: 'en' as const,
+    label: 'English',
+    launchStatus: 'ready',
+    marketingReady: true,
+    reviewRequiredBeforeMarketing: false,
+  },
+  {
+    code: 'es' as const,
+    label: 'Español',
+    launchStatus: 'review_required',
+    marketingReady: false,
+    reviewRequiredBeforeMarketing: es._meta.review_required_before_marketing === true,
+  },
+] as const;
+
+export const SUPPORTED_LOCALE_CODES = SUPPORTED_LOCALES.map((locale) => locale.code);
+
 // Namespaces live as top-level keys inside the one translation bundle so
 // callers can write `t('domain.section.element')` with a single dotted path.
 // en-json.test.ts / es-json.test.ts assert each of these exists in en/es.json.
@@ -16,7 +35,6 @@ export const NAMESPACES = [
   'activity',
   'projects',
   'library',
-  'dashboard',
   'settings',
   'notifications',
   'errors',
@@ -30,7 +48,7 @@ void i18n
   .use(initReactI18next)
   .init({
     fallbackLng: 'en',
-    supportedLngs: ['en', 'es'],
+    supportedLngs: SUPPORTED_LOCALE_CODES,
     interpolation: { escapeValue: false },
     resources: {
       en: { translation: en },
@@ -44,8 +62,3 @@ void i18n
   });
 
 export { i18n };
-
-export const SUPPORTED_LOCALES = [
-  { code: 'en' as const, label: 'English' },
-  { code: 'es' as const, label: 'Español' },
-];

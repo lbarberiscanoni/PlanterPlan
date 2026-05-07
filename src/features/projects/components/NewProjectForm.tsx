@@ -1,9 +1,8 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Trans, useTranslation } from 'react-i18next';
-import MasterLibrarySearch from '@/features/library/components/MasterLibrarySearch';
 
 interface LibraryTask {
     id: string;
@@ -18,6 +17,7 @@ interface LibraryTask {
 interface NewProjectFormProps {
     onSubmit: (data: ProjectFormData) => Promise<void>;
     onCancel: () => void;
+    renderLibrarySearch?: (onSelect: (task: LibraryTask) => void) => ReactNode;
 }
 
 type ProjectFormData = {
@@ -40,7 +40,7 @@ const defaultValues: ProjectFormData = {
     templateId: null,
 };
 
-const NewProjectForm = ({ onSubmit, onCancel }: NewProjectFormProps) => {
+const NewProjectForm = ({ onSubmit, onCancel, renderLibrarySearch }: NewProjectFormProps) => {
     const { t } = useTranslation();
     const [lastAppliedTaskTitle, setLastAppliedTaskTitle] = useState('');
 
@@ -92,14 +92,11 @@ const NewProjectForm = ({ onSubmit, onCancel }: NewProjectFormProps) => {
 
     return (
         <form onSubmit={handleSubmit(handleFormSubmit)} className="project-form">
-            <div className="form-group">
-                <MasterLibrarySearch
-                    mode="copy"
-                    onSelect={(t) => handleApplyFromLibrary(t as LibraryTask)}
-                    label={t('projects.form.search_library_label')}
-                    placeholder={t('projects.form.search_library_placeholder')}
-                />
-            </div>
+            {renderLibrarySearch && (
+                <div className="form-group">
+                    {renderLibrarySearch(handleApplyFromLibrary)}
+                </div>
+            )}
 
             {lastAppliedTaskTitle && (
                 <div className="mb-4 rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">

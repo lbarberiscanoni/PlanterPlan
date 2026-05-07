@@ -22,9 +22,9 @@ export class ProjectPage {
   constructor(page: Page) {
     this.page = page;
     this.projectTitle = page.getByRole('heading', { level: 1 }).or(page.getByRole('heading', { level: 2 })).first();
-    this.statusBadge = page.locator('[data-testid="status-badge"]');
+    this.statusBadge = page.locator('[data-testid="project-derived-state-badge"]');
     this.progressBar = page.locator('[role="progressbar"]');
-    this.backButton = page.getByRole('link', { name: /back|dashboard/i });
+    this.backButton = page.getByRole('link', { name: /back|tasks/i });
     this.phaseCards = page.locator('[data-testid="phase-card"]');
     this.milestones = page.locator('[data-testid="milestone-section"]');
     this.taskItems = page.locator('[data-testid="task-item"]');

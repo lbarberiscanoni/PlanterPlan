@@ -6,7 +6,7 @@ const masterLibraryReturn: {
     results: Array<{ id: string; title?: string; description?: string }>;
     isLoading: boolean;
 } = { results: [], isLoading: false };
-vi.mock('@/features/library/hooks/useMasterLibrarySearch', () => ({
+vi.mock('@/shared/hooks/useMasterLibrarySearch', () => ({
     default: () => masterLibraryReturn,
     useMasterLibrarySearch: () => masterLibraryReturn,
 }));

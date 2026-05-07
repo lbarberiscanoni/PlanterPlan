@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useAuth } from '@/shared/contexts/AuthContext';
+import { useAuth } from '@/shared/contexts/auth-context';
 import { planter } from '@/shared/api/planterClient';
 import type { PushSubscriptionRow } from '@/shared/db/app.types';
 
 /** Base64-URL → Uint8Array for `applicationServerKey`. Standard MDN snippet. */
-function urlBase64ToUint8Array(base64: string): Uint8Array {
+function urlBase64ToUint8Array(base64: string): Uint8Array<ArrayBuffer> {
     const padding = '='.repeat((4 - (base64.length % 4)) % 4);
     const normalised = (base64 + padding).replace(/-/g, '+').replace(/_/g, '/');
     const raw = atob(normalised);
@@ -94,9 +94,7 @@ export function usePushSubscription() {
             }
             const sub = await registration.pushManager.subscribe({
                 userVisibleOnly: true,
-                // Cast avoids TS strict `ArrayBuffer` vs `ArrayBufferLike` mismatch on
-                // DOM lib typings; Uint8Array is the runtime-correct shape for VAPID keys.
-                applicationServerKey: urlBase64ToUint8Array(publicKey) as unknown as BufferSource,
+                applicationServerKey: urlBase64ToUint8Array(publicKey),
             });
 
             const raw = sub.toJSON() as { endpoint?: string; keys?: { p256dh?: string; auth?: string } };

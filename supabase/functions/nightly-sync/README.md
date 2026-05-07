@@ -7,8 +7,10 @@ tasks on a schedule:
    `status NOT IN ('completed', 'overdue')` is set to `status = 'overdue'`.
 2. **Due Soon**: any task with `due_date >= now`, `is_complete = false`, and
    `status NOT IN ('completed', 'overdue', 'due_soon')` whose `due_date` falls
-   within its project root's `settings.due_soon_threshold` (in days, default
-   `3`) is set to `status = 'due_soon'`.
+   within its project root's `settings.due_soon_threshold` (date-project
+   business days, default `3`) is set to `status = 'due_soon'`. Date-project
+   business days use the edge `dateProjectBusinessCalendar`
+   (`us-federal-observed`) and preserve the UTC time-of-day for the cutoff.
 3. **Recurrence (Wave 21)**: template tasks with a valid `settings.recurrence`
    rule that fires today (evaluated in UTC) are cloned into the configured
    target project via the `clone_project_template` RPC. The clone is stamped

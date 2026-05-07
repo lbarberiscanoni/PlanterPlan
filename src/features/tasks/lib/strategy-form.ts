@@ -1,4 +1,8 @@
-import type { TaskFormData, TaskRow } from '@/shared/db/app.types';
+import type { JsonObject, TaskFormData, TaskRow } from '@/shared/db/app.types';
+
+function isJsonObject(value: unknown): value is JsonObject {
+    return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
 
 /**
  * Read the strategy-template flag from a task's `settings` JSONB. Tolerates
@@ -50,11 +54,11 @@ export function formDataToStrategyTemplateFlag(data: TaskFormData): boolean | nu
  * @returns The merged settings patch, or `undefined` to skip the update.
  */
 export function applyStrategyTemplateFlag(
-    currentSettings: Record<string, unknown> | null | undefined,
+    currentSettings: unknown,
     flag: boolean | null,
-): Record<string, unknown> | undefined {
+): JsonObject | undefined {
     const base =
-        currentSettings && typeof currentSettings === 'object' && !Array.isArray(currentSettings)
+        isJsonObject(currentSettings)
             ? { ...currentSettings }
             : {};
     if (flag === null) {

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Pencil, Trash2, Reply } from 'lucide-react';
 import { Avatar, AvatarFallback } from '@/shared/ui/avatar';
 import { Button } from '@/shared/ui/button';
@@ -33,14 +34,19 @@ export function CommentItem({
     onEdit,
     onDelete,
 }: CommentItemProps) {
+    const { t } = useTranslation();
     const [mode, setMode] = useState<'view' | 'edit' | 'reply'>('view');
-    const isOwn = comment.author_id === currentUserId;
+    const isOwn = currentUserId !== null && comment.author_id === currentUserId;
     const isDeleted = comment.deleted_at !== null;
     const fullName =
         typeof comment.author?.user_metadata?.full_name === 'string'
             ? comment.author.user_metadata.full_name
             : null;
-    const displayName = fullName || comment.author?.email || 'Unknown';
+    const displayName = fullName || comment.author?.email || (
+        comment.author_id === null
+            ? t('tasks.comments.deleted_author')
+            : t('common.unknown_name')
+    );
 
     // Tombstone render — preserves thread lineage for replies without leaking
     // the original body (softDelete blanks it server-side; optimistic update
@@ -126,7 +132,7 @@ export function CommentItem({
                             data-testid="comment-reply-btn"
                             className="h-7 px-2 text-xs text-slate-500 hover:text-slate-900"
                         >
-                            <Reply className="h-3 w-3 mr-1" /> Reply
+                            <Reply className="h-3 w-3 mr-1" /> {t('tasks.comments.reply_button')}
                         </Button>
                         {isOwn && (
                             <>
@@ -138,7 +144,7 @@ export function CommentItem({
                                     data-testid="comment-edit-btn"
                                     className="h-7 px-2 text-xs text-slate-500 hover:text-slate-900"
                                 >
-                                    <Pencil className="h-3 w-3 mr-1" /> Edit
+                                    <Pencil className="h-3 w-3 mr-1" /> {t('common.edit')}
                                 </Button>
                                 <Button
                                     type="button"
@@ -148,7 +154,7 @@ export function CommentItem({
                                     data-testid="comment-delete-btn"
                                     className="h-7 px-2 text-xs text-slate-500 hover:text-rose-600"
                                 >
-                                    <Trash2 className="h-3 w-3 mr-1" /> Delete
+                                    <Trash2 className="h-3 w-3 mr-1" /> {t('common.delete')}
                                 </Button>
                             </>
                         )}

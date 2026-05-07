@@ -5,7 +5,7 @@ import { useIsAdmin } from '@/features/admin/hooks/useIsAdmin';
 type MockUser = { role: string } | null;
 let mockUser: MockUser = null;
 
-vi.mock('@/shared/contexts/AuthContext', () => ({
+vi.mock('@/shared/contexts/auth-context', () => ({
   useAuth: () => ({ user: mockUser }),
 }));
 

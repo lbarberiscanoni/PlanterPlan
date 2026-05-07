@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, act, fireEvent, waitFor } from '@testing-library/react';
 import React from 'react';
 
-vi.mock('@/shared/contexts/AuthContext', () => ({
+vi.mock('@/shared/contexts/auth-context', () => ({
   useAuth: () => ({ user: { id: 'u1', email: 'u1@example.com', role: 'user' } }),
 }));
 
@@ -49,53 +49,75 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
-describe('TaskForm — Coaching task checkbox gating (Wave 22)', () => {
-  it('renders the checkbox for owner on an instance form', () => {
-    renderForm({ membershipRole: 'owner', onSubmit: vi.fn(async () => undefined) });
+describe('TaskForm — template-only coaching and strategy flag gates', () => {
+  it('hides both flag checkboxes on instance forms, even for owners and editors', () => {
+    const { rerender } = renderForm({ membershipRole: 'owner', onSubmit: vi.fn(async () => undefined) });
+
+    expect(screen.queryByTestId('is-coaching-task-checkbox')).toBeNull();
+    expect(screen.queryByTestId('is-strategy-template-checkbox')).toBeNull();
+
+    rerender(
+      <TaskForm
+        onSubmit={vi.fn(async () => undefined)}
+        onCancel={vi.fn()}
+        origin="instance"
+        membershipRole="editor"
+      />,
+    );
+
+    expect(screen.queryByTestId('is-coaching-task-checkbox')).toBeNull();
+    expect(screen.queryByTestId('is-strategy-template-checkbox')).toBeNull();
+  });
+
+  it('renders both flag checkboxes for template owners and editors', () => {
+    const { rerender } = renderForm({
+      membershipRole: 'owner',
+      origin: 'template',
+      onSubmit: vi.fn(async () => undefined),
+    });
+
     expect(screen.getByTestId('is-coaching-task-checkbox')).toBeInTheDocument();
-  });
+    expect(screen.getByTestId('is-strategy-template-checkbox')).toBeInTheDocument();
 
-  it('renders the checkbox for editor on an instance form', () => {
-    renderForm({ membershipRole: 'editor', onSubmit: vi.fn(async () => undefined) });
+    rerender(
+      <TaskForm
+        onSubmit={vi.fn(async () => undefined)}
+        onCancel={vi.fn()}
+        origin="template"
+        membershipRole="editor"
+      />,
+    );
+
     expect(screen.getByTestId('is-coaching-task-checkbox')).toBeInTheDocument();
+    expect(screen.getByTestId('is-strategy-template-checkbox')).toBeInTheDocument();
   });
 
-  it('hides the checkbox for coach role', () => {
-    renderForm({ membershipRole: 'coach', onSubmit: vi.fn(async () => undefined) });
+  it('hides both flag checkboxes for non-editor template roles', () => {
+    renderForm({ membershipRole: 'coach', origin: 'template', onSubmit: vi.fn(async () => undefined) });
     expect(screen.queryByTestId('is-coaching-task-checkbox')).toBeNull();
+    expect(screen.queryByTestId('is-strategy-template-checkbox')).toBeNull();
   });
 
-  it('hides the checkbox for viewer role', () => {
-    renderForm({ membershipRole: 'viewer', onSubmit: vi.fn(async () => undefined) });
+  it('hides both flag checkboxes when no membershipRole is supplied', () => {
+    renderForm({ origin: 'template', onSubmit: vi.fn(async () => undefined) });
     expect(screen.queryByTestId('is-coaching-task-checkbox')).toBeNull();
-  });
-
-  it('hides the checkbox for limited role', () => {
-    renderForm({ membershipRole: 'limited', onSubmit: vi.fn(async () => undefined) });
-    expect(screen.queryByTestId('is-coaching-task-checkbox')).toBeNull();
-  });
-
-  it('hides the checkbox on template origin even for owner', () => {
-    renderForm({ membershipRole: 'owner', origin: 'template', onSubmit: vi.fn(async () => undefined) });
-    expect(screen.queryByTestId('is-coaching-task-checkbox')).toBeNull();
-  });
-
-  it('hides the checkbox when no membershipRole is supplied', () => {
-    renderForm({ onSubmit: vi.fn(async () => undefined) });
-    expect(screen.queryByTestId('is-coaching-task-checkbox')).toBeNull();
+    expect(screen.queryByTestId('is-strategy-template-checkbox')).toBeNull();
   });
 });
 
-describe('TaskForm — Coaching task submission (Wave 22)', () => {
-  it('submits is_coaching_task=true when the owner checks the box', async () => {
+describe('TaskForm — template-only coaching and strategy submission', () => {
+  it('submits both flags when a template owner checks the boxes', async () => {
     const onSubmit = vi.fn(async () => undefined);
-    renderForm({ membershipRole: 'owner', onSubmit });
+    renderForm({ membershipRole: 'owner', origin: 'template', onSubmit });
 
     await act(async () => {
       fireEvent.change(screen.getByLabelText(/task title/i), { target: { value: 'Coach meeting' } });
     });
     await act(async () => {
       fireEvent.click(screen.getByTestId('is-coaching-task-checkbox'));
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('is-strategy-template-checkbox'));
     });
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: /add new task/i }));
@@ -106,38 +128,44 @@ describe('TaskForm — Coaching task submission (Wave 22)', () => {
     });
     const submitted = onSubmit.mock.calls[0][0] as TaskFormData;
     expect(submitted.is_coaching_task).toBe(true);
+    expect(submitted.is_strategy_template).toBe(true);
   });
 
-  it('seeds the checkbox from settings.is_coaching_task on edit', async () => {
+  it('seeds the checkboxes from template settings on edit', async () => {
     const onSubmit = vi.fn(async () => undefined);
     renderForm({
       membershipRole: 'editor',
+      origin: 'template',
       onSubmit,
       initialTask: {
         id: 't1',
         title: 'Existing',
-        settings: { is_coaching_task: true, due_soon_threshold: 3 },
+        settings: { is_coaching_task: true, is_strategy_template: true, due_soon_threshold: 3 },
       },
     });
 
-    const checkbox = screen.getByTestId('is-coaching-task-checkbox') as HTMLInputElement;
-    expect(checkbox.checked).toBe(true);
+    expect((screen.getByTestId('is-coaching-task-checkbox') as HTMLInputElement).checked).toBe(true);
+    expect((screen.getByTestId('is-strategy-template-checkbox') as HTMLInputElement).checked).toBe(true);
   });
 
-  it('submits is_coaching_task=false when the editor unchecks an already-tagged task', async () => {
+  it('submits false when a template editor unchecks already-tagged flags', async () => {
     const onSubmit = vi.fn(async () => undefined);
     renderForm({
       membershipRole: 'editor',
+      origin: 'template',
       onSubmit,
       initialTask: {
         id: 't1',
         title: 'Existing',
-        settings: { is_coaching_task: true },
+        settings: { is_coaching_task: true, is_strategy_template: true },
       },
     });
 
     await act(async () => {
       fireEvent.click(screen.getByTestId('is-coaching-task-checkbox'));
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('is-strategy-template-checkbox'));
     });
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
@@ -148,5 +176,31 @@ describe('TaskForm — Coaching task submission (Wave 22)', () => {
     });
     const submitted = onSubmit.mock.calls[0][0] as TaskFormData;
     expect(submitted.is_coaching_task).toBe(false);
+    expect(submitted.is_strategy_template).toBe(false);
+  });
+
+  it('strips hidden flag defaults before submitting an instance edit', async () => {
+    const onSubmit = vi.fn(async () => undefined);
+    renderForm({
+      membershipRole: 'owner',
+      origin: 'instance',
+      onSubmit,
+      initialTask: {
+        id: 't1',
+        title: 'Existing',
+        settings: { is_coaching_task: true, is_strategy_template: true },
+      },
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
+    });
+
+    await waitFor(() => {
+      expect(onSubmit).toHaveBeenCalled();
+    });
+    const submitted = onSubmit.mock.calls[0][0] as TaskFormData;
+    expect(submitted.is_coaching_task).toBeUndefined();
+    expect(submitted.is_strategy_template).toBeUndefined();
   });
 });

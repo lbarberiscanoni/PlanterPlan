@@ -2,9 +2,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { FormProvider, useForm } from 'react-hook-form';
 import type { ReactNode } from 'react';
-import type { TaskFormData } from '@/shared/db/app.types';
+import type { TaskFormData, TeamMemberWithProfile } from '@/shared/db/app.types';
 
-// useTeam is the only data dependency when the picker renders.
 const mockTeamMembers = [
     { id: 'tm1', user_id: 'u-viewer-1', project_id: 'p1', role: 'viewer', joined_at: null, email: 'viewer1@test.local' },
     { id: 'tm2', user_id: 'u-limited-1', project_id: 'p1', role: 'limited', joined_at: null, email: 'limited@test.local' },
@@ -12,16 +11,7 @@ const mockTeamMembers = [
     { id: 'tm4', user_id: 'u-owner-1', project_id: 'p1', role: 'owner', joined_at: null, email: 'owner@test.local' },
 ];
 
-vi.mock('@/features/people/hooks/useTeam', () => ({
-    useTeam: (projectId: string | null) => ({
-        project: undefined,
-        teamMembers: projectId ? mockTeamMembers : [],
-        isLoading: false,
-        mutations: {},
-    }),
-}));
-
-vi.mock('@/shared/contexts/AuthContext', () => ({
+vi.mock('@/shared/contexts/auth-context', () => ({
     useAuth: () => ({ user: { id: 'viewer-self', role: 'user' } }),
 }));
 
@@ -48,7 +38,7 @@ describe('TaskFormFields — Phase Lead picker (Wave 29)', () => {
     it('renders the picker for an owner editing a phase', () => {
         render(
             <Harness>
-                <TaskFormFields origin="instance" membershipRole="owner" taskType="phase" projectId="p1" />
+                <TaskFormFields origin="instance" membershipRole="owner" taskType="phase" projectId="p1" teamMembers={mockTeamMembers as TeamMemberWithProfile[]} />
             </Harness>,
         );
         expect(screen.getByTestId('phase-lead-picker')).toBeInTheDocument();
@@ -57,7 +47,7 @@ describe('TaskFormFields — Phase Lead picker (Wave 29)', () => {
     it('renders the picker for an owner editing a milestone', () => {
         render(
             <Harness>
-                <TaskFormFields origin="instance" membershipRole="owner" taskType="milestone" projectId="p1" />
+                <TaskFormFields origin="instance" membershipRole="owner" taskType="milestone" projectId="p1" teamMembers={mockTeamMembers as TeamMemberWithProfile[]} />
             </Harness>,
         );
         expect(screen.getByTestId('phase-lead-picker')).toBeInTheDocument();
@@ -66,7 +56,7 @@ describe('TaskFormFields — Phase Lead picker (Wave 29)', () => {
     it('hides the picker on leaf tasks even for owners', () => {
         render(
             <Harness>
-                <TaskFormFields origin="instance" membershipRole="owner" taskType="task" projectId="p1" />
+                <TaskFormFields origin="instance" membershipRole="owner" taskType="task" projectId="p1" teamMembers={mockTeamMembers as TeamMemberWithProfile[]} />
             </Harness>,
         );
         expect(screen.queryByTestId('phase-lead-picker')).toBeNull();
@@ -76,7 +66,7 @@ describe('TaskFormFields — Phase Lead picker (Wave 29)', () => {
         for (const role of ['editor', 'coach', 'viewer', 'limited']) {
             const { unmount } = render(
                 <Harness>
-                    <TaskFormFields origin="instance" membershipRole={role} taskType="phase" projectId="p1" />
+                    <TaskFormFields origin="instance" membershipRole={role} taskType="phase" projectId="p1" teamMembers={mockTeamMembers as TeamMemberWithProfile[]} />
                 </Harness>,
             );
             expect(screen.queryByTestId('phase-lead-picker')).toBeNull();
@@ -87,7 +77,7 @@ describe('TaskFormFields — Phase Lead picker (Wave 29)', () => {
     it('hides the picker on templates even for owners', () => {
         render(
             <Harness>
-                <TaskFormFields origin="template" membershipRole="owner" taskType="phase" projectId="p1" />
+                <TaskFormFields origin="template" membershipRole="owner" taskType="phase" projectId="p1" teamMembers={mockTeamMembers as TeamMemberWithProfile[]} />
             </Harness>,
         );
         expect(screen.queryByTestId('phase-lead-picker')).toBeNull();
@@ -96,7 +86,7 @@ describe('TaskFormFields — Phase Lead picker (Wave 29)', () => {
     it('lists only viewer/limited members in the dropdown', () => {
         render(
             <Harness>
-                <TaskFormFields origin="instance" membershipRole="owner" taskType="phase" projectId="p1" />
+                <TaskFormFields origin="instance" membershipRole="owner" taskType="phase" projectId="p1" teamMembers={mockTeamMembers as TeamMemberWithProfile[]} />
             </Harness>,
         );
         fireEvent.click(screen.getByTestId('phase-lead-picker-trigger'));
@@ -109,7 +99,7 @@ describe('TaskFormFields — Phase Lead picker (Wave 29)', () => {
     it('hydrates the initial selection from form state and reflects toggles in the trigger label', () => {
         render(
             <Harness defaults={{ phase_lead_user_ids: ['u-viewer-1'] }}>
-                <TaskFormFields origin="instance" membershipRole="owner" taskType="phase" projectId="p1" />
+                <TaskFormFields origin="instance" membershipRole="owner" taskType="phase" projectId="p1" teamMembers={mockTeamMembers as TeamMemberWithProfile[]} />
             </Harness>,
         );
         // Initial label — the trigger reflects the hydrated default.

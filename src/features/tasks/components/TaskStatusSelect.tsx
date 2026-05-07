@@ -22,6 +22,7 @@ interface TaskStatusSelectProps {
    *  generic "Task status" label if omitted for legacy callers. */
   taskTitle?: string | null;
   onStatusChange?: (taskId: string, status: string) => void;
+  disabled?: boolean;
 }
 
 /**
@@ -31,7 +32,7 @@ interface TaskStatusSelectProps {
  * use `aria-label` (rather than a visible label) because the pill styling is
  * the design language — a floating visible label would clutter the row.
  */
-export default function TaskStatusSelect({ status, taskId, taskTitle, onStatusChange }: TaskStatusSelectProps) {
+export default function TaskStatusSelect({ status, taskId, taskTitle, onStatusChange, disabled = false }: TaskStatusSelectProps) {
   const { t } = useTranslation();
   const label = taskTitle
     ? t('tasks.status_for_aria', { title: taskTitle })
@@ -40,10 +41,14 @@ export default function TaskStatusSelect({ status, taskId, taskTitle, onStatusCh
     <div data-testid="status-select" className="relative group">
       <select
         aria-label={label}
-        className={`appearance-none cursor-pointer pl-4 pr-9 py-1.5 text-xs font-semibold rounded-full border transition-all ${getStatusStyle(status)} focus:ring-2 focus:ring-offset-1 focus:ring-brand-500 focus:outline-none`}
+        className={`appearance-none pl-4 pr-9 py-1.5 text-xs font-semibold rounded-full border transition-all ${getStatusStyle(status)} focus:ring-2 focus:ring-offset-1 focus:ring-brand-500 focus:outline-none ${disabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}
         value={status || TASK_STATUS.TODO}
+        disabled={disabled}
         onClick={(e) => e.stopPropagation()}
-        onChange={(e) => { e.stopPropagation(); onStatusChange?.(taskId, e.target.value); }}
+        onChange={(e) => {
+          e.stopPropagation();
+          if (!disabled) onStatusChange?.(taskId, e.target.value);
+        }}
       >
         <option value={TASK_STATUS.TODO}>To Do</option>
         <option value={TASK_STATUS.IN_PROGRESS}>In Progress</option>

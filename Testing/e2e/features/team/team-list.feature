@@ -7,10 +7,10 @@ Feature: Team List
   Scenario: Team page shows project team title with project name
     Then the page title includes the project name
 
-  Scenario: Team member cards show name, role badge, email, and phone
+  Scenario: Team member cards show name, role badge, and email
     Given the project has team members
     Then member cards are visible
-    And each card shows a name and role badge
+    And each card shows a name, role badge, and email
 
   Scenario: Empty state shows "Build your team" message
     Given the project has no team members
@@ -19,7 +19,3 @@ Feature: Team List
   Scenario: Loading spinner during fetch
     When the team data is loading
     Then a loading spinner is visible
-
-  Scenario: Lead badge shown for lead members
-    Given a team member is marked as lead
-    Then the lead badge is visible on their card

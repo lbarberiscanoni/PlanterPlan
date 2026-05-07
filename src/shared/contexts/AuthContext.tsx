@@ -1,44 +1,16 @@
-import React, { createContext, useContext, useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { supabase } from '@/shared/db/client';
 import type { Session } from '@supabase/supabase-js';
 import type { User, UserMetadata } from '@/shared/db/app.types';
 import { authApi } from '@/shared/api/auth';
-
-interface AuthContextType {
-  user: User | null;
-  loading: boolean;
-  signUp: (email: string, password: string, userData?: UserMetadata) => Promise<{ data: unknown; error: unknown }>;
-  signIn: (email: string, password: string) => Promise<{ data: unknown; error: unknown }>;
-  signOut: () => Promise<void>;
-  updateMe: (attributes: UserMetadata) => Promise<User>;
-  savedEmailAddresses: string[];
-  rememberEmailAddress: (address: string) => Promise<void>;
-}
-
-const SAVED_EMAIL_CAP = 5;
-
-/** Pure helper: prepend `address` (case-insensitive de-dupe), cap at 5. */
-export function mergeSavedEmailAddress(existing: string[], address: string): string[] {
-  const trimmed = address.trim();
-  if (!trimmed) return existing;
-  const lower = trimmed.toLowerCase();
-  const filtered = existing.filter((e) => typeof e === 'string' && e.toLowerCase() !== lower);
-  return [trimmed, ...filtered].slice(0, SAVED_EMAIL_CAP);
-}
-
-export const AuthContext = createContext<AuthContextType | null>(null);
-
-export const useAuth = () => {
-  const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
-  return context;
-};
+import { clearPasswordRecoverySession, markPasswordRecoverySession } from '@/shared/lib/password-recovery';
+import { AuthContext } from '@/shared/contexts/auth-context';
+import { mergeSavedEmailAddress } from '@/shared/contexts/saved-email-addresses';
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const userId = user?.id;
 
   // --- Session management (was SessionContext) ---
 
@@ -68,9 +40,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'SIGNED_OUT') {
+        clearPasswordRecoverySession();
         setUser(null);
         setLoading(false);
       } else {
+        if (event === 'PASSWORD_RECOVERY') {
+          markPasswordRecoverySession();
+        }
         handleSession(session);
       }
     });
@@ -84,7 +60,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // --- Role hydration (was UserProfileContext) ---
 
   useEffect(() => {
-    if (!user) return;
+    if (!userId) return;
     let alive = true;
 
     const fetchRole = async () => {
@@ -98,7 +74,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // everywhere; the project-scoped role is hydrated per-project via
       // `useTeam(projectId)`.
       try {
-        const isAdmin = await authApi.checkIsAdmin(user.id);
+        const isAdmin = await authApi.checkIsAdmin(userId);
         if (alive) {
           setUser(prev => prev ? { ...prev, role: isAdmin ? 'admin' : 'viewer' } : null);
         }
@@ -110,7 +86,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     fetchRole();
 
     return () => { alive = false; };
-  }, [user?.id]); // Only re-run if user ID changes
+  }, [userId]); // Only re-run if user ID changes
 
   // --- Auth actions ---
 

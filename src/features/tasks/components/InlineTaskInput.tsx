@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import type { KeyboardEvent } from 'react';
 import { Loader2 } from 'lucide-react';
-import useMasterLibrarySearch from '@/features/library/hooks/useMasterLibrarySearch';
+import useMasterLibrarySearch from '@/shared/hooks/useMasterLibrarySearch';
 
 interface TemplateData {
  id: string;

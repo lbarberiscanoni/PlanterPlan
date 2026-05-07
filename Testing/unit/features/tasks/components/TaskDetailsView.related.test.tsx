@@ -24,7 +24,7 @@ vi.mock('@/features/tasks/hooks/useTaskCommentsRealtime', () => ({
   useTaskCommentsRealtime: () => undefined,
 }));
 
-vi.mock('@/features/projects/hooks/useProjectActivity', () => ({
+vi.mock('@/shared/hooks/useActivityLog', () => ({
   useProjectActivity: () => ({ data: [], isLoading: false }),
   useTaskActivity: () => ({ data: [], isLoading: false }),
 }));
@@ -46,9 +46,9 @@ vi.mock('@/shared/api/auth', () => ({
 }));
 
 const mockRememberEmailAddress = vi.fn();
-vi.mock('@/shared/contexts/AuthContext', async () => {
-  const actual = await vi.importActual<typeof import('@/shared/contexts/AuthContext')>(
-    '@/shared/contexts/AuthContext',
+vi.mock('@/shared/contexts/auth-context', async () => {
+  const actual = await vi.importActual<typeof import('@/shared/contexts/auth-context')>(
+    '@/shared/contexts/auth-context',
   );
   return {
     ...actual,

@@ -55,5 +55,7 @@ describe('AdminTemplates', () => {
   });
   expect(await screen.findByText('Alpha Plant')).toBeInTheDocument();
   expect(screen.getByText('stale')).toBeInTheDocument();
+  expect(screen.getByText('Template changed; existing projects are not auto-updated.')).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: /update|sync|reconcile/i })).not.toBeInTheDocument();
  });
 });

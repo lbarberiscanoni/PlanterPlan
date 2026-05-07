@@ -8,10 +8,6 @@ const mutateAsync = vi.fn();
 const invalidate = vi.fn();
 const toastError = vi.fn();
 
-vi.mock('@/features/tasks/hooks/useTaskMutations', () => ({
-    useUpdateTask: () => ({ mutateAsync }),
-}));
-
 vi.mock('sonner', () => ({
     toast: { error: (...args: unknown[]) => toastError(...args) },
 }));
@@ -61,7 +57,7 @@ describe('useGanttDragShift (Wave 28)', () => {
         toastError.mockReset();
     });
 
-    it('fires useUpdateTask with iso dates when drag is in-bounds', async () => {
+    it('persists iso dates when drag is in-bounds', async () => {
         const tasks = [
             makeTask({ id: 'ph1', parent_task_id: 'p1', task_type: 'phase', start_date: '2026-01-01', due_date: '2026-01-31' }),
             makeTask({ id: 'm1', parent_task_id: 'ph1', start_date: '2026-01-05', due_date: '2026-01-10' }),
@@ -69,7 +65,7 @@ describe('useGanttDragShift (Wave 28)', () => {
         mutateAsync.mockResolvedValue({});
 
         const { result } = renderHook(
-            () => useGanttDragShift({ projectId: 'p1', tasks }),
+            () => useGanttDragShift({ projectId: 'p1', tasks, updateTaskDates: mutateAsync }),
             { wrapper },
         );
 
@@ -90,7 +86,7 @@ describe('useGanttDragShift (Wave 28)', () => {
         ];
 
         const { result } = renderHook(
-            () => useGanttDragShift({ projectId: 'p1', tasks }),
+            () => useGanttDragShift({ projectId: 'p1', tasks, updateTaskDates: mutateAsync }),
             { wrapper },
         );
 
@@ -106,7 +102,7 @@ describe('useGanttDragShift (Wave 28)', () => {
         ];
 
         const { result } = renderHook(
-            () => useGanttDragShift({ projectId: 'p1', tasks }),
+            () => useGanttDragShift({ projectId: 'p1', tasks, updateTaskDates: mutateAsync }),
             { wrapper },
         );
 
@@ -124,7 +120,7 @@ describe('useGanttDragShift (Wave 28)', () => {
         mutateAsync.mockRejectedValueOnce(new Error('boom'));
 
         const { result } = renderHook(
-            () => useGanttDragShift({ projectId: 'p1', tasks }),
+            () => useGanttDragShift({ projectId: 'p1', tasks, updateTaskDates: mutateAsync }),
             { wrapper },
         );
 

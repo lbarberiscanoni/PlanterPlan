@@ -74,8 +74,8 @@ const InviteMemberModal: React.FC<InviteMemberModalProps> = ({ project, onClose,
         let result: { data?: unknown; error?: unknown };
         try {
             if (isEmail) {
-                const res = await planter.entities.Project.addMemberByEmail(project.id, userId, role);
-                result = { data: res, error: (res as { error?: unknown })?.error };
+                const res = await planter.entities.Project.inviteMemberByEmail(project.id, userId, role);
+                result = { data: res };
             } else {
                 const res = await planter.entities.Project.addMember(project.id, userId, role);
                 result = { data: res, error: (res as { error?: unknown })?.error };

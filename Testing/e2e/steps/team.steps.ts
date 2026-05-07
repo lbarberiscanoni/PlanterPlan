@@ -84,16 +84,15 @@ Then('member cards are visible', async ({ page }) => {
   await expect(page.locator('[data-testid="team-member-card"]').first()).toBeVisible();
 });
 
-Then('each card shows a name and role badge', async ({ page }) => {
-  await expect(page.locator('[data-testid="team-member-card"]').first()).toBeVisible();
+Then('each card shows a name, role badge, and email', async ({ page }) => {
+  const card = page.locator('[data-testid="team-member-card"]').first();
+  await expect(card).toBeVisible();
+  await expect(card.getByText(/owner|editor|coach|viewer|limited/i)).toBeVisible();
+  await expect(card.getByText(/@/)).toBeVisible();
 });
 
 Then('the {string} empty state is visible', async ({ page }, text: string) => {
   await expect(page.getByText(new RegExp(text, 'i'))).toBeVisible();
-});
-
-Then('the lead badge is visible on their card', async ({ page }) => {
-  await expect(page.getByText(/lead/i)).toBeVisible();
 });
 
 Then('the {string} button is visible', async ({ page }, text: string) => {
@@ -108,20 +107,17 @@ Then('the add member modal is closed', async ({ page }) => {
   await expect(page.locator('[role="dialog"]')).toBeHidden();
 });
 
-Then('the modal has name, email, and role fields', async ({ page }) => {
+Then('the modal has email and role fields', async ({ page }) => {
   const dialog = page.locator('[role="dialog"]');
-  await expect(dialog.getByLabel(/name/i).first()).toBeVisible();
+  await expect(dialog.getByLabel(/email|uuid/i).first()).toBeVisible();
+  await expect(dialog.getByLabel(/role/i).first()).toBeVisible();
 });
 
 Then('the member {string} appears in the team list', async ({ page }, name: string) => {
   await expect(page.getByText(name)).toBeVisible();
 });
 
-Then('the member is removed from the list', async ({ page }) => {
-  // After removal, member count should decrease
-  await page.waitForTimeout(500);
-});
-
-Then('the member card is no longer visible', async ({ page }) => {
-  await page.waitForTimeout(500);
+Then('remove actions are available for removable members', async ({ page }) => {
+  await expect(page.locator('[data-testid="team-member-card"]').first()).toBeVisible();
+  await expect(page.getByRole('button', { name: /remove/i }).first()).toBeVisible();
 });

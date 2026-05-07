@@ -45,10 +45,22 @@ Feature: Create Project
     And the user clicks Back
     Then the template selection is visible
 
-  Scenario: Successful project creation navigates to project page
-    When the user creates a new project "E2E Project"
+  @release
+  Scenario: Blank project creation from tasks action imports the default scaffold
+    When the user navigates to "/tasks?action=new-project"
+    And the user completes the new project modal with "E2E Blank Scaffold"
     Then the user is redirected to a project page
-    And the project title "E2E Project" is visible
+    And the project title "E2E Blank Scaffold" is visible
+    And the blank project scaffold baseline is imported
+
+  @release
+  Scenario: Project creation from Launch Large template imports hierarchy without notes
+    When the user navigates to "/tasks?action=new-project"
+    And the user selects the "Launch Large" project template
+    And the user completes the new project modal with "E2E Launch Large Project"
+    Then the user is redirected to a project page
+    And the project title "E2E Launch Large Project" is visible
+    And the project imports the "Launch Large" template baseline without copied notes
 
   Scenario: Failed project creation shows toast error
     When the user attempts to create a project with invalid data

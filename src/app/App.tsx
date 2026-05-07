@@ -4,21 +4,23 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { Toaster } from 'sonner';
 import { I18nextProvider } from 'react-i18next';
 import { i18n } from '@/shared/i18n';
-import { AuthProvider, useAuth } from '@/shared/contexts/AuthContext';
+import { AuthProvider } from '@/shared/contexts/AuthContext';
+import { useAuth } from '@/shared/contexts/auth-context';
 import { TooltipProvider } from '@/shared/ui/tooltip';
 import { ConfirmDialogProvider } from '@/shared/ui/confirm-dialog';
-import DashboardLayout from '../layouts/DashboardLayout';
-import Dashboard from '../pages/Dashboard';
-import Project from '../pages/Project';
-import Settings from '../pages/Settings';
-import TasksPage from '../pages/TasksPage';
+import AppShellLayout from '@/layouts/AppShellLayout';
+import Project from '@/pages/Project';
+import Settings from '@/pages/Settings';
+import TasksPage from '@/pages/TasksPage';
 import LoginForm from '@/pages/components/LoginForm';
+import ResetPassword from '@/pages/ResetPassword';
 
 // Reports uses recharts (~524 KB gzipped as `charts-*.js`) — lazy so the
-// Dashboard / Tasks / Project routes don't pay the cost. Gantt + Admin
-// already lazy for the same reason.
-const Reports = lazy(() => import('../pages/Reports'));
+// primary Tasks / Project routes don't pay the cost. Gantt + Admin are already
+// lazy for the same reason.
+const Reports = lazy(() => import('@/pages/Reports'));
 const Gantt = lazy(() => import('@/pages/Gantt'));
+const Team = lazy(() => import('@/pages/Team'));
 const AdminLayout = lazy(() => import('@/pages/admin/AdminLayout'));
 const AdminHome = lazy(() => import('@/pages/admin/AdminHome'));
 const AdminUsers = lazy(() => import('@/pages/admin/AdminUsers'));
@@ -43,9 +45,10 @@ export default function App() {
  <Router>
  <Routes>
  <Route path="/login" element={<LoginForm />} />
- <Route path="/" element={<PrivateRoute><DashboardLayout /></PrivateRoute>}>
+ <Route path="/reset-password" element={<ResetPassword />} />
+ <Route path="/" element={<PrivateRoute><AppShellLayout /></PrivateRoute>}>
  <Route index element={<Navigate to="/tasks" replace />} />
- <Route path="dashboard" element={<Dashboard />} />
+ <Route path="dashboard" element={<Navigate to="/tasks" replace />} />
  <Route
  path="reports"
  element={<Suspense fallback={<div className="p-6 text-sm text-slate-600">Loading reports…</div>}><Reports /></Suspense>}
@@ -55,6 +58,10 @@ export default function App() {
  <Route path="Project/:projectId" element={<Project />} />
  <Route path="Project" element={<Project />} />
  <Route path="tasks" element={<TasksPage />} />
+ <Route
+ path="team"
+ element={<Suspense fallback={<div className="p-6 text-sm text-slate-600">Loading team…</div>}><Team /></Suspense>}
+ />
  <Route path="daily" element={<Navigate to="/tasks" replace />} />
  <Route path="settings" element={<Settings />} />
  <Route

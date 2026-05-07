@@ -48,7 +48,7 @@ Given('the invite member modal is open', async ({ page }) => {
 // ── Actions ─────────────────────────────────────────────────────────────────
 
 When('the user clicks the back button', async ({ page }) => {
-  await page.getByRole('link', { name: /dashboard|back/i }).first().click();
+  await page.getByRole('link', { name: /tasks|back/i }).first().click();
 });
 
 When('the user clicks phase card {int}', async ({ page }, index: number) => {

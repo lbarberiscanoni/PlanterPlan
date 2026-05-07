@@ -25,11 +25,6 @@ export default function AdminTemplates() {
     });
     const templateRoots = useMemo(() => templates.data ?? [], [templates.data]);
     const clonedInstances = useMemo(() => clones.data ?? [], [clones.data]);
-    const currentTemplate = useMemo(
-        () => templateRoots.find((t) => t.id === selectedTemplateId) ?? null,
-        [templateRoots, selectedTemplateId],
-    );
-
     return (
         <div className="p-8" data-testid="admin-templates">
             <header className="mb-6">
@@ -105,8 +100,13 @@ export default function AdminTemplates() {
                                                     </p>
                                                     <p className="text-xs text-muted-foreground">
                                                         {t('admin.templates_cloned_from', { version: inst.cloned_from_template_version ?? '—' })}
-                                                        {inst.stale && currentTemplate ? <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-amber-800">{t('admin.templates_stale_badge')}</span> : null}
+                                                        {inst.stale ? <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-amber-800">{t('admin.templates_stale_badge')}</span> : null}
                                                     </p>
+                                                    {inst.stale ? (
+                                                        <p className="mt-1 text-xs leading-5 text-slate-600">
+                                                            {t('admin.templates_stale_explanation')}
+                                                        </p>
+                                                    ) : null}
                                                 </div>
                                             </li>
                                         );

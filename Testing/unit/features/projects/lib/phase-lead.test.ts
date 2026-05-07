@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { applyPhaseLeads, extractPhaseLeads } from '@/features/projects/lib/phase-lead';
+import { applyPhaseLeads, extractPhaseLeads } from '@/shared/lib/phase-lead';
 
 describe('extractPhaseLeads (Wave 29)', () => {
     it('returns [] for null/undefined/empty settings', () => {

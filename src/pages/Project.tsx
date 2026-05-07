@@ -1,6 +1,6 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
-import { useAuth } from '@/shared/contexts/AuthContext';
+import { useAuth } from '@/shared/contexts/auth-context';
 import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/shared/db/client';
 import type { RealtimePostgresChangesPayload } from '@supabase/supabase-js';
@@ -10,8 +10,7 @@ import { ROLES, TASK_STATUS } from '@/shared/constants';
 import { compareDateAsc, toIsoDate } from '@/shared/lib/date-engine';
 import { collectSpawnedTemplateIds } from '@/shared/lib/tree-helpers';
 import { constructCreatePayload, constructUpdatePayload } from '@/shared/lib/date-engine/payloadHelpers';
-import { applyCoachingFlag, formDataToCoachingFlag } from '@/features/tasks/lib/coaching-form';
-import { applyStrategyTemplateFlag, formDataToStrategyTemplateFlag } from '@/features/tasks/lib/strategy-form';
+import { buildTemplateFlagSettingsPatch } from '@/features/tasks/lib/task-form-flags';
 import { planter } from '@/shared/api/planterClient';
 import { ProjectDndShell } from '@/pages/components/ProjectDndShell';
 
@@ -19,15 +18,15 @@ import { Loader2, Plus } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/shared/ui/button';
-import { useCreateTask, useUpdateTask } from '@/features/tasks/hooks/useTaskMutations';
+import { useCreateTask, useDeleteTask, useUpdateTask } from '@/features/tasks/hooks/useTaskMutations';
 import { toast } from 'sonner';
-import type { TaskRow, Project as ProjectType, TaskFormData, PersonRow } from '@/shared/db/app.types';
+import type { TaskRow, Project as ProjectType, TaskFormData } from '@/shared/db/app.types';
 
 import ProjectHeader from '@/features/projects/components/ProjectHeader';
 import ProjectTabs from '@/features/projects/components/ProjectTabs';
 import PeopleList from '@/features/people/components/PeopleList';
 import PhaseCard from '@/features/projects/components/PhaseCard';
-import MilestoneSection from '@/features/projects/components/MilestoneSection';
+import MilestoneSection from '@/features/tasks/components/MilestoneSection';
 import InviteMemberModal from '@/features/projects/components/InviteMemberModal';
 import TaskDetailsPanel from '@/features/tasks/components/TaskDetailsPanel';
 import MasterLibrarySearch from '@/features/library/components/MasterLibrarySearch';
@@ -35,6 +34,14 @@ import ResourceLibrary from '@/features/projects/components/ResourceLibrary';
 import ProjectActivityTab from '@/features/projects/components/ProjectActivityTab';
 import { useProjectPresence } from '@/features/projects/hooks/useProjectPresence';
 import { PresenceBar } from '@/features/projects/components/PresenceBar';
+import {
+    canCreateChildTask,
+    canDeleteTask as canDeleteTaskForRole,
+    canEditTaskContent,
+    canReorderTask,
+    canUpdateTaskProgress,
+} from '@/features/tasks/lib/task-permissions';
+import { canManageProjectMembers } from '@/features/projects/lib/project-member-permissions';
 
 export default function Project() {
     // Canonical URL form is /Project/:projectId. The legacy /Project?id=X
@@ -64,7 +71,15 @@ export default function Project() {
         [tasks],
     );
 
-    const board = useProjectBoard(projectId, (tasks as TaskRow[]) || []);
+    const createTask = useCreateTask();
+    const updateTask = useUpdateTask();
+    const deleteTask = useDeleteTask();
+
+    const board = useProjectBoard(projectId, (tasks as TaskRow[]) || [], {
+        updateTask: (payload, options) => updateTask.mutate(payload, options),
+        createTask: (payload) => createTask.mutateAsync(payload),
+        deleteTask: (payload, options) => deleteTask.mutate(payload, options),
+    });
     const { state, actions, handlers, computed } = board;
 
     // Wave 27: open the per-project presence channel and publish the focused
@@ -76,9 +91,6 @@ export default function Project() {
 
     // Form states restored
     const [taskFormState, setTaskFormState] = useState<{ mode?: 'create' | 'edit'; origin?: 'instance' | 'template'; isPhase?: boolean } | null>(null);
-
-    const createTask = useCreateTask();
-    const updateTask = useUpdateTask();
 
     const handleTaskSubmit = async (formData: TaskFormData) => {
         try {
@@ -97,15 +109,10 @@ export default function Project() {
 
             if (mode === 'edit' && state.selectedTask) {
                 const updatePayload = constructUpdatePayload(formData, state.selectedTask, payloadContext);
-                const coachingFlag = formDataToCoachingFlag(formData);
-                const strategyFlag = formDataToStrategyTemplateFlag(formData);
-                const afterCoaching = applyCoachingFlag(
-                    state.selectedTask.settings as Record<string, unknown> | null | undefined,
-                    coachingFlag,
-                );
-                const settingsPatch = applyStrategyTemplateFlag(
-                    afterCoaching ?? (state.selectedTask.settings as Record<string, unknown> | null | undefined),
-                    strategyFlag,
+                const settingsPatch = buildTemplateFlagSettingsPatch(
+                    origin,
+                    formData,
+                    state.selectedTask.settings,
                 );
                 await updateTask.mutateAsync({
                     id: state.selectedTask.id,
@@ -118,7 +125,8 @@ export default function Project() {
             } else {
                 const extendedFormData = formData as TaskFormData & { templateId?: string | null };
                 if (extendedFormData.templateId) {
-                    const hasManualDates = Boolean(formData.start_date || formData.due_date);
+                    const manualStartDate = toIsoDate(formData.start_date as string);
+                    const manualDueDate = toIsoDate(formData.due_date as string);
                     const { error } = await planter.entities.Task.clone(
                         extendedFormData.templateId,
                         parentId,
@@ -127,18 +135,15 @@ export default function Project() {
                         {
                             title: formData.title,
                             description: formData.description,
-                            start_date: hasManualDates ? toIsoDate(formData.start_date as string) : undefined,
-                            due_date: hasManualDates ? (toIsoDate(formData.due_date as string) || toIsoDate(formData.start_date as string)) : undefined,
+                            start_date: manualStartDate ?? undefined,
+                            due_date: manualDueDate ?? undefined,
                         }
                     );
                     if (error) throw error;
                     queryClient.invalidateQueries({ queryKey: ['projectHierarchy', projectId] });
                 } else {
                     const createPayload = constructCreatePayload(formData, payloadContext);
-                    const coachingFlag = formDataToCoachingFlag(formData);
-                    const strategyFlag = formDataToStrategyTemplateFlag(formData);
-                    const afterCoaching = applyCoachingFlag(null, coachingFlag);
-                    const settingsPatch = applyStrategyTemplateFlag(afterCoaching, strategyFlag);
+                    const settingsPatch = buildTemplateFlagSettingsPatch(origin, formData, null);
                     await createTask.mutateAsync({
                         ...createPayload,
                         root_id: projectId,
@@ -216,12 +221,22 @@ export default function Project() {
     }, [projectId, queryClient]);
 
     const isOwnerByProject = project?.creator === user?.id;
+    const isGlobalAdmin = user?.role === ROLES.ADMIN;
     const currentMember = teamMembers?.find((m: { user_id?: string }) => m.user_id === user?.id);
-    const userRole = currentMember?.role || (isOwnerByProject ? ROLES.OWNER : ROLES.VIEWER);
+    const userRole = isGlobalAdmin ? ROLES.ADMIN : currentMember?.role || (isOwnerByProject ? ROLES.OWNER : ROLES.VIEWER);
 
-    const canEdit = userRole === ROLES.OWNER || userRole === ROLES.ADMIN || userRole === ROLES.EDITOR;
-    const canInvite = userRole === ROLES.OWNER || userRole === ROLES.ADMIN || userRole === ROLES.EDITOR;
-    const canManageSettings = userRole === ROLES.OWNER || userRole === ROLES.ADMIN;
+    const canEdit = canEditTaskContent(userRole);
+    const canCreateTasks = canCreateChildTask(userRole);
+    const canReorderTasks = canReorderTask(userRole);
+    const canInvite = canManageProjectMembers(userRole);
+    const canManageSettings = canManageProjectMembers(userRole);
+    const canUpdateTaskStatusForRow = useCallback(
+        (task: TaskRow) => canUpdateTaskProgress(userRole, task),
+        [userRole],
+    );
+    const handleInvalidHierarchyDrop = useCallback(() => {
+        toast.error(t('projects.invalid_task_hierarchy_drop'));
+    }, [t]);
 
     const sortedPhases = [...(phases || [])].sort((a, b) => (a.position || 0) - (b.position || 0));
     const activePhase = state.selectedPhase || sortedPhases[0];
@@ -250,7 +265,7 @@ export default function Project() {
 
     // The primary project-metadata query either errored (network / RLS denial
     // / bad id) or returned null. Render a recoverable error card instead of
-    // an infinite spinner — user can retry or bail to the dashboard. Before
+    // an infinite spinner — user can retry or bail to the task list. Before
     // this change, an expired membership or a mistyped UUID froze the route.
     if (projectError || !project) {
         return (
@@ -264,7 +279,7 @@ export default function Project() {
                         {t('common.retry')}
                     </Button>
                     <Button asChild variant="ghost">
-                        <Link to="/dashboard">{t('errors.back_to_dashboard')}</Link>
+                        <Link to="/tasks">{t('errors.back_to_tasks')}</Link>
                     </Button>
                 </div>
             </div>
@@ -277,16 +292,18 @@ export default function Project() {
         <>
             <div className="flex h-full gap-8 min-w-0">
             <ProjectDndShell
-                tasks={(tasks as TaskRow[]) || []}
-                onTaskUpdate={handlers.handleTaskUpdate}
+                tasks={(projectHierarchy as TaskRow[]) || []}
+                onTaskUpdate={canReorderTasks ? handlers.handleTaskUpdate : () => undefined}
                 onToggleExpand={handlers.handleToggleExpand}
+                onInvalidDrop={handleInvalidHierarchyDrop}
             >
             {(dropIndicator) => (
                 <div className="flex-1 min-w-0 flex flex-col min-h-0 overflow-y-auto custom-scrollbar pr-4">
                     <ProjectHeader
                         project={project as ProjectType}
                         tasks={tasks as TaskRow[]}
-                        teamMembers={teamMembers as unknown as PersonRow[]}
+                        stateTasks={projectHierarchy as TaskRow[]}
+                        teamMembers={teamMembers}
                         canInvite={canInvite}
                         canManageSettings={canManageSettings}
                         onInviteMember={() => actions.setShowInviteModal(true)}
@@ -297,7 +314,7 @@ export default function Project() {
                             <ProjectTabs activeTab={state.activeTab} onTabChange={actions.setActiveTab} />
                             <PresenceBar presentUsers={presentUsers} currentUserId={user?.id ?? null} />
 
-                            {canEdit && state.activeTab === 'board' && (
+                            {canCreateTasks && state.activeTab === 'board' && (
                                 <Button
                                     onClick={() => setTaskFormState({ mode: 'create', origin: projectOrigin, isPhase: true })}
                                     className="bg-brand-500 hover:bg-brand-600 text-white"
@@ -347,7 +364,7 @@ export default function Project() {
                                             {phaseMilestones.length === 0 ? (
                                                 <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-12 text-center">
                                                     <p className="text-slate-500 mb-4">{t('projects.no_milestones_in_phase')}</p>
-                                                    {canEdit && (
+                                                    {canCreateTasks && (
                                                         <Button
                                                             variant="outline"
                                                             onClick={() => {
@@ -367,16 +384,18 @@ export default function Project() {
                                                         key={milestone.id}
                                                         milestone={milestone}
                                                         tasks={(tasks as TaskRow[] || []).map(computed.mapTaskWithState) as TaskRow[]}
-                                                        onTaskUpdate={canEdit ? (handlers.handleTaskUpdate as (id: string, updates: Partial<TaskRow>) => void) : undefined}
-                                                        onAddChildTask={canEdit ? handlers.handleStartInlineAdd : undefined}
+                                                        onTaskUpdate={handlers.handleTaskUpdate as (id: string, updates: Partial<TaskRow>) => void}
+                                                        onAddChildTask={canCreateTasks ? handlers.handleStartInlineAdd : undefined}
                                                         onToggleExpand={handlers.handleToggleExpand}
                                                         onTaskClick={(task: TaskRow) => {
                                                             handlers.handleTaskClick(task);
-                                                            setTaskFormState({ mode: 'edit', origin: projectOrigin });
+                                                            setTaskFormState(canEdit ? { mode: 'edit', origin: projectOrigin } : null);
                                                         }}
-                                                        onInlineCommit={canEdit ? handlers.handleInlineCommit : undefined}
+                                                        onInlineCommit={canCreateTasks ? handlers.handleInlineCommit : undefined}
                                                         onInlineCancel={() => actions.setInlineAddingParentId(null)}
                                                         canEdit={canEdit}
+                                                        canUpdateTaskStatus={canUpdateTaskStatusForRow}
+                                                        disableDrag={!canReorderTasks}
                                                         isAddingInline={state.inlineAddingParentId === milestone.id}
                                                         dropIndicator={dropIndicator}
                                                         presentUsers={presentUsers}
@@ -385,7 +404,7 @@ export default function Project() {
                                                 ))
                                             )}
 
-                                            {canEdit && phaseMilestones.length > 0 && (
+                                            {canCreateTasks && phaseMilestones.length > 0 && (
                                                 <Button
                                                     variant="ghost"
                                                     className="w-full text-slate-500 hover:text-slate-700"
@@ -430,6 +449,8 @@ export default function Project() {
                         parentTaskForForm={state.inlineAddingParentId ? (tasks?.find(t => t.id === state.inlineAddingParentId) as TaskRow) : undefined}
                         membershipRole={userRole}
                         allProjectTasks={(projectHierarchy as TaskRow[]) || []}
+                        teamMembers={teamMembers}
+                        showComments={false}
                         onClose={() => {
                             actions.setSelectedTask(null);
                             setTaskFormState(null);
@@ -447,7 +468,12 @@ export default function Project() {
                                 excludeTemplateIds={excludedTemplateIds}
                             />
                         )}
-                        onDeleteTaskWrapper={async () => { if (state.selectedTask) await handlers.handleDeleteTask(state.selectedTask); }}
+                        canEdit={canEdit}
+                        onDeleteTaskWrapper={
+                            state.selectedTask && canDeleteTaskForRole(userRole, state.selectedTask)
+                                ? async () => { if (state.selectedTask) await handlers.handleDeleteTask(state.selectedTask); }
+                                : undefined
+                        }
                         handleEditTask={(task) => {
                             actions.setSelectedTask(task as TaskRow);
                             setTaskFormState({ mode: 'edit', origin: projectOrigin });

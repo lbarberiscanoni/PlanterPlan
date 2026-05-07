@@ -7,10 +7,10 @@ import * as z from 'zod';
 import TaskResources from '@/features/tasks/components/TaskResources';
 import TaskDependencies from '@/features/tasks/components/TaskDependencies';
 import TaskComments from '@/features/tasks/components/TaskComments/TaskComments';
-import { useTaskActivity } from '@/features/projects/hooks/useProjectActivity';
-import { ActivityRow } from '@/features/projects/components/ActivityRow';
+import { useTaskActivity } from '@/shared/hooks/useActivityLog';
+import { ActivityRow } from '@/shared/ui/ActivityRow';
 import { formatDisplayDate } from '@/shared/lib/date-engine';
-import { useAuth } from '@/shared/contexts/AuthContext';
+import { useAuth } from '@/shared/contexts/auth-context';
 import { useTaskSiblings } from '@/features/tasks/hooks/useTaskSiblings';
 import {
     Dialog,
@@ -25,11 +25,11 @@ import { Textarea } from '@/shared/ui/textarea';
 import { Button } from '@/shared/ui/button';
 import { Label } from '@/shared/ui/label';
 import type { TaskItemData } from '@/features/tasks/components/TaskItem';
-import type { TaskRow } from '@/shared/db/app.types';
+import type { TaskRow, TeamMemberWithProfile } from '@/shared/db/app.types';
 import { extractCoachingFlag } from '@/features/tasks/lib/coaching-form';
 import { extractStrategyTemplateFlag } from '@/features/tasks/lib/strategy-form';
-import { extractPhaseLeads } from '@/features/projects/lib/phase-lead';
-import { useTeam } from '@/features/people/hooks/useTeam';
+import { canTaskHaveChildren } from '@/features/tasks/lib/task-hierarchy';
+import { extractPhaseLeads } from '@/shared/lib/phase-lead';
 import StrategyFollowUpDialog from '@/features/tasks/components/StrategyFollowUpDialog';
 import { collectSpawnedTemplateIds } from '@/shared/lib/tree-helpers';
 
@@ -37,6 +37,10 @@ const emailDetailsSchema = z.object({
     recipient: z.string().email(),
 });
 type EmailDetailsFormData = z.infer<typeof emailDetailsSchema>;
+
+function getMemberEmail(member: TeamMemberWithProfile | undefined): string | undefined {
+    return typeof member?.email === 'string' && member.email.length > 0 ? member.email : undefined;
+}
 
 function buildEmailBody(task: TaskItemData, t: TFunction): string {
     const emptyDate = t('tasks.detail.email_body_empty_date');
@@ -60,13 +64,10 @@ interface TaskDetailsViewProps {
     onTaskUpdated?: () => void;
     canEdit?: boolean;
     allProjectTasks?: TaskItemData[];
-    /**
-     * Wave 36 Task 2: used by the delete-guard modal. When the task has
-     * `cloned_from_task_id IS NOT NULL` and `membershipRole !== 'owner'`,
-     * the modal blocks the delete with a "only the project owner can
-     * delete template-origin tasks" message.
-     */
+    /** Retained for call-site compatibility; cloned scaffold delete bypass no longer depends on role. */
     membershipRole?: string;
+    teamMembers?: TeamMemberWithProfile[];
+    showComments?: boolean;
     [key: string]: unknown;
 }
 
@@ -76,20 +77,20 @@ const TaskDetailsView = ({
     onDeleteTask,
     onTaskUpdated,
     canEdit = true,
-    membershipRole,
-    ...props
+    allProjectTasks = [],
+    teamMembers = [],
+    showComments = true,
 }: TaskDetailsViewProps) => {
     const { t } = useTranslation();
     const { user, savedEmailAddresses, rememberEmailAddress } = useAuth();
     const { data: siblings = [] } = useTaskSiblings(task?.id, task?.parent_task_id);
     const [emailOpen, setEmailOpen] = useState(false);
     const [strategyDialogOpen, setStrategyDialogOpen] = useState(false);
-    // Wave 36 Task 2: delete-guard modal state for template-origin tasks.
+    // PR 2: template-origin scaffold deletes are blocked at the DB layer.
     const [deleteGuardOpen, setDeleteGuardOpen] = useState(false);
     const isTemplateOrigin = Boolean(
         (task as (TaskItemData & { cloned_from_task_id?: string | null }) | null)?.cloned_from_task_id,
     );
-    const isProjectOwner = membershipRole === 'owner';
 
     // Edge-trigger the Strategy Template follow-up dialog: fires exactly once
     // per transition into `completed`, regardless of how many re-renders happen
@@ -100,15 +101,13 @@ const TaskDetailsView = ({
         () => extractPhaseLeads(task as TaskRow | undefined),
         [task],
     );
-    const phaseLeadProjectId = task?.root_id ?? task?.id ?? null;
-    const { teamMembers: phaseLeadMembers } = useTeam(phaseLeadIds.length > 0 ? phaseLeadProjectId : null);
     const phaseLeadLabels = useMemo(
         () => phaseLeadIds.map((id) => {
-            const member = phaseLeadMembers.find((m) => m.user_id === id);
-            const email = member ? (member as unknown as { email?: string }).email : undefined;
+            const member = teamMembers.find((m) => m.user_id === id);
+            const email = getMemberEmail(member);
             return email ?? t('tasks.detail.phase_lead_fallback', { id: id.slice(0, 8) });
         }),
-        [phaseLeadIds, phaseLeadMembers, t],
+        [phaseLeadIds, teamMembers, t],
     );
     useEffect(() => {
         const prev = prevStatusRef.current;
@@ -122,10 +121,10 @@ const TaskDetailsView = ({
         prevStatusRef.current = curr;
     }, [task?.status, isStrategyTask]);
 
-    const allProjectTasksProp = props.allProjectTasks as TaskRow[] | undefined;
+    const allProjectTaskRows = allProjectTasks as TaskRow[];
     const strategyExcludeIds = useMemo(
-        () => Array.from(collectSpawnedTemplateIds(allProjectTasksProp ?? [])),
-        [allProjectTasksProp],
+        () => Array.from(collectSpawnedTemplateIds(allProjectTaskRows)),
+        [allProjectTaskRows],
     );
     const {
         register,
@@ -156,14 +155,7 @@ const TaskDetailsView = ({
         setEmailOpen(false);
     };
 
-    // Determine hierarchy level
-    const getTaskLevel = () => {
-        if (!task.parent_task_id) return 0;
-        return 1;
-    };
-
-    const level = getTaskLevel();
-    const canHaveChildren = level < 3;
+    const canHaveChildren = canTaskHaveChildren(task as TaskRow, allProjectTaskRows);
 
     // Check valid subscription or override for local dev/admin if needed.
     // For now, strict check on subscription_status.
@@ -352,7 +344,7 @@ const TaskDetailsView = ({
 
             <div className="h-px bg-slate-100 my-4"></div>
 
-            <TaskDependencies task={task as TaskRow} allProjectTasks={(props.allProjectTasks as TaskRow[]) || []} />
+            <TaskDependencies task={task as TaskRow} allProjectTasks={allProjectTaskRows} />
 
             {/* Related Tasks (Siblings) */}
             {task.parent_task_id && (
@@ -381,8 +373,7 @@ const TaskDetailsView = ({
                 </div>
             )}
 
-            {/* Comments (Wave 26) */}
-            <TaskComments taskId={task.id} />
+            {showComments && <TaskComments taskId={task.id} />}
 
             {/* Activity (Wave 27) */}
             <TaskActivityRail taskId={task.id} />
@@ -444,10 +435,9 @@ const TaskDetailsView = ({
                     <button
                         type="button"
                         onClick={() => {
-                            // Wave 36 Task 2: template-origin guard. Non-owners
-                            // see a modal before deleting cloned-from-template
-                            // rows. Owners bypass the modal.
-                            if (isTemplateOrigin && !isProjectOwner) {
+                            // Mirror the DB trigger: cloned-from-template
+                            // scaffold rows are not deletable through app UI.
+                            if (isTemplateOrigin) {
                                 setDeleteGuardOpen(true);
                                 return;
                             }
@@ -523,7 +513,7 @@ const TaskDetailsView = ({
                 </DialogContent>
             </Dialog>
 
-            {/* Wave 36 Task 2: template-origin delete guard. */}
+            {/* Template-origin delete guard. */}
             <Dialog open={deleteGuardOpen} onOpenChange={setDeleteGuardOpen}>
                 <DialogContent data-testid="template-origin-delete-guard">
                     <DialogHeader>

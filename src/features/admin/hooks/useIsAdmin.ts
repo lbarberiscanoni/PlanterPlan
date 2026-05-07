@@ -1,4 +1,4 @@
-import { useAuth } from '@/shared/contexts/AuthContext';
+import { useAuth } from '@/shared/contexts/auth-context';
 
 /**
  * Wave 34: derived from the already-hydrated `user.role === 'admin'` assignment

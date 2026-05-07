@@ -10,6 +10,10 @@ import {
 } from '@/shared/ui/dialog';
 import { Button } from '@/shared/ui/button';
 import { cn } from '@/shared/lib/utils';
+import {
+    ConfirmDialogContext,
+    type ConfirmDialogOptions,
+} from '@/shared/ui/confirm-dialog-context';
 
 /**
  * App-wide confirmation dialog — the single replacement for the browser's
@@ -20,7 +24,8 @@ import { cn } from '@/shared/lib/utils';
  * ## Imperative API (recommended)
  *
  * Wrap the app in `<ConfirmDialogProvider>` (done once in `App.tsx`), then
- * call `useConfirm()` from any component:
+ * import `useConfirm()` from `@/shared/ui/confirm-dialog-context` and call it
+ * from any component:
  *
  * ```tsx
  * const confirm = useConfirm();
@@ -48,15 +53,6 @@ import { cn } from '@/shared/lib/utils';
  * - Esc and backdrop click map to cancel (returns `false`) by default.
  */
 
-export interface ConfirmDialogOptions {
-    title: string;
-    description: string;
-    confirmText?: string;
-    cancelText?: string;
-    /** When true, the confirm button is rendered in a destructive color scheme. */
-    destructive?: boolean;
-}
-
 type Resolver = (value: boolean) => void;
 
 interface State {
@@ -64,10 +60,6 @@ interface State {
     options: ConfirmDialogOptions | null;
     resolver: Resolver | null;
 }
-
-const ConfirmDialogContext = React.createContext<
-    ((options: ConfirmDialogOptions) => Promise<boolean>) | null
->(null);
 
 export function ConfirmDialogProvider({ children }: { children: React.ReactNode }) {
     const { t } = useTranslation();
@@ -137,12 +129,4 @@ export function ConfirmDialogProvider({ children }: { children: React.ReactNode 
             </Dialog>
         </ConfirmDialogContext.Provider>
     );
-}
-
-export function useConfirm() {
-    const ctx = React.useContext(ConfirmDialogContext);
-    if (!ctx) {
-        throw new Error('useConfirm must be used inside <ConfirmDialogProvider>');
-    }
-    return ctx;
 }

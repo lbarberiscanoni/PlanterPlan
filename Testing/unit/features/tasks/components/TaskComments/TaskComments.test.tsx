@@ -13,8 +13,9 @@ const mockDeleteMutate = vi.fn();
 // Wave 30: CommentComposer transitively imports `planter` from planterClient
 // (for `resolveMentions` → `planter.rpc`). The planterClient module throws at
 // import time when VITE_SUPABASE_URL is unset, so the whole test file fails
-// to load without this stub. Resolving to verbatim handles (error path) keeps
-// the existing Wave 26 assertions valid.
+// to load without this stub. The error path now warns and returns no mentions,
+// which keeps these rendering-focused assertions independent of notification
+// delivery.
 vi.mock('@/shared/api/planterClient', () => ({
     planter: {
         rpc: vi.fn().mockResolvedValue({ data: null, error: new Error('mocked rpc') }),
@@ -32,7 +33,7 @@ vi.mock('@/features/tasks/hooks/useTaskCommentsRealtime', () => ({
     useTaskCommentsRealtime: () => undefined,
 }));
 
-vi.mock('@/shared/contexts/AuthContext', () => ({
+vi.mock('@/shared/contexts/auth-context', () => ({
     useAuth: () => ({
         user: {
             id: 'user-me',
@@ -182,7 +183,7 @@ describe('TaskComments (Wave 26)', () => {
 
     it('does not show a composer when the viewer is signed out', async () => {
         vi.resetModules();
-        vi.doMock('@/shared/contexts/AuthContext', () => ({
+        vi.doMock('@/shared/contexts/auth-context', () => ({
             useAuth: () => ({ user: null }),
         }));
         vi.doMock('@/features/tasks/hooks/useTaskComments', () => ({
@@ -249,5 +250,25 @@ describe('TaskComments (Wave 26)', () => {
 
         // Count chip shows live count (2 = mineLive + replyUnderDeleted), not 3.
         expect(screen.getByTestId('task-comments-count')).toHaveTextContent('2 comments');
+    });
+
+    it('renders deleted-account authors as historical comments without owner affordances', () => {
+        const deletedAuthor = makeCommentWithAuthor({
+            id: 'deleted-author',
+            task_id: 'task-1',
+            parent_comment_id: null,
+            author_id: null,
+            author: null,
+            body: 'Historical comment remains',
+        });
+        mockUseTaskComments.mockReturnValue({ data: [deletedAuthor], isLoading: false });
+
+        renderSut();
+
+        const row = screen.getByTestId('comment-deleted-author');
+        expect(row).toHaveTextContent('Deleted user');
+        expect(row).toHaveTextContent('Historical comment remains');
+        expect(row.querySelector('[data-testid="comment-edit-btn"]')).toBeNull();
+        expect(row.querySelector('[data-testid="comment-delete-btn"]')).toBeNull();
     });
 });

@@ -2,11 +2,12 @@ import { useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { ViewMode } from 'gantt-task-react';
-import { useDashboard } from '@/features/dashboard/hooks/useDashboard';
+import { useProjectList } from '@/features/projects/hooks/useProjectList';
 import { useProjectData } from '@/features/projects/hooks/useProjectData';
 import { tasksToGanttRows } from '@/features/gantt/lib/gantt-adapter';
 import { ProjectGantt, type GanttZoom } from '@/features/gantt/components/ProjectGantt';
 import { useGanttDragShift } from '@/features/gantt/hooks/useGanttDragShift';
+import { useUpdateTask } from '@/features/tasks/hooks/useTaskMutations';
 import {
     Select,
     SelectContent,
@@ -15,21 +16,21 @@ import {
     SelectValue,
 } from '@/shared/ui/select';
 import { Label } from '@/shared/ui/label';
-import type { HierarchyTask } from '@/shared/db/app.types';
 
 export default function Gantt() {
     const { t } = useTranslation();
     const [searchParams, setSearchParams] = useSearchParams();
     const projectId = searchParams.get('projectId');
 
-    const { data: dashboard } = useDashboard();
-    const activeProjects = dashboard.activeProjects;
+    const { data: projectList } = useProjectList();
+    const activeProjects = projectList.activeProjects;
 
     const [zoom, setZoom] = useState<GanttZoom>(ViewMode.Week);
     const [includeLeafTasks, setIncludeLeafTasks] = useState(false);
 
     const { projectHierarchy } = useProjectData(projectId);
-    const hierarchyTasks = projectHierarchy as unknown as HierarchyTask[];
+    const hierarchyTasks = projectHierarchy;
+    const updateTask = useUpdateTask();
 
     const { rows, skippedCount } = useMemo(
         () => tasksToGanttRows(hierarchyTasks, { includeLeafTasks }),
@@ -39,6 +40,7 @@ export default function Gantt() {
     const onShiftDates = useGanttDragShift({
         projectId: projectId ?? '',
         tasks: hierarchyTasks,
+        updateTaskDates: updateTask.mutateAsync,
     });
 
     if (!projectId) {

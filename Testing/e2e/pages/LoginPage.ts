@@ -16,7 +16,7 @@ export class LoginPage {
     this.page = page;
     this.emailInput = page.getByLabel(/email/i);
     this.passwordInput = page.getByLabel(/password/i);
-    this.submitButton = page.getByRole('button', { name: /sign in|sign up|log in/i });
+    this.submitButton = page.locator('form button[type="submit"]');
     this.toggleModeButton = page.getByText(/Already have an account|Need an account/);
     this.autoLoginButton = page.getByText('(Auto-Login as Test User)');
     this.emailError = page.locator('[data-testid="email-error"]');

@@ -1,6 +1,6 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { useForm, FormProvider } from 'react-hook-form';
+import { useForm, FormProvider, type SubmitHandler } from 'react-hook-form';
 import { isDateValid, isBeforeDate } from '@/shared/lib/date-engine';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -10,8 +10,9 @@ import { Button } from '@/shared/ui/button';
 import { isRecurrenceRule } from '@/shared/lib/recurrence';
 import { extractCoachingFlag } from '@/features/tasks/lib/coaching-form';
 import { extractStrategyTemplateFlag } from '@/features/tasks/lib/strategy-form';
-import { extractPhaseLeads } from '@/features/projects/lib/phase-lead';
-import type { TaskFormData, TaskRow } from '@/shared/db/app.types';
+import { sanitizeTemplateFlagFormData } from '@/features/tasks/lib/task-form-flags';
+import { extractPhaseLeads } from '@/shared/lib/phase-lead';
+import type { TaskFormData, TaskRow, TeamMemberWithProfile } from '@/shared/db/app.types';
 
 const extractDateInput = (value?: string | null) => {
  if (!value) return '';
@@ -113,6 +114,8 @@ export interface TaskFormProps {
  membershipRole?: string;
  /** Wave 29: project root id threaded to TaskFormFields for the Phase Lead picker. */
  projectId?: string | null;
+ /** Team members supplied by the page/composition layer for phase-lead controls. */
+ teamMembers?: TeamMemberWithProfile[];
 }
 
 const TaskForm = ({
@@ -125,12 +128,13 @@ const TaskForm = ({
  renderLibrarySearch,
  membershipRole,
  projectId,
+ teamMembers = [],
 }: TaskFormProps) => {
  const isEditMode = Boolean(initialTask);
  const [lastAppliedTaskTitle, setLastAppliedTaskTitle] = useState('');
  const prevInitialTaskRef = useRef(initialTask);
 
- const methods = useForm<TaskFormData>({
+ const methods = useForm<TaskFormData, unknown, TaskFormData>({
  // @ts-expect-error Zod refinement output doesn't structurally match TaskFormData for resolver
  resolver: zodResolver(getTaskSchema(origin)),
  defaultValues: createInitialState(initialTask) as TaskFormData,
@@ -163,9 +167,9 @@ const TaskForm = ({
  setLastAppliedTaskTitle(task.title || '');
  }, [setValue]);
 
- const handleFormSubmit = useCallback(async (data: TaskFormData) => {
+ const handleFormSubmit = useCallback<SubmitHandler<TaskFormData>>(async (data) => {
  try {
- await onSubmit(data);
+ await onSubmit(sanitizeTemplateFlagFormData(data, origin));
  if (!isEditMode) {
  reset(createInitialState(null));
  setLastAppliedTaskTitle('');
@@ -173,12 +177,11 @@ const TaskForm = ({
  } catch (e) {
  console.error("Task submission failed:", e);
  }
- }, [onSubmit, isEditMode, reset]);
+ }, [onSubmit, origin, isEditMode, reset]);
 
  return (
  <FormProvider {...methods}>
- {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
- <form data-testid="task-form" onSubmit={methods.handleSubmit(handleFormSubmit as any)} className="project-form">
+ <form data-testid="task-form" onSubmit={methods.handleSubmit(handleFormSubmit)} className="project-form">
  <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
  {origin === 'template'
  ? (isEditMode ? 'Editing Template Task' : (submitLabel?.includes('Phase') ? 'Template Phase' : 'Template Task'))
@@ -212,6 +215,7 @@ const TaskForm = ({
  membershipRole={membershipRole}
  taskType={initialTask?.task_type ?? null}
  projectId={projectId ?? initialTask?.root_id ?? null}
+ teamMembers={teamMembers}
  />
 
  {origin === 'template' && <RecurrencePicker />}

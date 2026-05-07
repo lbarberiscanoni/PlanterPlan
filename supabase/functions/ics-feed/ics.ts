@@ -2,10 +2,10 @@
 //
 // Pure functions so the unit test runner can drive them directly. The Deno
 // edge function imports `renderIcsDocument` from here. Date math routes
-// through `supabase/functions/_shared/date.ts` (the Deno mirror of
-// `src/shared/lib/date-engine`) per the styleguide's no-raw-date-math rule.
+// through `supabase/functions/_shared/business-calendar.ts` (the Deno mirror
+// of the app business-calendar seam) per the styleguide's no-raw-date-math rule.
 
-import { addDaysToIsoDate } from '../_shared/date.ts';
+import { calendarDayBusinessCalendar } from '../_shared/business-calendar.ts';
 
 export interface IcsTaskRow {
     id: string;
@@ -97,10 +97,10 @@ export function renderIcsDocument(tasks: IcsTaskRow[], opts: RenderIcsOptions = 
         if (!dueDate || !/^\d{4}-\d{2}-\d{2}$/.test(dueDate)) continue;
 
         const startFmt = formatIcsDate(startDate);
-        // DTEND is exclusive in iCal; advance one calendar day so single-day
-        // events render. Routed through the date-engine Deno mirror — no
-        // mutating raw Date math.
-        const dueNextIso = addDaysToIsoDate(dueDate, 1);
+        // DTEND is exclusive in iCal; advance one literal calendar day so
+        // single-day events render even after date-project scheduling starts
+        // skipping weekends and observed holidays.
+        const dueNextIso = calendarDayBusinessCalendar.addBusinessDays(dueDate, 1);
         if (!dueNextIso) continue;
         const endFmt = formatIcsDate(dueNextIso);
 

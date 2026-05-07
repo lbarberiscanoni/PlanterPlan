@@ -11,8 +11,8 @@ vi.mock('gantt-task-react/dist/index.css', () => ({}));
 const activeProjects: Array<{ id: string; title: string }> = [];
 const projectHierarchy: unknown[] = [];
 
-vi.mock('@/features/dashboard/hooks/useDashboard', () => ({
-    useDashboard: () => ({
+vi.mock('@/features/projects/hooks/useProjectList', () => ({
+    useProjectList: () => ({
         state: {},
         data: { activeProjects },
         actions: {},
@@ -21,6 +21,10 @@ vi.mock('@/features/dashboard/hooks/useDashboard', () => ({
 
 vi.mock('@/features/projects/hooks/useProjectData', () => ({
     useProjectData: () => ({ project: undefined, loadingProject: false, projectHierarchy, phases: [], milestones: [], tasks: [], teamMembers: [] }),
+}));
+
+vi.mock('@/features/tasks/hooks/useTaskMutations', () => ({
+    useUpdateTask: () => ({ mutateAsync: vi.fn() }),
 }));
 
 vi.mock('@/features/gantt/hooks/useGanttDragShift', () => ({

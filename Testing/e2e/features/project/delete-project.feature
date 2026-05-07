@@ -17,8 +17,8 @@ Feature: Delete Project
     And the user cancels the deletion
     Then the confirmation prompt is hidden
 
-  Scenario: Confirm delete removes project and redirects to dashboard
+  Scenario: Confirm delete removes project and redirects to tasks
     When the user clicks the delete button
     And the user confirms the deletion
-    Then the user is redirected to "/dashboard"
+    Then the user is redirected to "/tasks"
     And the project is no longer in the sidebar

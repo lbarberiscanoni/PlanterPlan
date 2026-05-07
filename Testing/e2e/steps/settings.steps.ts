@@ -100,6 +100,14 @@ Then('the {string} tab is marked as active', async ({ page }, tabName: string) =
   await expect(page.getByText(tabName).first()).toBeVisible();
 });
 
+Then('the {string} tab is available', async ({ page }, tabName: string) => {
+  await expect(page.getByRole('button', { name: new RegExp(tabName, 'i') })).toBeEnabled();
+});
+
+Then('no settings tab shows {string}', async ({ page }, text: string) => {
+  await expect(page.getByText(text)).toHaveCount(0);
+});
+
 Then('{string} shows {string}', async ({ page }, label: string, text: string) => {
   await expect(page.getByText(label).first()).toBeVisible();
   await expect(page.getByText(text).first()).toBeVisible();

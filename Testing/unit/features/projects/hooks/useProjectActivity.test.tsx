@@ -17,7 +17,7 @@ vi.mock('@/shared/api/planterClient', () => ({
     },
 }));
 
-import { useProjectActivity, useTaskActivity } from '@/features/projects/hooks/useProjectActivity';
+import { useProjectActivity, useTaskActivity } from '@/shared/hooks/useActivityLog';
 
 function makeWrapper() {
     const qc = new QueryClient({

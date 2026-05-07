@@ -11,7 +11,7 @@ import { Input } from '@/shared/ui/input';
 import { Textarea } from '@/shared/ui/textarea';
 import { Switch } from '@/shared/ui/switch';
 import { RadioGroup, RadioGroupItem } from '@/shared/ui/radio-group';
-import { useUpdateProject, useDeleteProject, useUpdateProjectStatus } from '@/features/projects/hooks/useProjectMutations';
+import { useUpdateProject, useDeleteProject, useSetProjectArchived } from '@/features/projects/hooks/useProjectMutations';
 import { applyProjectKind, extractProjectKind, type ProjectKind } from '@/features/projects/lib/project-kind';
 import { toIsoDate } from '@/shared/lib/date-engine';
 import { useDirtyCloseGuard } from '@/shared/lib/use-dirty-close-guard';
@@ -40,7 +40,7 @@ export default function EditProjectModal({ project, isOpen, onClose }: EditProje
  const navigate = useNavigate();
  const updateProjectMutation = useUpdateProject();
  const deleteProjectMutation = useDeleteProject();
- const updateStatusMutation = useUpdateProjectStatus();
+ const setProjectArchivedMutation = useSetProjectArchived();
  const isTemplate = project.origin === 'template';
  const isArchived = project.status === PROJECT_STATUS.ARCHIVED;
 
@@ -64,9 +64,8 @@ export default function EditProjectModal({ project, isOpen, onClose }: EditProje
  type EditProjectFormData = z.infer<typeof editProjectSchema>;
 
  const handleArchiveToggle = async () => {
-  const nextStatus = isArchived ? PROJECT_STATUS.IN_PROGRESS : PROJECT_STATUS.ARCHIVED;
   try {
-   await updateStatusMutation.mutateAsync({ projectId: project.id, status: nextStatus });
+   await setProjectArchivedMutation.mutateAsync({ projectId: project.id, archived: !isArchived });
    toast.success(isArchived ? t('projects.edit_modal.project_unarchived_toast') : t('projects.edit_modal.project_archived_toast'));
    onClose();
   } catch (error) {
@@ -356,10 +355,10 @@ export default function EditProjectModal({ project, isOpen, onClose }: EditProje
          size="sm"
          data-testid="archive-project-btn"
          onClick={handleArchiveToggle}
-         disabled={updateStatusMutation.isPending}
+         disabled={setProjectArchivedMutation.isPending}
          className="border-amber-300 text-amber-800 hover:bg-amber-100"
         >
-         {updateStatusMutation.isPending
+         {setProjectArchivedMutation.isPending
           ? (isArchived ? t('projects.edit_modal.unarchiving') : t('projects.edit_modal.archiving'))
           : (isArchived ? t('projects.edit_modal.unarchive_button') : t('projects.edit_modal.archive_button'))}
         </Button>
@@ -403,7 +402,7 @@ export default function EditProjectModal({ project, isOpen, onClose }: EditProje
           className="h-8"
           onClick={async () => {
            await deleteProjectMutation.mutateAsync(project.id);
-           navigate('/dashboard', { replace: true });
+           navigate('/tasks', { replace: true });
           }}
          >
           {t('projects.edit_modal.delete_confirm_yes')}

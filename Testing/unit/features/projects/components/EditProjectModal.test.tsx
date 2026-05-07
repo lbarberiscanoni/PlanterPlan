@@ -9,12 +9,12 @@ import type { TaskRow } from '@/shared/db/app.types';
 
 const mockUpdateMutateAsync = vi.fn();
 const mockDeleteMutateAsync = vi.fn();
-const mockUpdateStatusMutateAsync = vi.fn();
+const mockSetArchivedMutateAsync = vi.fn();
 
 vi.mock('@/features/projects/hooks/useProjectMutations', () => ({
   useUpdateProject: () => ({ mutateAsync: mockUpdateMutateAsync }),
   useDeleteProject: () => ({ mutateAsync: mockDeleteMutateAsync }),
-  useUpdateProjectStatus: () => ({ mutateAsync: mockUpdateStatusMutateAsync, isPending: false }),
+  useSetProjectArchived: () => ({ mutateAsync: mockSetArchivedMutateAsync, isPending: false }),
 }));
 
 const mockToastSuccess = vi.fn();
@@ -55,7 +55,7 @@ function renderModal(project: TaskRow) {
 beforeEach(() => {
   vi.clearAllMocks();
   mockUpdateMutateAsync.mockResolvedValue({ shiftedCount: 0 });
-  mockUpdateStatusMutateAsync.mockResolvedValue(undefined);
+  mockSetArchivedMutateAsync.mockResolvedValue(undefined);
 });
 
 describe('EditProjectModal — Published toggle visibility', () => {
@@ -277,7 +277,7 @@ describe('EditProjectModal — Archive / Unarchive (Wave 21.5)', () => {
     expect(screen.queryByTestId('archive-project-btn')).toBeNull();
   });
 
-  it('archive click fires updateStatus with status=archived', async () => {
+  it('archive click marks the project archived', async () => {
     const instance = makeTask({
       id: 'proj-1',
       title: 'A Project',
@@ -291,14 +291,14 @@ describe('EditProjectModal — Archive / Unarchive (Wave 21.5)', () => {
       fireEvent.click(button);
     });
     await waitFor(() => {
-      expect(mockUpdateStatusMutateAsync).toHaveBeenCalledWith({
+      expect(mockSetArchivedMutateAsync).toHaveBeenCalledWith({
         projectId: 'proj-1',
-        status: 'archived',
+        archived: true,
       });
     });
   });
 
-  it('unarchive click fires updateStatus with status=in_progress', async () => {
+  it('unarchive click clears the archived visibility flag', async () => {
     const instance = makeTask({
       id: 'proj-1',
       title: 'A Project',
@@ -312,9 +312,9 @@ describe('EditProjectModal — Archive / Unarchive (Wave 21.5)', () => {
       fireEvent.click(button);
     });
     await waitFor(() => {
-      expect(mockUpdateStatusMutateAsync).toHaveBeenCalledWith({
+      expect(mockSetArchivedMutateAsync).toHaveBeenCalledWith({
         projectId: 'proj-1',
-        status: 'in_progress',
+        archived: false,
       });
     });
   });

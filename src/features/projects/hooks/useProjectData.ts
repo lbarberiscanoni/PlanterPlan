@@ -2,32 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useMemo } from 'react';
 import { planter } from '@/shared/api/planterClient';
 import { STALE_TIMES } from '@/shared/lib/react-query-config';
-
-/** Minimal task shape returned by the project hierarchy query. */
-interface HierarchyTask {
-    id: string;
-    parent_task_id?: string | null;
-    root_id?: string | null;
-    position?: number | null;
-    [key: string]: unknown;
-}
-
-/** Team member shape returned by the team query. */
-interface TeamMember {
-    id: string;
-    project_id: string;
-    user_id: string;
-    role?: string;
-    [key: string]: unknown;
-}
-
-/** Project metadata shape. */
-interface Project {
-    id: string;
-    title?: string;
-    status?: string;
-    [key: string]: unknown;
-}
+import type { HierarchyTask, Project, TeamMemberWithProfile } from '@/shared/db/app.types';
 
 interface UseProjectDataReturn {
     project: Project | undefined;
@@ -38,7 +13,7 @@ interface UseProjectDataReturn {
     phases: HierarchyTask[];
     milestones: HierarchyTask[];
     tasks: HierarchyTask[];
-    teamMembers: TeamMember[];
+    teamMembers: TeamMemberWithProfile[];
     /** Manually retry the failed project-metadata query (used by the error-card CTA). */
     refetchProject: () => void;
 }
@@ -60,12 +35,12 @@ export function useProjectData(projectId: string | null | undefined): UseProject
         staleTime: STALE_TIMES.long, // 5 minutes cache
     });
 
-    const project = (data as { data?: Project } | undefined)?.data;
+    const project = data?.data;
 
     // 2. Fetch Full Project Hierarchy
     const { data: projectHierarchy = [] } = useQuery<HierarchyTask[]>({
         queryKey: ['projectHierarchy', projectId],
-        queryFn: () => planter.entities.Task.filter({ root_id: projectId }) as Promise<HierarchyTask[]>,
+        queryFn: () => planter.entities.Task.filter({ root_id: projectId! }),
         enabled: !!projectId,
         staleTime: STALE_TIMES.long,
     });
@@ -98,9 +73,9 @@ export function useProjectData(projectId: string | null | undefined): UseProject
     }, [projectHierarchy, projectId]);
 
     // 3. Fetch Team Members
-    const { data: teamMembers = [] } = useQuery<TeamMember[]>({
+    const { data: teamMembers = [] } = useQuery<TeamMemberWithProfile[]>({
         queryKey: ['teamMembers', projectId],
-        queryFn: () => planter.entities.TeamMember.filter({ project_id: projectId }),
+        queryFn: () => planter.entities.TeamMember.listByProjectWithProfiles(projectId!),
         enabled: !!projectId,
         staleTime: STALE_TIMES.medium,
     });

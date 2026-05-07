@@ -1,14 +1,13 @@
 import {
  format,
- addDays,
  parseISO,
  isValid,
  isPast,
  isToday,
  endOfDay,
- isBefore,
- differenceInCalendarDays
+ isBefore
 } from 'date-fns';
+import { defaultBusinessCalendar, dateProjectBusinessCalendar } from './business-calendar';
 
 /**
  * Date Engine - Single Source of Truth for PlanterPlan Date Logic
@@ -122,9 +121,7 @@ export const isTodayDate = (date: DateInput | null | undefined): boolean => {
 
 /** Adds `amount` calendar days to a date. Returns `null` on invalid input. */
 export const addDaysToDate = (date: DateInput | null | undefined, amount: number): Date | null => {
- const d = resolve(date);
- if (!d) return null;
- return addDays(d, amount);
+ return defaultBusinessCalendar.addBusinessDays(date, amount);
 };
 
 /** Validates a date input. */
@@ -140,10 +137,7 @@ export const diffInCalendarDays = (
  later: DateInput | null | undefined,
  earlier: DateInput | null | undefined,
 ): number | null => {
- const a = resolve(later);
- const b = resolve(earlier);
- if (!a || !b) return null;
- return differenceInCalendarDays(a, b);
+ return defaultBusinessCalendar.diffInBusinessDays(later, earlier);
 };
 
 /** Returns the end of the day for a given date. */
@@ -204,6 +198,16 @@ export const findTaskById = <T extends DateEngineTask>(
 };
 
 /**
+ * Adds date-project business days to a UTC date-only value and returns a Date.
+ * @param isoDate - Date-only value in `YYYY-MM-DD` format.
+ * @param amount - Number of days to shift; negative values subtract.
+ * @returns Shifted Date, or null when the calendar rejects the input.
+ */
+const addBusinessDaysToUtcDate = (isoDate: string, amount: number): Date | null => {
+ return dateProjectBusinessCalendar.addBusinessDays(isoDate, amount);
+};
+
+/**
  * Calculates start/due dates based on a parent's date and an offset.
  * Traverses ancestors to find the root project start date.
  */
@@ -233,20 +237,11 @@ export const calculateScheduleFromOffset = (
  const projectStartDate = rootTask?.start_date || parentTask.start_date;
  if (!projectStartDate) return {};
 
- const baseDate = projectStartDate.includes('T')
- ? projectStartDate
- : `${projectStartDate}T00:00:00.000Z`;
-
- const start = new Date(baseDate);
-
- if (Number.isNaN(start.getTime())) return {};
-
- // Normalize to UTC Midnight
- start.setUTCHours(0, 0, 0, 0);
- start.setUTCDate(start.getUTCDate() + daysOffset);
-
- const iso = start.toISOString();
- const dateOnly = iso.split('T')[0];
+ const projectStartIso = toIsoDate(projectStartDate);
+ if (!projectStartIso) return {};
+ const start = addBusinessDaysToUtcDate(projectStartIso, daysOffset);
+ const dateOnly = toIsoDate(start);
+ if (!dateOnly) return {};
 
  return {
  start_date: dateOnly,
@@ -422,20 +417,17 @@ export const recalculateProjectDates = (
  const newIso = toIsoDate(newStartDateStr);
  if (!oldIso || !newIso) return [];
 
- const oldStart = new Date(oldIso);
- const newStart = new Date(newIso);
+ const diffDays = dateProjectBusinessCalendar.diffInBusinessDays(newIso, oldIso);
 
- if (isNaN(oldStart.getTime()) || isNaN(newStart.getTime())) return [];
-
- // Calculate delta in milliseconds
- const diffTime = newStart.getTime() - oldStart.getTime();
- const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
-
- if (diffDays === 0) return [];
+ if (diffDays === null || diffDays === 0) return [];
 
  const updates: DateUpdateRecord[] = [];
 
  projectTasks.forEach((task) => {
+ // The project root is updated directly by the project mutation. Re-shifting it
+ // here can overwrite a user-selected weekend/holiday launch date.
+ if (root && task.id === root.id) return;
+
  // Skip if task is completed by either signal (preserve history)
  if (task.is_complete || task.status === 'completed') return;
 
@@ -445,22 +437,20 @@ export const recalculateProjectDates = (
  const taskStartIso = toIsoDate(task.start_date);
  if (!taskStartIso) return;
 
- const taskStart = new Date(taskStartIso);
- if (isNaN(taskStart.getTime())) return;
-
  // Shift Start Date
- taskStart.setUTCDate(taskStart.getUTCDate() + diffDays);
- const newStartISO = taskStart.toISOString();
+ const taskStart = addBusinessDaysToUtcDate(taskStartIso, diffDays);
+ if (!taskStart) return;
+ const newStartISO = toIsoDate(taskStart);
+ if (!newStartISO) return;
 
  // Shift Due Date (if exists)
  let newDueISO: string | null = null;
  if (task.due_date) {
  const taskDueIso = toIsoDate(task.due_date);
  if (taskDueIso) {
- const taskDue = new Date(taskDueIso);
- if (!isNaN(taskDue.getTime())) {
- taskDue.setUTCDate(taskDue.getUTCDate() + diffDays);
- newDueISO = taskDue.toISOString();
+ const taskDue = addBusinessDaysToUtcDate(taskDueIso, diffDays);
+ if (taskDue) {
+ newDueISO = toIsoDate(taskDue);
  }
  }
  }
@@ -514,7 +504,11 @@ export const deriveUrgency = (
  if (due.getTime() < today.getTime()) return 'overdue';
 
  const threshold = Math.max(0, Math.floor(dueSoonThresholdDays));
- const soonCutoff = startOfUtcDay(addDays(today, threshold));
+ const todayIso = toIsoDate(today);
+ if (!todayIso) return null;
+ const shiftedCutoff = dateProjectBusinessCalendar.addBusinessDays(todayIso, threshold);
+ if (!shiftedCutoff) return null;
+ const soonCutoff = startOfUtcDay(shiftedCutoff);
  if (due.getTime() <= soonCutoff.getTime()) return 'due_soon';
 
  if (task.start_date) {

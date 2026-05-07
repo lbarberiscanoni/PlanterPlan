@@ -1,4 +1,4 @@
-import { useAuth } from '@/shared/contexts/AuthContext';
+import { useAuth } from '@/shared/contexts/auth-context';
 import {
     useTaskComments,
     useCreateComment,

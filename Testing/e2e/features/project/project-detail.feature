@@ -20,9 +20,9 @@ Feature: Project Detail View
   Scenario: Project header shows team member avatars
     Then team member avatar icons are visible
 
-  Scenario: Back button navigates to dashboard
+  Scenario: Back button navigates to tasks
     When the user clicks the back button
-    Then the user is redirected to "/dashboard"
+    Then the user is redirected to "/tasks"
 
   Scenario: Project loading state shows spinner
     When the project data is loading

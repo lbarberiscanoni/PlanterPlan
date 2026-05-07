@@ -1,4 +1,4 @@
-import { memo, useMemo } from 'react';
+import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import RoleIndicator from '@/shared/ui/RoleIndicator';
 import { SortableContext, useSortable } from '@dnd-kit/sortable';
@@ -17,8 +17,8 @@ import {
  formatTaskDueBadge,
 } from '@/shared/lib/date-engine/formatTaskDueBadge';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/ui/tooltip';
-import { useConfirm } from '@/shared/ui/confirm-dialog';
-import type { PresenceState } from '@/features/projects/hooks/useProjectPresence';
+import { useConfirm } from '@/shared/ui/confirm-dialog-context';
+import type { PresenceState } from '@/shared/types/presence';
 
 export type { TaskItemData } from '@/shared/types/tasks';
 import type { TaskItemData } from '@/shared/types/tasks';
@@ -35,6 +35,8 @@ interface TaskItemProps {
  onAddChildTask?: (task: TaskItemData) => void;
  onInviteMember?: (task: TaskItemData) => void;
  onStatusChange?: (id: string, status: string) => void;
+ canUpdateStatus?: boolean;
+ canUpdateStatusForTask?: (task: TaskItemData) => boolean;
  dragHandleProps?: DragHandleProps;
  onToggleExpand?: (task: TaskItemData, expanded: boolean) => void;
  onEdit?: ((task: TaskItemData) => void) | null;
@@ -72,6 +74,8 @@ const TaskItem = ({
  onAddChildTask,
  onInviteMember,
  onStatusChange,
+ canUpdateStatus,
+ canUpdateStatusForTask,
  dragHandleProps = {},
  onToggleExpand,
  onEdit = null,
@@ -90,7 +94,7 @@ const TaskItem = ({
  const confirm = useConfirm();
  const indentWidth = level * 20;
  const isSelected = selectedTaskId === task.id;
- const canHaveChildren = level < 4;
+ const canHaveChildren = level === 0;
 
  // Wave 33: right-aligned due-date badge. The threshold defaults to 3 because
  // TaskItem doesn't receive the root-task settings; the tone is a visual hint,
@@ -137,6 +141,21 @@ const TaskItem = ({
  }
  };
 
+ const handleCardKeyDown = (e: React.KeyboardEvent) => {
+ const target = e.target as HTMLElement;
+ if (
+ target.closest('.expand-button') ||
+ target.closest('select') ||
+ target.closest('button') ||
+ target.closest('input')
+ ) {
+ return;
+ }
+ if (e.key !== 'Enter' && e.key !== ' ') return;
+ e.preventDefault();
+ onTaskClick?.(task);
+ };
+
  const handleToggleExpandClick = (e: React.MouseEvent) => {
  e.stopPropagation();
  if (onToggleExpand) {
@@ -160,6 +179,17 @@ const TaskItem = ({
  };
 
  const isLocked = !!task.is_locked;
+ const canUpdateThisStatus = canUpdateStatusForTask ? canUpdateStatusForTask(task) : canUpdateStatus !== false;
+ const statusDisabled = !onStatusChange || !canUpdateThisStatus;
+ const handleEditAction = useCallback(() => {
+ onEdit?.(task);
+ }, [onEdit, task]);
+ const handleAddChildAction = useCallback(() => {
+ onAddChildTask?.(task);
+ }, [onAddChildTask, task]);
+ const handleInviteAction = useCallback(() => {
+ onInviteMember?.(task);
+ }, [onInviteMember, task]);
 
  // Wave 27: peers currently focused on this task (self-hidden, cap 3).
  // Memoize so DnD reorders / parent re-renders don't re-filter per row.
@@ -185,6 +215,8 @@ const TaskItem = ({
  aria-level={level + 1}
  aria-expanded={canHaveChildren ? isExpanded : undefined}
  aria-selected={isSelected}
+ aria-label={onTaskClick ? t('tasks.open_task_details_aria', { title: task.title ?? '' }) : undefined}
+ tabIndex={!isLocked && onTaskClick ? 0 : undefined}
  className={cn(
  'relative flex flex-col min-w-0 py-4 px-5 mb-3 rounded-xl border transition-all duration-200 shadow-sm',
  'bg-card text-card-foreground',
@@ -198,6 +230,7 @@ const TaskItem = ({
  )}
  style={{ marginLeft: `${indentWidth}px` }}
  onClick={!isLocked ? handleCardClick : undefined}
+ onKeyDown={!isLocked ? handleCardKeyDown : undefined}
  data-testid={`task-row-${task.id}`}
  >
  {focusPeers.length > 0 && (
@@ -357,14 +390,15 @@ const TaskItem = ({
  taskId={task.id}
  taskTitle={task.title}
  onStatusChange={handleStatusChange}
+ disabled={statusDisabled}
  />
  )}
 
  <TaskControlButtons
  task={task}
- onEdit={() => onEdit?.(task)}
- onAddChild={() => onAddChildTask?.(task)}
- onInvite={() => onInviteMember?.(task)}
+ onEdit={onEdit ? handleEditAction : undefined}
+ onAddChild={onAddChildTask ? handleAddChildAction : undefined}
+ onInvite={onInviteMember ? handleInviteAction : undefined}
  onDelete={onDeleteTask || undefined}
  canHaveChildren={canHaveChildren}
  />
@@ -418,9 +452,12 @@ const TaskItem = ({
  onAddChildTask={onAddChildTask}
  onInviteMember={onInviteMember}
  onStatusChange={onStatusChange}
+ canUpdateStatus={canUpdateStatus}
+ canUpdateStatusForTask={canUpdateStatusForTask}
  onToggleExpand={onToggleExpand}
  onEdit={onEdit}
  onDeleteTask={onDeleteTask ? () => onDeleteTask(child.id) : undefined}
+ disableDrag={disableDrag}
  isAddingInline={child.isAddingInline}
  onInlineCommit={onInlineCommit}
  onInlineCancel={onInlineCancel}

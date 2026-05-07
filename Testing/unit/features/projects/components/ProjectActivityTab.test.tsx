@@ -7,7 +7,7 @@ import type { ActivityLogWithActor } from '@/shared/db/app.types';
 const mockUseProjectActivity = vi.fn();
 const mockListByProject = vi.fn();
 
-vi.mock('@/features/projects/hooks/useProjectActivity', () => ({
+vi.mock('@/shared/hooks/useActivityLog', () => ({
     useProjectActivity: (...args: unknown[]) => mockUseProjectActivity(...args),
     useTaskActivity: () => ({ data: [], isLoading: false }),
 }));

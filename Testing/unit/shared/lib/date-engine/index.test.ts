@@ -299,8 +299,8 @@ describe('calculateScheduleFromOffset', () => {
 
   it('calculates dates from offset using root start date', () => {
     const result = calculateScheduleFromOffset(tasks, 'phase', 10);
-    expect(result.start_date).toBe('2026-01-11');
-    expect(result.due_date).toBe('2026-01-11');
+    expect(result.start_date).toBe('2026-01-15');
+    expect(result.due_date).toBe('2026-01-15');
   });
 
   it('returns empty for null parentId', () => {
@@ -327,13 +327,48 @@ describe('calculateScheduleFromOffset', () => {
       'ms',
       30,
     );
-    expect(result.start_date).toBe('2026-01-31');
+    expect(result.start_date).toBe('2026-02-13');
   });
 
   it('returns project start date when offset is 0', () => {
     const result = calculateScheduleFromOffset(tasks, 'phase', 0);
     expect(result.start_date).toBe('2026-01-01');
     expect(result.due_date).toBe('2026-01-01');
+  });
+
+  it('skips weekends when date-kind offsets cross weekends', () => {
+    const weekendTasks: DateEngineTask[] = [
+      { ...projectRoot, start_date: '2026-01-02' },
+      { ...phase, start_date: '2026-01-02' },
+    ];
+
+    const result = calculateScheduleFromOffset(weekendTasks, 'phase', 1);
+
+    expect(result.start_date).toBe('2026-01-05');
+    expect(result.due_date).toBe('2026-01-05');
+  });
+
+  it('skips observed US federal holidays for date-kind offsets', () => {
+    const holidayTasks: DateEngineTask[] = [
+      { ...projectRoot, start_date: '2026-07-02' },
+      { ...phase, start_date: '2026-07-02' },
+    ];
+
+    const result = calculateScheduleFromOffset(holidayTasks, 'phase', 1);
+
+    expect(result.start_date).toBe('2026-07-06');
+    expect(result.due_date).toBe('2026-07-06');
+  });
+
+  it('normalizes full ISO root dates through UTC date-only scheduling', () => {
+    const isoTasks: DateEngineTask[] = [
+      { ...projectRoot, start_date: '2026-03-08T23:30:00-08:00' },
+      { ...phase, start_date: '2026-03-08T23:30:00-08:00' },
+    ];
+
+    const result = calculateScheduleFromOffset(isoTasks, 'phase', 0);
+
+    expect(result.start_date).toBe('2026-03-09');
   });
 });
 
@@ -380,23 +415,74 @@ describe('recalculateProjectDates', () => {
   });
 
   const tasks: DateEngineTask[] = [
-    { id: 't1', start_date: '2026-01-10', due_date: '2026-01-20', is_complete: false },
-    { id: 't2', start_date: '2026-02-01', due_date: '2026-02-15', is_complete: false },
+    { id: 'root', parent_task_id: null, start_date: '2026-01-01', due_date: '2026-01-01', is_complete: false },
+    { id: 't1', parent_task_id: 'root', start_date: '2026-01-10', due_date: '2026-01-20', is_complete: false },
+    { id: 't2', parent_task_id: 'root', start_date: '2026-02-01', due_date: '2026-02-15', is_complete: false },
   ];
 
   it('shifts dates forward', () => {
     const updates = recalculateProjectDates(tasks, '2026-01-06', '2026-01-01');
     expect(updates).toHaveLength(2);
     expect(updates[0].id).toBe('t1');
-    // Shifted 5 days forward
-    expect(toIsoDate(updates[0].start_date)).toBe('2026-01-15');
+    // Shifted 3 business days forward: Jan 1 is New Year's Day and Jan 3/4 are a weekend.
+    expect(updates[0].start_date).toBe('2026-01-14');
+    expect(updates[0].due_date).toBe('2026-01-23');
   });
 
   it('shifts dates backward', () => {
     const updates = recalculateProjectDates(tasks, '2025-12-29', '2026-01-01');
     expect(updates).toHaveLength(2);
     // Shifted 3 days backward
-    expect(toIsoDate(updates[0].start_date)).toBe('2026-01-07');
+    expect(updates[0].start_date).toBe('2026-01-07');
+  });
+
+  it('skips weekends for date-kind project shifts', () => {
+    const weekendTasks: DateEngineTask[] = [
+      { id: 'root', parent_task_id: null, start_date: '2026-01-02', due_date: '2026-01-02', is_complete: false },
+      { id: 't1', parent_task_id: 'root', start_date: '2026-01-02', due_date: '2026-01-02', is_complete: false },
+    ];
+
+    const updates = recalculateProjectDates(weekendTasks, '2026-01-05', '2026-01-02');
+
+    expect(updates[0].start_date).toBe('2026-01-05');
+    expect(updates[0].due_date).toBe('2026-01-05');
+  });
+
+  it('skips observed holidays for date-kind project shifts', () => {
+    const holidayTasks: DateEngineTask[] = [
+      { id: 'root', parent_task_id: null, start_date: '2026-07-02', due_date: '2026-07-02', is_complete: false },
+      { id: 't1', parent_task_id: 'root', start_date: '2026-07-02', due_date: '2026-07-02', is_complete: false },
+    ];
+
+    const updates = recalculateProjectDates(holidayTasks, '2026-07-06', '2026-07-02');
+
+    expect(updates[0].start_date).toBe('2026-07-06');
+    expect(updates[0].due_date).toBe('2026-07-06');
+  });
+
+  it('keeps UTC date-only shifts stable across DST boundaries', () => {
+    const dstTasks: DateEngineTask[] = [
+      { id: 'root', parent_task_id: null, start_date: '2026-03-06', due_date: '2026-03-06', is_complete: false },
+      { id: 't1', parent_task_id: 'root', start_date: '2026-03-08', due_date: '2026-03-08', is_complete: false },
+    ];
+
+    const updates = recalculateProjectDates(dstTasks, '2026-03-09', '2026-03-06');
+
+    expect(updates[0].start_date).toBe('2026-03-09');
+    expect(updates[0].due_date).toBe('2026-03-09');
+  });
+
+  it('does not include the project root in batch shifts when the new start is skipped', () => {
+    const rootAndChild: DateEngineTask[] = [
+      { id: 'root', parent_task_id: null, start_date: '2026-01-01', due_date: '2026-01-01', is_complete: false },
+      { id: 'child', parent_task_id: 'root', start_date: '2026-01-10', due_date: '2026-01-10', is_complete: false },
+    ];
+
+    const updates = recalculateProjectDates(rootAndChild, '2026-01-03', '2026-01-01');
+
+    expect(updates.map((u) => u.id)).toEqual(['child']);
+    expect(updates[0].start_date).toBe('2026-01-12');
+    expect(updates[0].due_date).toBe('2026-01-12');
   });
 
   it('skips completed tasks', () => {
