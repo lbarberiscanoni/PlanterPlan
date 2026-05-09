@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { NAMESPACES } from '@/shared/i18n';
 import en from '@/shared/i18n/locales/en.json';
 
 type JsonValue = string | number | boolean | null | JsonObject | JsonValue[];
@@ -6,28 +7,9 @@ interface JsonObject {
   [key: string]: JsonValue;
 }
 
-const REQUIRED_NAMESPACES = [
-  'common',
-  'nav',
-  'onboarding',
-  'auth',
-  'tasks',
-  'activity',
-  'projects',
-  'library',
-  'settings',
-  'notifications',
-  'errors',
-  'ics',
-  'gantt',
-  'admin',
-] as const;
-
 describe('en.json', () => {
-  it('has every required namespace', () => {
-    for (const ns of REQUIRED_NAMESPACES) {
-      expect(en).toHaveProperty(ns);
-    }
+  it('matches the runtime namespace catalog', () => {
+    expect(Object.keys(en).sort()).toEqual([...NAMESPACES].sort());
   });
 
   it('no empty string values', () => {

@@ -133,6 +133,57 @@ describe('tasksToGanttRows (Wave 28)', () => {
         expect(on.rows.map((r) => r.id)).toEqual(['ph1', 'm1', 't1']);
     });
 
+    it('maps a 500+ row hierarchy with leaf-task rendering enabled', () => {
+        const root = makeTask({ id: 'large-project', parent_task_id: null, task_type: 'project' });
+        const phases = Array.from({ length: 12 }, (_, phaseIndex) =>
+            makeTask({
+                id: `large-phase-${phaseIndex}`,
+                parent_task_id: root.id,
+                task_type: 'phase',
+                title: `Phase ${phaseIndex}`,
+                start_date: '2026-01-01',
+                due_date: '2026-12-31',
+                position: phaseIndex,
+            }),
+        );
+        const milestones = phases.flatMap((phase, phaseIndex) =>
+            Array.from({ length: 10 }, (_, milestoneIndex) =>
+                makeTask({
+                    id: `large-milestone-${phaseIndex}-${milestoneIndex}`,
+                    parent_task_id: phase.id,
+                    task_type: 'milestone',
+                    title: `Milestone ${phaseIndex}.${milestoneIndex}`,
+                    start_date: '2026-02-01',
+                    due_date: '2026-11-30',
+                    position: milestoneIndex,
+                }),
+            ),
+        );
+        const leafTasks = milestones.flatMap((milestone, milestoneIndex) =>
+            Array.from({ length: 4 }, (_, taskIndex) =>
+                makeTask({
+                    id: `large-task-${milestoneIndex}-${taskIndex}`,
+                    parent_task_id: milestone.id,
+                    task_type: 'task',
+                    title: `Task ${milestoneIndex}.${taskIndex}`,
+                    start_date: '2026-03-01',
+                    due_date: '2026-03-15',
+                    position: taskIndex,
+                }),
+            ),
+        );
+
+        const result = tasksToGanttRows(
+            [root, ...phases, ...milestones, ...leafTasks],
+            { includeLeafTasks: true },
+        );
+
+        expect(result.skippedCount).toBe(0);
+        expect(result.rows).toHaveLength(612);
+        expect(result.rows[0].id).toBe('large-phase-0');
+        expect(result.rows.at(-1)?.id).toBe('large-task-119-3');
+    });
+
     it('always excludes subtasks', () => {
         const tasks: HierarchyTask[] = [
             makeTask({ id: 'p1', parent_task_id: null, task_type: 'project' }),

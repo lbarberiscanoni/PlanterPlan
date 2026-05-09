@@ -28,15 +28,21 @@ function safePath(value, fallback = '/') {
   }
 }
 
+function safePayloadText(data) {
+  try {
+    return data.text();
+  } catch {
+    return '';
+  }
+}
+
 function parsePushPayload(data) {
   let payload;
   try {
     payload = data.json();
-  } catch {
-    payload = { body: data.text() };
-  }
+  } catch {}
   if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
-    payload = { body: data.text() };
+    payload = { body: safePayloadText(data) };
   }
   return {
     title: safeText(payload.title, 'PlanterPlan'),

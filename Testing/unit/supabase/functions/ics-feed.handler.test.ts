@@ -179,6 +179,7 @@ describe('handleIcsFeedRequest', () => {
         expect(response.headers.get('Content-Type')).toBe('text/calendar; charset=utf-8');
         expect(body).toContain('UID:task-owner-task@planterplan');
         expect(body).not.toContain('UID:task-other-task@planterplan');
+        expect(body).toContain('DTSTAMP:20260422T120000Z');
         expect(db.tokens[0].last_accessed_at).toBe(NOW.toISOString());
     });
 
@@ -196,6 +197,41 @@ describe('handleIcsFeedRequest', () => {
 
         expect(response.status).toBe(404);
         expect(db.tokens[0].last_accessed_at).toBeNull();
+    });
+
+    it('returns 404 for unknown tokens without stamping any token row', async () => {
+        const db: FakeDb = {
+            tokens: [token({})],
+            memberships: [{ user_id: 'user-1', project_id: 'project-a' }],
+            tasks: [task({ id: 'owner-task' })],
+        };
+
+        const response = await handleIcsFeedRequest(requestFor('unknown-token-000000000000000000000000000000'), {
+            supabase: makeSupabase(db),
+            now: NOW,
+        });
+
+        expect(response.status).toBe(404);
+        expect(db.tokens[0].last_accessed_at).toBeNull();
+    });
+
+    it('does not echo the feed token into the rendered calendar body', async () => {
+        const db: FakeDb = {
+            tokens: [token({})],
+            memberships: [{ user_id: 'user-1', project_id: 'project-a' }],
+            tasks: [task({ id: 'owner-task' })],
+        };
+
+        const response = await handleIcsFeedRequest(requestFor(db.tokens[0].token), {
+            supabase: makeSupabase(db),
+            now: NOW,
+        });
+        const body = await response.text();
+
+        expect(response.status).toBe(200);
+        expect(body).not.toContain(db.tokens[0].token);
+        expect(body).not.toContain('token=');
+        expect(body).not.toContain('X-WR-SOURCE');
     });
 
     it('treats a rotated old token as revoked while the replacement token works', async () => {

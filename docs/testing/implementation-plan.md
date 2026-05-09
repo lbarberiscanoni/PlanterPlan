@@ -1,6 +1,11 @@
 # Testing Gap Analysis — Implementation Plan
 
 > **Note (Phase 6 — File Reorganization):** All test files have been moved from `src/` to `Testing/`. Unit tests are under `Testing/unit/` (mirroring the `src/` structure), test utilities are in `Testing/test-utils/`, setup is at `Testing/setupTests.ts`, and E2E tests are in `Testing/e2e/`. The `@test` alias resolves to `Testing/test-utils/`. File paths in the original plan below reflect the pre-move locations.
+> **Current status (2026-05-09):** This is a historical implementation plan,
+> not an open task list. Many planned files now exist under `Testing/`, CI runs
+> `npm test`, pgTAP, build, and the `@release` Playwright smoke suite, and the
+> dashboard/pipeline-board items below were superseded by the `/dashboard` to
+> `/tasks` redirect.
 
 ## Context
 
@@ -375,7 +380,11 @@ Testing/e2e/steps/library.steps.ts                            (Phase 3d)
 4. **After Phase 3**: `npm run test:e2e` → new E2E scenarios pass against running dev server
 5. **After Phase 4**: `npm test` → all ~176 tests pass
 6. **Coverage check**: `npx vitest --coverage` → shared/lib/ at 90%+, hooks at 70%+
-7. **CI**: Ensure `npm test` is added to CI pipeline (currently `npm run build` is the gate)
+7. **CI**: Current CI runs `npm ci`, dependency guardrails, architecture
+   verification, lint, `npm test`, `npm run db:local:test`, `npm run build`,
+   and `npm run test:e2e:release`.
 
 ### Execution order recommendation:
-Start with Phase 0 + Phase 1 (infrastructure + pure logic) as a single PR — this gives maximum safety net with minimum complexity. Phase 2-4 can follow as separate PRs.
+Historical only. New release-hardening coverage should start from
+`docs/testing/gap-findings.md` current status and the active release plan, not
+from the original Phase 0-4 sequence above.

@@ -82,7 +82,7 @@ describe('planter.integrations.ics (Wave 35)', () => {
         const insertArg = (chain.insert as ReturnType<typeof vi.fn>).mock.calls[0][0] as Record<string, unknown>;
         expect(insertArg.user_id).toBe('user-1');
         expect(typeof insertArg.token).toBe('string');
-        expect((insertArg.token as string).length).toBeGreaterThanOrEqual(32);
+        expect(insertArg.token).toMatch(/^[0-9a-f]{64}$/);
         expect(row.id).toBe('new-id');
     });
 

@@ -40,9 +40,11 @@ Generate VAPID keys once: `npx web-push generate-vapid-keys`. Put the public
 key in `.env.example` (shipped to the bundle as `VITE_VAPID_PUBLIC_KEY`);
 the private key is a Supabase secret only.
 
-When any VAPID env is missing the function short-circuits to log-only (writes
-`error = 'vapid_unconfigured'` to `notification_log` so the operator can spot
-the misconfiguration at a glance).
+When any VAPID env is missing the function short-circuits before transport and
+returns `{ success: false, error: 'vapid_unconfigured' }` to its service-role
+caller. The caller (`dispatch-notifications` / `overdue-digest`) owns the
+terminal `notification_log` row so one misconfigured fan-out cannot create
+duplicate per-user transport logs.
 
 ## Scheduling
 
@@ -61,7 +63,7 @@ Not scheduled. Invoked by other edge functions only. Schedule the callers
 supabase functions serve dispatch-push --env-file ./supabase/.env.local
 
 curl -X POST http://127.0.0.1:54321/functions/v1/dispatch-push \
-  -H "Authorization: Bearer $SUPABASE_ANON_KEY" \
+  -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
   -H "Content-Type: application/json" \
   -d '{ "user_ids": ["<uid>"], "title": "Hello", "body": "World", "event_type": "mentions" }'
 ```

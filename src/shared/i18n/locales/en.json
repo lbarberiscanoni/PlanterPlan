@@ -154,6 +154,15 @@
     "invite_member_aria": "Invite member to {{title}}",
     "delete_task": "Delete Task",
     "delete_task_aria": "Delete {{title}}",
+    "move_task": "Move Task",
+    "move_task_aria": "Move {{title}}",
+    "move_dialog": {
+      "title": "Move {{title}}",
+      "description": "Choose a valid parent destination without using drag and drop.",
+      "target_label": "Move under",
+      "no_targets": "No valid destinations are available for this task.",
+      "submit": "Move task"
+    },
     "reorder_task": "Reorder task",
     "open_task_details_aria": "Open details for {{title}}",
     "status_for_aria": "Status for {{title}}",
@@ -173,6 +182,12 @@
     "sort_chronological": "Chronological",
     "sort_alphabetical": "Alphabetical",
     "no_tasks": "No tasks yet",
+    "first_run": {
+      "title": "Start your first project",
+      "description": "Create a blank project or use the Launch Large template to add your first project workspace.",
+      "blank_cta": "Start blank project",
+      "template_cta": "Use Launch Large template"
+    },
     "panel": {
       "edit_named_task": "Edit {{title}}",
       "edit_task": "Edit Task",
@@ -183,6 +198,7 @@
       "new_item_in_parent": "New {{item}} in {{title}}",
       "new_item": "New {{item}}",
       "details": "Details",
+      "description": "View task details, status, dates, resources, and available actions.",
       "close_panel": "Close panel",
       "add_phase": "Add Phase",
       "add_task": "Add Task"
@@ -612,7 +628,41 @@
     "resources": {
       "title": "Resources",
       "empty": "No resources yet",
-      "search_placeholder": "Search resources…"
+      "search_placeholder": "Search resources…",
+      "add_button": "Add Resource",
+      "add_modal_title": "Add Resource",
+      "add_modal_description": "Attach a link, note, or document reference to this task.",
+      "resource_type_label": "Resource Type",
+      "url_label": "URL",
+      "content_label": "Content",
+      "storage_path_label": "Storage Path",
+      "url_placeholder": "https://example.com",
+      "content_placeholder": "Enter your note…",
+      "storage_path_placeholder": "path/to/document.pdf",
+      "unknown_task": "Unknown task",
+      "from_task": "From: {{title}}",
+      "empty_project_title": "No resources in this project yet",
+      "empty_search_title": "No resources match your search",
+      "empty_project_description": "Add links, documents, or notes to tasks to see them here.",
+      "empty_search_description": "Try adjusting your search or filter.",
+      "count_total_one": "{{formattedCount}} resource total",
+      "count_total_other": "{{formattedCount}} resources total",
+      "count_matching_one": "{{formattedCount}} resource matching",
+      "count_matching_other": "{{formattedCount}} resources matching",
+      "set_primary_aria": "Set {{type}} as primary resource",
+      "unset_primary_aria": "Unset {{type}} as primary resource",
+      "delete_aria": "Delete {{type}} resource",
+      "types": {
+        "url": "External Link",
+        "pdf": "Document",
+        "text": "Note"
+      },
+      "filters": {
+        "all": "All",
+        "url": "Links",
+        "pdf": "Documents",
+        "text": "Notes"
+      }
     },
     "activity": {
       "title": "Activity"
@@ -667,6 +717,7 @@
     "tab_notifications": "Notifications",
     "tab_integrations": "Integrations",
     "tab_security": "Security",
+    "tabs_aria": "Settings sections",
     "profile": {
       "personal_info": "Personal Info",
       "personal_info_description": "Update your photo and personal details.",
@@ -765,7 +816,12 @@
     "login_failed": "Login failed",
     "user_must_be_logged_in": "User must be logged in",
     "project_not_found_or_no_access": "This project doesn't exist, or you no longer have access to it.",
-    "back_to_tasks": "Back to tasks"
+    "back_to_tasks": "Back to tasks",
+    "boot_config_title": "App configuration is incomplete",
+    "boot_config_description": "PlanterPlan could not start because required public environment variables are missing.",
+    "boot_config_missing_label": "Missing variables",
+    "boot_config_help": "Set these in your local .env.local file or Vercel project settings, then rebuild or reload the app.",
+    "boot_config_no_values": "Only variable names are shown here; secret or token values are never displayed."
   },
   "ics": {
     "card_title": "Calendar feeds (ICS)",
@@ -901,11 +957,22 @@
     "users_reset_password_button": "Send password reset",
     "users_reset_password_aria": "Generate a password-reset link for {{name}}",
     "users_reset_password_confirm_title": "Generate a password-reset link?",
-    "users_reset_password_confirm_description": "A one-time recovery link will be generated for {{name}} and copied to your clipboard. Share it out-of-band (Slack, email, in person). The link expires in roughly 24 hours. No email is sent automatically.",
+    "users_reset_password_confirm_description": "A one-time recovery link will be generated for {{name}}. If your clipboard allows it, it will be copied automatically; otherwise use the secure dialog to reveal and copy it. The link expires in roughly 24 hours. No email is sent automatically.",
     "users_reset_password_confirm_button": "Generate link",
     "users_reset_password_copied_toast": "Reset link copied to clipboard. Share with the user.",
-    "users_reset_password_manual_toast": "Reset link generated — clipboard is blocked, copy manually:",
+    "users_reset_password_manual_toast": "Reset link generated. Clipboard is blocked; use the secure dialog to reveal and copy it.",
     "users_reset_password_failed_toast": "Failed to generate reset link",
+    "users_reset_password_ready_title": "Password reset link generated",
+    "users_reset_password_ready_description": "Treat this link like a temporary password for {{name}}. It is hidden until you reveal it.",
+    "users_reset_password_link_label": "Recovery link",
+    "users_reset_password_hidden_link": "Hidden recovery link",
+    "users_reset_password_reveal_button": "Reveal link",
+    "users_reset_password_hide_button": "Hide link",
+    "users_reset_password_copy_button": "Copy link",
+    "users_reset_password_copied_button": "Copied",
+    "users_reset_password_copied_note": "Copied to clipboard.",
+    "users_reset_password_close_button": "Close",
+    "users_reset_password_copy_failed_toast": "Clipboard is blocked. Reveal the link and copy it from the dialog.",
     "untitled": "(untitled)",
     "templates_title": "Templates",
     "templates_subtitle": "All templates across every creator. Filter by published state.",

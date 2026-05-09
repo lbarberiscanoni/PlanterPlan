@@ -62,7 +62,7 @@ Per-project presence channel `presence:project:<id>`, opened once in `src/pages/
 
 ## Gantt Chart (Wave 28)
 
-Standalone route `/gantt?projectId=:id` (registered in `src/app/App.tsx`, lazy-loaded). Reads project hierarchy from the same `useTaskQuery` React Query cache as `TaskList`.
+Standalone route `/gantt?projectId=:id` (registered in `src/app/App.tsx`, lazy-loaded). Reads project hierarchy through `useProjectData(projectId)`.
 
 **Stack**: `gantt-task-react@0.3.9` (pinned, no `^`). Bundle impact ~13 KB gzipped, lazy-loaded.
 
@@ -77,7 +77,9 @@ Standalone route `/gantt?projectId=:id` (registered in `src/app/App.tsx`, lazy-l
 * Bounds check before mutation: child cannot exceed parent's bounds; error toast + no mutation if violated.
 * On error: force-refetch `['projectHierarchy', projectId]` per styleguide §5.
 
-**Out of scope (this wave)**: Print/PDF (button rendered disabled with tooltip — targeted for the Wave 34 admin tooling); critical-path lines; resource swimlanes; mobile-optimized rendering; weekend/holiday awareness (descoped during the post-Wave-31 roadmap renumber — no wave currently assigned).
+**Launch export behavior**: The toolbar renders an enabled "Export PDF" action backed by `window.print()`. The accessible label instructs users to choose "Save as PDF" in the browser print dialog. This is intentionally browser-print export, not server-side PDF generation or a document pipeline.
+
+**Out of scope (this wave)**: critical-path lines; resource swimlanes; mobile-optimized rendering; weekend/holiday awareness (descoped during the post-Wave-31 roadmap renumber — no wave currently assigned).
 
 ## Integration Points
 * **Date Engine:** Sources calculations for 'Due Soon' and 'Overdue' task arrays.

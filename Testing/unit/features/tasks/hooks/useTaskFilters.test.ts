@@ -239,6 +239,56 @@ describe('filterAndSortTasks — views', () => {
   expect(result.map((t) => t.id).sort()).toEqual([...ALL_INSTANCE_CHILDREN].sort());
  });
 
+ it("'all_tasks' handles a 500+ row tree without dropping hierarchy rows", () => {
+  const project = makeProject({ id: 'large-project', origin: 'instance' });
+  const phases = Array.from({ length: 10 }, (_, phaseIndex) =>
+   makeTask({
+    id: `large-phase-${phaseIndex}`,
+    parent_task_id: project.id,
+    root_id: project.id,
+    origin: 'instance',
+    task_type: 'phase',
+    position: phaseIndex,
+   }),
+  );
+  const milestones = phases.flatMap((phase, phaseIndex) =>
+   Array.from({ length: 5 }, (_, milestoneIndex) =>
+    makeTask({
+     id: `large-milestone-${phaseIndex}-${milestoneIndex}`,
+     parent_task_id: phase.id,
+     root_id: project.id,
+     origin: 'instance',
+     task_type: 'milestone',
+     position: milestoneIndex,
+    }),
+   ),
+  );
+  const leafTasks = milestones.flatMap((milestone, milestoneIndex) =>
+   Array.from({ length: 10 }, (_, taskIndex) =>
+    makeTask({
+     id: `large-task-${milestoneIndex}-${taskIndex}`,
+     parent_task_id: milestone.id,
+     root_id: project.id,
+     origin: 'instance',
+     task_type: 'task',
+     due_date: `2026-05-${String((taskIndex % 28) + 1).padStart(2, '0')}`,
+     position: taskIndex,
+    }),
+   ),
+  );
+
+  const result = filterAndSortTasks({
+   tasks: [project, ...phases, ...milestones, ...leafTasks],
+   filter: 'all_tasks',
+   sort: 'chronological',
+   now: NOW,
+  });
+
+  expect(result).toHaveLength(560);
+  expect(new Set(result.map((task) => task.id)).size).toBe(560);
+  expect(result).not.toContainEqual(expect.objectContaining({ id: project.id }));
+ });
+
  it("'milestones' returns ONLY rows with task_type='milestone'", () => {
   const tasks = buildFixture();
   const result = filterAndSortTasks({ tasks, filter: 'milestones', sort: 'chronological', now: NOW });

@@ -15,8 +15,8 @@ This domain governs the atomic execution units within a Project. It provides the
 Transitions strictly through: `To Do` -> `In Progress` -> `Complete` -> `Blocked` -> `N/A`.
 
 ### Auto-Completion Automation
-* Toggling a parent to `Complete` forces a confirmation prompt if dependent sub-items exist. Confirmation cascades `Complete` status to all children.
-* Any status toggle instantly recalculates parent Milestone/Project completion percentages.
+* Toggling a parent to `Complete` forces a confirmation prompt if open child/subtask rows exist. Confirmation cascades `Complete` status to all descendants.
+* Any status toggle reconciles parent status up the trusted task hierarchy. Subtask reopens bubble through Task -> Milestone -> Phase so a previously completed phase cannot remain stale.
 * **Completion-flag invariant (Wave 23):** `is_complete === (status === 'completed')` is enforced *unconditionally* at the DB layer by the `sync_task_completion_flags` BEFORE INSERT/UPDATE trigger on `public.tasks` (migration: `docs/db/migrations/2026_04_17_sync_task_completion.sql`). The app-layer cascade/bubble-up logic in `planterClient.updateStatus` still owns multi-row orchestration — it now writes **only** `status` on every server payload and relies on the trigger to derive `is_complete`. Single-field raw SQL writes are reconciled (`UPDATE tasks SET status = 'completed'` flips `is_complete` to `true`, and vice versa). Dual-field writes are *also* reconciled — **`status` is the source of truth**, so `UPDATE tasks SET status = 'completed', is_complete = false` lands as `(status='completed', is_complete=true)`. There is no "both sides trusted" escape hatch; the invariant is the contract. Cross-ref: `docs/dev-notes.md` "Dual completion signals" (resolved Wave 23).
 
 ## Business Rules & Constraints
@@ -28,7 +28,7 @@ Transitions strictly through: `To Do` -> `In Progress` -> `Complete` -> `Blocked
   * Dragging a Task moves all of its nested Subtasks concurrently.
   * Invalid depth/cycle drops are rejected before mutation and surfaced as a recoverable localized toast; the DB trigger remains the trusted enforcement layer for direct API/RPC/database writes.
 * **Kanban Board V2 (Wave 20):** Native column-to-column drag-and-drop is implemented in `src/features/tasks/components/board/` (`ProjectBoardView.tsx`, `BoardColumn.tsx`, `BoardTaskCard.tsx`). Drops between columns change task `status`; depth constraints and cycle detection still apply.
-* **Dependencies:** Tasks mapped as dependencies cannot be closed out of sequence without throwing a warning.
+* **Dependencies:** `task_relationships` currently power relationship display and link management only. There is no trusted dependency-order completion warning or dependency-date auto-adjustment enforcement in the current implementation; see `date-engine.md`.
 * **Deletion Invariants:** Deleting an item triggers a warning and cascades a hard delete to all descendants.
 
 ## Recurrence (Wave 21)

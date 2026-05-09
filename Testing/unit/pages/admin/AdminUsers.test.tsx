@@ -6,6 +6,8 @@ import userEvent from '@testing-library/user-event';
 const useAdminUsers = vi.fn();
 const useAdminUserDetail = vi.fn();
 const suspendUser = vi.fn();
+const generatePasswordResetLink = vi.fn();
+const toastSuccess = vi.fn();
 const toastError = vi.fn();
 
 vi.mock('@/features/admin/hooks/useAdminUsers', () => ({
@@ -19,7 +21,7 @@ vi.mock('@/shared/api/planterClient', () => ({
             setAdminRole: vi.fn(),
             suspendUser: (...args: unknown[]) => suspendUser(...args),
             unsuspendUser: vi.fn(),
-            generatePasswordResetLink: vi.fn(),
+            generatePasswordResetLink: (...args: unknown[]) => generatePasswordResetLink(...args),
         },
     },
 }));
@@ -35,7 +37,7 @@ vi.mock('@/shared/contexts/auth-context', () => ({
 
 vi.mock('sonner', () => ({
     toast: {
-        success: vi.fn(),
+        success: (...args: unknown[]) => toastSuccess(...args),
         error: (...args: unknown[]) => toastError(...args),
     },
 }));
@@ -56,6 +58,11 @@ function renderAdminUsers() {
 describe('AdminUsers moderation actions', () => {
     beforeEach(() => {
         vi.clearAllMocks();
+        generatePasswordResetLink.mockResolvedValue('https://auth.example/reset-token');
+        Object.defineProperty(navigator, 'clipboard', {
+            configurable: true,
+            value: { writeText: vi.fn().mockResolvedValue(undefined) },
+        });
         useAdminUsers.mockReturnValue({
             data: [{
                 id: 'target-user',
@@ -93,6 +100,7 @@ describe('AdminUsers moderation actions', () => {
         suspendUser.mockRejectedValue(new Error('unauthorized: admin role required'));
         const user = userEvent.setup();
         renderAdminUsers();
+        expect(screen.getByTestId('admin-users')).toHaveClass('p-4', 'sm:p-6', 'lg:p-8');
 
         await user.click(screen.getByTestId('admin-users-toggle-suspension'));
         const dialog = await screen.findByRole('alertdialog', { name: 'Suspend this user?' });
@@ -104,5 +112,42 @@ describe('AdminUsers moderation actions', () => {
         expect(toastError).toHaveBeenCalledWith('Failed to change suspension state', {
             description: 'unauthorized: admin role required',
         });
+    });
+
+    it('keeps generated reset links out of toast fallback copy', async () => {
+        const user = userEvent.setup();
+        const writeText = vi.fn().mockRejectedValue(new Error('clipboard blocked'));
+        Object.defineProperty(navigator, 'clipboard', {
+            configurable: true,
+            value: { writeText },
+        });
+        renderAdminUsers();
+        expect(screen.getByTestId('admin-users-detail')).toHaveClass('w-full', 'xl:w-80');
+
+        await user.click(screen.getByTestId('admin-users-reset-password'));
+        const confirmDialog = await screen.findByRole('dialog', {
+            name: 'Generate a password-reset link?',
+        });
+        await user.click(within(confirmDialog).getByRole('button', { name: 'Generate link' }));
+
+        await waitFor(() => {
+            expect(generatePasswordResetLink).toHaveBeenCalledWith('target-user');
+        });
+        await screen.findByTestId('admin-users-reset-link-dialog');
+
+        expect(toastSuccess).toHaveBeenCalledWith(
+            'Reset link generated. Clipboard is blocked; use the secure dialog to reveal and copy it.',
+        );
+        expect(JSON.stringify(toastSuccess.mock.calls)).not.toContain('reset-token');
+
+        const resetDialog = screen.getByTestId('admin-users-reset-link-dialog');
+        expect(resetDialog).not.toHaveTextContent('reset-token');
+        expect(screen.getByTestId('admin-users-reset-link-value')).toHaveTextContent('https://auth.example/...');
+
+        await user.click(within(resetDialog).getByRole('button', { name: 'Reveal link' }));
+
+        expect(screen.getByTestId('admin-users-reset-link-value')).toHaveTextContent(
+            'https://auth.example/reset-token',
+        );
     });
 });

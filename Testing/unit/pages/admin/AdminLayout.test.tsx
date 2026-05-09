@@ -60,10 +60,13 @@ describe('AdminLayout auth gate (Wave 34)', () => {
         authState.user = { id: 'admin-1', role: 'admin' };
         authState.loading = false;
         renderAt();
-        expect(await screen.findByTestId('admin-layout')).toBeInTheDocument();
+        const layout = await screen.findByTestId('admin-layout');
+        expect(layout).toHaveClass('flex-col', 'lg:flex-row');
         expect(screen.getByTestId('admin-nav-home')).toBeInTheDocument();
         expect(screen.getByTestId('admin-nav-users')).toBeInTheDocument();
         expect(screen.getByTestId('admin-nav-analytics')).toBeInTheDocument();
+        expect(screen.getByTestId('admin-nav-home').closest('nav')).toHaveClass('overflow-x-auto', 'lg:flex-col');
+        expect(screen.getByTestId('admin-main')).toHaveClass('min-w-0');
         expect(screen.getByTestId('admin-home-stub')).toBeInTheDocument();
     });
 

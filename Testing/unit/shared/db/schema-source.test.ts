@@ -32,6 +32,8 @@ describe('docs/db/schema.sql source of truth', () => {
   'CREATE OR REPLACE TRIGGER "trg_enforce_template_scaffold_immutability"',
    'CREATE OR REPLACE FUNCTION "public"."enforce_coach_task_update_scope"',
    'CREATE OR REPLACE TRIGGER "trg_enforce_coach_task_update_scope"',
+   'CREATE OR REPLACE FUNCTION "public"."enforce_phase_lead_task_update_scope"',
+   'CREATE OR REPLACE TRIGGER "trg_enforce_phase_lead_task_update_scope"',
    'CREATE OR REPLACE FUNCTION "public"."enforce_task_hierarchy_depth"',
    'CREATE OR REPLACE TRIGGER "trg_enforce_task_hierarchy_depth"',
    'CREATE OR REPLACE FUNCTION "public"."enforce_task_date_envelope"',
@@ -128,7 +130,24 @@ describe('docs/db/schema.sql source of truth', () => {
   expect(sql).toContain('OLD.assignee_id IS DISTINCT FROM NEW.assignee_id');
   expect(sql).toContain("COALESCE(NEW.status, '') NOT IN");
   expect(schema).toContain('WITH CHECK (("public"."has_project_role"(COALESCE("root_id", "id"), ( SELECT "auth"."uid"() AS "uid"), ARRAY[\'coach\'::"text"])');
-  expect(schema).toContain('COMMENT ON POLICY "Enable update for coaches on coaching tasks"');
+ expect(schema).toContain('COMMENT ON POLICY "Enable update for coaches on coaching tasks"');
+ });
+
+ it('keeps task role matrix admin and phase-lead rules enforced below the UI', () => {
+  const sql = functionSql('enforce_phase_lead_task_update_scope');
+
+  expect(sql).toContain("public.has_project_role(v_project_id, v_actor_id, ARRAY['viewer', 'limited'])");
+  expect(sql).toContain('public.user_is_phase_lead(OLD.id, v_actor_id)');
+  expect(sql).toContain('phase lead role may update only task content, schedule, and progress fields');
+  expect(sql).toContain('OLD.settings IS DISTINCT FROM NEW.settings');
+  expect(sql).toContain('OLD.assignee_id IS DISTINCT FROM NEW.assignee_id');
+  expect(sql).toContain('OLD.parent_task_id IS DISTINCT FROM NEW.parent_task_id');
+  expect(schema).toContain('CREATE POLICY "Enable update for phase leads"');
+  expect(schema).toContain('ARRAY[\'viewer\'::"text", \'limited\'::"text"]');
+  expect(schema).toContain('CREATE POLICY "Enable update for users" ON "public"."tasks" FOR UPDATE USING (((("creator" = ( SELECT "auth"."uid"() AS "uid"))');
+  expect(schema).toContain('OR "public"."is_admin"(( SELECT "auth"."uid"() AS "uid"))) AND (("origin" IS DISTINCT FROM \'template\'::"text")');
+  expect(schema).toContain('CREATE POLICY "Enable delete for users" ON "public"."tasks" FOR DELETE USING ((("creator" = ( SELECT "auth"."uid"() AS "uid"))');
+  expect(schema).toContain('CREATE POLICY "Allow subtask creation by members" ON "public"."tasks" FOR INSERT TO "authenticated"');
  });
 
  it('keeps task hierarchy depth enforced below the UI', () => {
@@ -265,6 +284,12 @@ describe('docs/db/schema.sql source of truth', () => {
   expect(completionSql).toContain('NEW.is_complete := false;');
   expect(completionSql).not.toContain('v_complete_changed');
   expect(completionSql).not.toContain('NEW.status := CASE');
+  expect(schema).toContain(
+   'CREATE OR REPLACE TRIGGER "trigger_phase_unlock" AFTER UPDATE OF "status", "is_complete" ON "public"."tasks"',
+  );
+  expect(schema).not.toContain(
+   'CREATE OR REPLACE TRIGGER "trigger_phase_unlock" AFTER UPDATE OF "is_complete" ON "public"."tasks"',
+  );
  });
 
  it('keeps account lifecycle user references anonymizing instead of restricting auth deletion', () => {
@@ -278,8 +303,26 @@ describe('docs/db/schema.sql source of truth', () => {
   expect(schema).toContain(
    'ADD CONSTRAINT "tasks_creator_fkey" FOREIGN KEY ("creator") REFERENCES "auth"."users"("id") ON DELETE SET NULL;',
   );
+  expect(schema).toContain(
+   'ADD CONSTRAINT "activity_log_actor_id_fkey" FOREIGN KEY ("actor_id") REFERENCES "auth"."users"("id") ON DELETE SET NULL;',
+  );
+  [
+   'admin_users_user_id_fkey',
+   'ics_feed_tokens_user_id_fkey',
+   'notification_log_user_id_fkey',
+   'notification_preferences_user_id_fkey',
+   'project_members_user_id_fkey',
+   'push_subscriptions_user_id_fkey',
+  ].forEach((constraintName) => {
+   expect(schema).toContain(
+    `ADD CONSTRAINT "${constraintName}" FOREIGN KEY ("user_id") REFERENCES "auth"."users"("id") ON DELETE CASCADE;`,
+   );
+  });
   expect(schema).not.toContain(
    'ADD CONSTRAINT "task_comments_author_id_fkey" FOREIGN KEY ("author_id") REFERENCES "auth"."users"("id") ON DELETE RESTRICT;',
+  );
+  expect(schema).not.toContain(
+   'ADD CONSTRAINT "tasks_creator_fkey" FOREIGN KEY ("creator") REFERENCES "auth"."users"("id") ON DELETE RESTRICT;',
   );
  });
 

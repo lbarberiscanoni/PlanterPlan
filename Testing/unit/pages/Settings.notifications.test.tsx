@@ -88,7 +88,7 @@ describe('Settings — Notifications tab (Wave 30)', () => {
 
     it('clicking the Notifications nav shows the tab body', async () => {
         renderSettings();
-        fireEvent.click(screen.getByRole('button', { name: /notifications/i }));
+        fireEvent.click(screen.getByRole('tab', { name: /notifications/i }));
         await waitFor(() => {
             expect(screen.getByTestId('settings-notifications')).toBeInTheDocument();
         });
@@ -97,16 +97,24 @@ describe('Settings — Notifications tab (Wave 30)', () => {
     it('does not label live settings tabs as coming soon', () => {
         renderSettings();
 
-        expect(screen.getByRole('button', { name: /notifications/i })).toBeEnabled();
-        expect(screen.getByRole('button', { name: /integrations/i })).toBeEnabled();
-        expect(screen.getByRole('button', { name: /security/i })).toBeEnabled();
+        expect(screen.getByRole('tab', { name: /notifications/i })).toBeEnabled();
+        expect(screen.getByRole('tab', { name: /integrations/i })).toBeEnabled();
+        expect(screen.getByRole('tab', { name: /security/i })).toBeEnabled();
         expect(screen.queryByText(/coming soon/i)).not.toBeInTheDocument();
         expect(screen.queryByText(/^soon$/i)).not.toBeInTheDocument();
     });
 
+    it('exposes the settings navigation with tab semantics', () => {
+        renderSettings();
+
+        expect(screen.getByRole('tablist', { name: /settings sections/i })).toBeInTheDocument();
+        expect(screen.getByRole('tab', { name: /profile/i })).toHaveAttribute('aria-selected', 'true');
+        expect(screen.getByRole('tabpanel')).toHaveAccessibleName(/profile/i);
+    });
+
     it('mutates when the user flips the Email Mentions switch', async () => {
         renderSettings();
-        fireEvent.click(screen.getByRole('button', { name: /notifications/i }));
+        fireEvent.click(screen.getByRole('tab', { name: /notifications/i }));
         // Email/Push both label a row 'Mentions'; target by element id.
         await screen.findByTestId('settings-notifications');
         const emailMentions = document.getElementById('email-mentions') as HTMLButtonElement;
@@ -119,7 +127,7 @@ describe('Settings — Notifications tab (Wave 30)', () => {
 
     it('push toggles are disabled until browser push is enabled', async () => {
         renderSettings();
-        fireEvent.click(screen.getByRole('button', { name: /notifications/i }));
+        fireEvent.click(screen.getByRole('tab', { name: /notifications/i }));
         await screen.findByTestId('settings-notifications');
         const pushSwitch = document.getElementById('push-mentions') as HTMLButtonElement;
         const emailSwitch = document.getElementById('email-mentions') as HTMLButtonElement;
@@ -130,7 +138,7 @@ describe('Settings — Notifications tab (Wave 30)', () => {
 
     it('disables the Enable browser push button when the browser lacks support', async () => {
         renderSettings();
-        fireEvent.click(screen.getByRole('button', { name: /notifications/i }));
+        fireEvent.click(screen.getByRole('tab', { name: /notifications/i }));
         const btn = await screen.findByTestId('enable-browser-push');
         expect(btn).toBeDisabled();
         expect(btn).toHaveAttribute('title', expect.stringMatching(/not supported/i));

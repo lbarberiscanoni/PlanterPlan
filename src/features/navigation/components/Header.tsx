@@ -55,7 +55,14 @@ export default function Header({ onMenuToggle, showMenuButton = false, projectSw
                 <div className="flex items-center justify-between h-16">
                     <div className="flex items-center gap-3">
                         {showMenuButton && (
-                            <Button variant="ghost" size="icon" onClick={onMenuToggle} className="lg:hidden" aria-label={t('nav.menu_aria')}>
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={onMenuToggle}
+                                className="lg:hidden"
+                                aria-label={t('nav.menu_aria')}
+                                data-testid="mobile-menu-button"
+                            >
                                 <Menu className="w-5 h-5" />
                             </Button>
                         )}

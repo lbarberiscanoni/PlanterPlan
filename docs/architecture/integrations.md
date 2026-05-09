@@ -32,6 +32,8 @@ Indexes on `(token)` (public lookup) and `(user_id)` (per-user listing).
 - **Rendering:** pure `renderIcsDocument` in `ics.ts` (no Deno imports, so vitest drives it). RFC 5545 VCALENDAR with one all-day VEVENT per task + VALARM `-PT24H` reminder. RFC escaping + 75-octet line folding implemented in helpers. All-day `DTEND` is an exclusive calendar rendering boundary and therefore uses the edge `calendarDayBusinessCalendar`, not date-project business-day scheduling.
 - **Side effect:** awaited UPDATE on `last_accessed_at`. Deno edge runtimes can cancel unawaited promises after returning a response, so the access audit stamp is intentionally part of the success path; stamp failures are logged but do not fail the feed response.
 - **Response headers:** `Content-Type: text/calendar; charset=utf-8`, `Cache-Control: private, max-age=300`, `Content-Disposition: inline; filename="planterplan.ics"`.
+- **Credential handling:** the token is used for lookup only. The rendered
+  calendar body does not echo the token or full subscribed URL.
 
 Not scheduled / cron-bound — pull-only.
 

@@ -17,6 +17,27 @@ The Auth & RBAC system manages application-level authentication, user account li
 3. **Authenticated:** User receives session token and gains access to the application via `AuthContext`.
 4. **Error Handling:** Standardized generic error messages for invalid credentials to prevent enumeration.
 
+### Account Deletion / Anonymization Semantics
+
+PlanterPlan does not currently expose a self-service account deletion screen or
+an admin hard-delete action in `admin-user-moderation`; platform-level account
+deletion is performed through Supabase Auth administration. The database FK
+surface is still hardened so deleting an `auth.users` row does not corrupt
+project history:
+
+* Historical authored/assigned content is preserved and anonymized with
+  `ON DELETE SET NULL`: `task_comments.author_id`, `tasks.creator`,
+  `tasks.assignee_id`, and `activity_log.actor_id`.
+* Account-private or account-scoped rows disappear with `ON DELETE CASCADE`:
+  `project_members`, `admin_users`, `notification_preferences`,
+  `notification_log`, `push_subscriptions`, and `ics_feed_tokens`.
+* Direct authenticated-user deletion of arbitrary `auth.users` rows remains
+  blocked by database permissions; the lifecycle test verifies that failed
+  non-admin deletes leave the target account intact.
+
+Runtime coverage lives in `supabase/tests/pgtap_account_lifecycle.sql`; the
+schema-source unit test also guards the intended FK actions.
+
 ## Business Rules & Constraints
 * **Project Role Permission Matrix:**
 
@@ -25,7 +46,7 @@ The Auth & RBAC system manages application-level authentication, user account li
 | **View all tasks/hierarchy** | Yes | Yes | Yes | Yes |
 | **Edit task text info/fields**| Yes | Yes | Yes (If Assigned Lead) | No |
 | **Update task status** | Yes | Yes | Yes (If Assigned Lead) | Yes (Coaching Tasks Only)|
-| **Add tasks / subtasks** | Yes | Yes | Yes (If Assigned Lead) | No |
+| **Add tasks / subtasks** | Yes | Yes | No | No |
 | **Delete tasks / subtasks** | Yes | Yes | No | No |
 | **Assign Lead to task** | Yes | No | No | No |
 | **Drag & Drop (Mutate)** | Yes | Yes | No | No |
@@ -92,7 +113,7 @@ A project Owner may designate any `viewer` or `limited`-role member as the **Lea
 
 **UI** (`src/features/tasks/components/TaskFormFields.tsx`): the `<PhaseLeadPicker>` sub-component (multi-select popover) renders only for `membershipRole === 'owner'` on phase/milestone rows. Options come from `useTeam(projectId).teamMembers.filter(m => m.role === 'viewer' || m.role === 'limited')` — owners/editors/admins already have task edit privileges, while coaches are governed by the separate Coaching-task progress scope. Badge in `TaskDetailsView.tsx` lists current leads.
 
-**Permission matrix update**: limited viewers may now edit tasks under any phase/milestone they are designated as Phase Lead for. See the matrix footnote above.
+**Permission matrix update**: limited viewers may now edit existing tasks under any phase/milestone they are designated as Phase Lead for. Phase Lead scope does not grant INSERT, DELETE, drag/reparent, task assignment, project settings, or phase-lead assignment authority; those remain owner/editor/admin-controlled below UI.
 
 ### Notification Preferences (Wave 30)
 
@@ -137,3 +158,4 @@ Admin suspension, unsuspension, and password-reset link generation cannot be imp
 * Only after that check passes does it use the service-role client for `auth.admin.updateUserById` or `auth.admin.generateLink`.
 * Self-suspend/self-unsuspend are rejected; reset-password on self is allowed.
 * `activity_log` records `user_suspended`, `user_unsuspended`, or `password_reset_requested`, but reset links are never written to logs.
+* The admin UI treats generated reset links as credential-equivalent: clipboard success is toasted, clipboard failure opens a masked dialog with explicit reveal/copy controls instead of putting the full URL in transient toast text.

@@ -26,7 +26,7 @@ export default function AdminTemplates() {
     const templateRoots = useMemo(() => templates.data ?? [], [templates.data]);
     const clonedInstances = useMemo(() => clones.data ?? [], [clones.data]);
     return (
-        <div className="p-8" data-testid="admin-templates">
+        <div className="p-4 sm:p-6 lg:p-8" data-testid="admin-templates">
             <header className="mb-6">
                 <h1 className="text-2xl font-bold text-slate-900 tracking-tight">{t('admin.templates_title')}</h1>
                 <p className="mt-1 text-sm text-muted-foreground">{t('admin.templates_subtitle')}</p>
@@ -37,49 +37,51 @@ export default function AdminTemplates() {
             ) : templates.error instanceof Error ? (
                 <p className="text-sm text-red-600">{templates.error.message}</p>
             ) : (
-                <div className="flex gap-6">
-                    <div className="flex-1 overflow-hidden rounded-lg border border-border bg-card shadow-sm">
-                        <table className="w-full text-sm" data-testid="admin-templates-table">
-                            <thead className="bg-slate-50 text-xs uppercase tracking-wide text-muted-foreground">
-                                <tr>
-                                    <th scope="col" className="px-4 py-2 text-left font-semibold">{t('admin.templates_col_title')}</th>
-                                    <th scope="col" className="px-4 py-2 text-right font-semibold">{t('admin.templates_col_version')}</th>
-                                    <th scope="col" className="px-4 py-2 text-left font-semibold">{t('admin.templates_col_updated')}</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {templateRoots.length === 0 ? (
+                <div className="flex flex-col gap-6 xl:flex-row">
+                    <div className="min-w-0 flex-1 overflow-hidden rounded-lg border border-border bg-card shadow-sm">
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-sm" data-testid="admin-templates-table">
+                                <thead className="bg-slate-50 text-xs uppercase tracking-wide text-muted-foreground">
                                     <tr>
-                                        <td colSpan={3} className="px-4 py-6 text-center text-muted-foreground">
-                                            {t('admin.templates_empty')}
-                                        </td>
+                                        <th scope="col" className="px-4 py-2 text-left font-semibold">{t('admin.templates_col_title')}</th>
+                                        <th scope="col" className="px-4 py-2 text-right font-semibold">{t('admin.templates_col_version')}</th>
+                                        <th scope="col" className="px-4 py-2 text-left font-semibold">{t('admin.templates_col_updated')}</th>
                                     </tr>
-                                ) : (
-                                    templateRoots.map((tpl) => (
-                                        <tr
-                                            key={tpl.id}
-                                            className={
-                                                'cursor-pointer border-t border-border hover:bg-slate-50 ' +
-                                                (selectedTemplateId === tpl.id ? 'bg-brand-50' : '')
-                                            }
-                                            onClick={() => setSelectedTemplateId(tpl.id)}
-                                            data-testid={`admin-templates-row-${tpl.id}`}
-                                        >
-                                            <td className="px-4 py-2">{tpl.title ?? t('admin.untitled')}</td>
-                                            <td className="px-4 py-2 text-right tabular-nums">
-                                                {t('admin.templates_version_prefix', { version: tpl.template_version })}
+                                </thead>
+                                <tbody>
+                                    {templateRoots.length === 0 ? (
+                                        <tr>
+                                            <td colSpan={3} className="px-4 py-6 text-center text-muted-foreground">
+                                                {t('admin.templates_empty')}
                                             </td>
-                                            <td className="px-4 py-2">{tpl.updated_at ? formatDisplayDate(tpl.updated_at) : '—'}</td>
                                         </tr>
-                                    ))
-                                )}
-                            </tbody>
-                        </table>
+                                    ) : (
+                                        templateRoots.map((tpl) => (
+                                            <tr
+                                                key={tpl.id}
+                                                className={
+                                                    'cursor-pointer border-t border-border hover:bg-slate-50 ' +
+                                                    (selectedTemplateId === tpl.id ? 'bg-brand-50' : '')
+                                                }
+                                                onClick={() => setSelectedTemplateId(tpl.id)}
+                                                data-testid={`admin-templates-row-${tpl.id}`}
+                                            >
+                                                <td className="px-4 py-2">{tpl.title ?? t('admin.untitled')}</td>
+                                                <td className="px-4 py-2 text-right tabular-nums">
+                                                    {t('admin.templates_version_prefix', { version: tpl.template_version })}
+                                                </td>
+                                                <td className="px-4 py-2">{tpl.updated_at ? formatDisplayDate(tpl.updated_at) : '—'}</td>
+                                            </tr>
+                                        ))
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
 
                     {selectedTemplateId && (
                         <aside
-                            className="w-96 flex-shrink-0 rounded-lg border border-border bg-card p-5 shadow-sm"
+                            className="w-full flex-shrink-0 rounded-lg border border-border bg-card p-5 shadow-sm xl:w-96"
                             data-testid="admin-templates-clones"
                         >
                             <h2 className="text-lg font-semibold text-slate-900">{t('admin.templates_clones_heading')}</h2>

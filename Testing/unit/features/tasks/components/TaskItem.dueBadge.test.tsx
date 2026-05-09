@@ -47,6 +47,17 @@ function renderTaskItemWithChildAction(task: TaskItemData, opts: { level: number
     );
 }
 
+function renderTaskItemWithMoveAction(
+    task: TaskItemData,
+    opts: { onMoveTask: (task: TaskItemData) => void; canMoveTask?: (task: TaskItemData) => boolean },
+) {
+    return renderWithProviders(
+        <DndWrapper>
+            <TaskItem task={task} onMoveTask={opts.onMoveTask} canMoveTask={opts.canMoveTask} />
+        </DndWrapper>,
+    );
+}
+
 describe('TaskItem due-date badge (Wave 33)', () => {
     beforeAll(() => {
         vi.useFakeTimers();
@@ -176,5 +187,23 @@ describe('TaskItem due-date badge (Wave 33)', () => {
         expect(screen.queryByRole('button', { name: /edit actionless task/i })).not.toBeInTheDocument();
         expect(screen.queryByRole('button', { name: /add subtask under actionless task/i })).not.toBeInTheDocument();
         expect(screen.queryByRole('button', { name: /invite member to actionless task/i })).not.toBeInTheDocument();
+    });
+
+    it('renders a keyboard-accessible move action when a valid move path exists', () => {
+        const onMoveTask = vi.fn();
+        const task = makeTask({ id: 'movable', title: 'Movable task', origin: 'instance' }) as TaskItemData;
+        renderTaskItemWithMoveAction(task, { onMoveTask, canMoveTask: () => true });
+
+        fireEvent.click(screen.getByRole('button', { name: /move movable task/i }));
+
+        expect(onMoveTask).toHaveBeenCalledWith(task);
+    });
+
+    it('hides the move action when hierarchy validation leaves no valid destination', () => {
+        const onMoveTask = vi.fn();
+        const task = makeTask({ id: 'immovable', title: 'Immovable task', origin: 'instance' }) as TaskItemData;
+        renderTaskItemWithMoveAction(task, { onMoveTask, canMoveTask: () => false });
+
+        expect(screen.queryByRole('button', { name: /move immovable task/i })).not.toBeInTheDocument();
     });
 });

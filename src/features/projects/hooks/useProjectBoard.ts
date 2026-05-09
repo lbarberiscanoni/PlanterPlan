@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { toast } from 'sonner';
@@ -20,6 +20,12 @@ export interface ProjectBoardTaskActions {
         options?: { onSuccess?: () => void; onError?: (error: Error) => void },
     ) => void;
 }
+
+export type TaskWithBoardState = TaskRow & {
+    isExpanded?: boolean;
+    isAddingInline?: boolean;
+    children?: TaskWithBoardState[];
+};
 
 /**
  * Copies only behavior flags that project instances may inherit as read-only behavior.
@@ -60,6 +66,20 @@ export function useProjectBoard(
     const [inlineAddingParentId, setInlineAddingParentId] = useState<string | null>(null);
     const [showInviteModal, setShowInviteModal] = useState(false);
 
+    const childrenByParentId = useMemo(() => {
+        const index = new Map<string, TaskRow[]>();
+        for (const task of tasks) {
+            if (!task.parent_task_id || task.parent_task_id === task.id) continue;
+            const children = index.get(task.parent_task_id) ?? [];
+            children.push(task);
+            index.set(task.parent_task_id, children);
+        }
+        for (const children of index.values()) {
+            children.sort((a, b) => (a.position || 0) - (b.position || 0));
+        }
+        return index;
+    }, [tasks]);
+
     const handleTaskUpdate = (taskId: string, data: Partial<TaskUpdate>) => {
         if (!projectId) {
             toast.error(t('errors.project_not_found_or_no_access'));
@@ -84,23 +104,25 @@ export function useProjectBoard(
         });
     };
 
-    const mapTaskWithState = (task: TaskRow): Record<string, unknown> => {
+    const mapTaskWithState = useCallback((task: TaskRow): TaskWithBoardState => {
         const visited = new Set<string>();
-        const buildNode = (t: TaskRow): Record<string, unknown> => {
+        const buildNode = (t: TaskRow): TaskWithBoardState => {
             if (visited.has(t.id)) return { ...t, children: [] };
             visited.add(t.id);
             return {
                 ...t,
                 isExpanded: expandedTaskIds.has(t.id) || inlineAddingParentId === t.id,
                 isAddingInline: inlineAddingParentId === t.id,
-                children: tasks
-                    .filter((c) => c.parent_task_id === t.id && c.id !== t.id)
-                    .map(buildNode)
-                    .sort((a, b) => ((a as TaskRow).position || 0) - ((b as TaskRow).position || 0)),
+                children: (childrenByParentId.get(t.id) ?? []).map(buildNode),
             };
         };
         return buildNode(task);
-    };
+    }, [childrenByParentId, expandedTaskIds, inlineAddingParentId]);
+
+    const getTasksWithStateForParent = useCallback(
+        (parentId: string): TaskWithBoardState[] => (childrenByParentId.get(parentId) ?? []).map(mapTaskWithState),
+        [childrenByParentId, mapTaskWithState],
+    );
 
     const handleStartInlineAdd = (parentTask: TaskRow) => {
         setInlineAddingParentId(parentTask.id);
@@ -159,7 +181,8 @@ export function useProjectBoard(
             handleStartInlineAdd, handleInlineCommit, handleDeleteTask
         },
         computed: {
-            mapTaskWithState
+            mapTaskWithState,
+            getTasksWithStateForParent
         }
     };
 }

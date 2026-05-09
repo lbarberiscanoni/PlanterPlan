@@ -22,7 +22,7 @@ export function LocaleSwitcher() {
           value={selectedLocale.code}
           onValueChange={(code) => void i18n.changeLanguage(code)}
         >
-          <SelectTrigger className="w-56">
+          <SelectTrigger className="w-56" aria-label={t('settings.profile.locale_label')}>
             <SelectValue />
           </SelectTrigger>
           <SelectContent>

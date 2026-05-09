@@ -117,7 +117,11 @@ Tests must be strictly organized around the core business domains defined in `do
 * **Strict Invariants:**
     * **Max Subtask Depth:** Tests MUST verify that dropping a task into an existing subtask is rejected visually and functionally (Depth = 1 max).
     * **Cycle Detection:** Tests MUST verify that a parent cannot be dropped into its own child.
-    * **Dependencies:** Verify that dependent tasks cannot be completed out of sequence without triggering the appropriate UI warnings.
+    * **Dependencies:** Current `task_relationships` behavior is display/link
+      management only, per `docs/architecture/tasks-subtasks.md`. Do not treat
+      dependency-order completion blocking as a release gate until a future
+      product PR adds trusted DB/API enforcement; if added, tests must verify
+      that enforcement layer rather than a UI prompt alone.
 
 ### 5.3 Projects & Phases
 * **Invariants:**

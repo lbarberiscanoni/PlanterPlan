@@ -18,34 +18,36 @@
 2. **Install dependencies**:
 
    ```bash
-   npm install
+   npm ci
    ```
 
 3. **Set up environment variables**:
-   Create a `.env` file in the root directory and add:
+   Copy `.env.example` to `.env.local` and fill in the required Vite client
+   variables:
    ```env
    VITE_SUPABASE_URL=your_supabase_url
    VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
    ```
-   > [!NOTE]
-   > For integration tests, you may also need `TEST_USER_PASSWORD` and `TEST_USER_EMAIL`.
+   Keep server-only secrets such as `SUPABASE_SERVICE_ROLE_KEY`,
+   `VAPID_PRIVATE_KEY`, `EMAIL_PROVIDER_API_KEY`, and `RESEND_FROM_ADDRESS`
+   out of local client env files; configure those as Supabase function
+   secrets. If either required Vite key is missing, the app renders a boot
+   configuration error that lists only missing variable names, never values.
 
 ## Running the App
 
 ```bash
 npm run dev
-# or
-npm start
 ```
 
-Runs the app in development mode at [http://localhost:3000](http://localhost:3000).
+Runs the Vite app in development mode at [http://localhost:5173](http://localhost:5173).
 
-## Linting & Formatting
+## Linting & Build
 
 We use ESLint and Prettier to maintain code quality.
 
 - **Lint**: `npm run lint`
-- **Format**: `npm run format`
+- **Build**: `npm run build`
 
 ## Testing
 

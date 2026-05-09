@@ -54,6 +54,21 @@ describe('useProjectDnd hierarchy guard', () => {
         expect(onToggleExpand).not.toHaveBeenCalled();
     });
 
+    it('rejects drops that would move a parent under its own descendant', () => {
+        const onTaskUpdate = vi.fn();
+        const onToggleExpand = vi.fn();
+        const onInvalidDrop = vi.fn();
+        const { result } = renderHook(() => useProjectDnd(rows, onTaskUpdate, onToggleExpand, onInvalidDrop));
+
+        act(() => result.current.handleDragStart(startEvent('task-b')));
+        act(() => result.current.handleDragOver(containerOverEvent('task-b', 'subtask-a')));
+        act(() => result.current.handleDragEnd(containerEndEvent('task-b', 'subtask-a')));
+
+        expect(onInvalidDrop).toHaveBeenCalledTimes(1);
+        expect(onTaskUpdate).not.toHaveBeenCalled();
+        expect(onToggleExpand).not.toHaveBeenCalled();
+    });
+
     it('allows valid childless task reparenting under another task', () => {
         const onTaskUpdate = vi.fn();
         const onToggleExpand = vi.fn();

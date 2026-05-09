@@ -160,6 +160,15 @@
     "invite_member_aria": "Invitar miembro a {{title}}",
     "delete_task": "Eliminar tarea",
     "delete_task_aria": "Eliminar {{title}}",
+    "move_task": "Mover tarea",
+    "move_task_aria": "Mover {{title}}",
+    "move_dialog": {
+      "title": "Mover {{title}}",
+      "description": "Elige un destino principal válido sin usar arrastrar y soltar.",
+      "target_label": "Mover bajo",
+      "no_targets": "No hay destinos válidos disponibles para esta tarea.",
+      "submit": "Mover tarea"
+    },
     "reorder_task": "Reordenar tarea",
     "open_task_details_aria": "Abrir detalles de {{title}}",
     "status_for_aria": "Estado de {{title}}",
@@ -179,6 +188,12 @@
     "sort_chronological": "Cronológica",
     "sort_alphabetical": "Alfabética",
     "no_tasks": "Aún no hay tareas",
+    "first_run": {
+      "title": "Inicia tu primer proyecto",
+      "description": "Crea un proyecto en blanco o usa la plantilla Launch Large para agregar tu primer espacio de trabajo de proyecto.",
+      "blank_cta": "Iniciar proyecto en blanco",
+      "template_cta": "Usar plantilla Launch Large"
+    },
     "panel": {
       "edit_named_task": "Editar {{title}}",
       "edit_task": "Editar tarea",
@@ -189,6 +204,7 @@
       "new_item_in_parent": "Nueva {{item}} en {{title}}",
       "new_item": "Nueva {{item}}",
       "details": "Detalles",
+      "description": "Ver detalles de la tarea, estado, fechas, recursos y acciones disponibles.",
       "close_panel": "Cerrar panel",
       "add_phase": "Agregar fase",
       "add_task": "Agregar tarea"
@@ -618,7 +634,41 @@
     "resources": {
       "title": "Recursos",
       "empty": "Aún no hay recursos",
-      "search_placeholder": "Buscar recursos…"
+      "search_placeholder": "Buscar recursos…",
+      "add_button": "Agregar recurso",
+      "add_modal_title": "Agregar recurso",
+      "add_modal_description": "Adjunta un enlace, una nota o una referencia de documento a esta tarea.",
+      "resource_type_label": "Tipo de recurso",
+      "url_label": "URL",
+      "content_label": "Contenido",
+      "storage_path_label": "Ruta de almacenamiento",
+      "url_placeholder": "https://example.com",
+      "content_placeholder": "Introduce tu nota…",
+      "storage_path_placeholder": "ruta/al/documento.pdf",
+      "unknown_task": "Tarea desconocida",
+      "from_task": "De: {{title}}",
+      "empty_project_title": "Aún no hay recursos en este proyecto",
+      "empty_search_title": "Ningún recurso coincide con tu búsqueda",
+      "empty_project_description": "Añade enlaces, documentos o notas a las tareas para verlos aquí.",
+      "empty_search_description": "Prueba a ajustar tu búsqueda o filtro.",
+      "count_total_one": "{{formattedCount}} recurso total",
+      "count_total_other": "{{formattedCount}} recursos en total",
+      "count_matching_one": "{{formattedCount}} recurso coincidente",
+      "count_matching_other": "{{formattedCount}} recursos coincidentes",
+      "set_primary_aria": "Establecer {{type}} como recurso principal",
+      "unset_primary_aria": "Quitar {{type}} como recurso principal",
+      "delete_aria": "Eliminar recurso {{type}}",
+      "types": {
+        "url": "Enlace externo",
+        "pdf": "Documento",
+        "text": "Nota"
+      },
+      "filters": {
+        "all": "Todos",
+        "url": "Enlaces",
+        "pdf": "Documentos",
+        "text": "Notas"
+      }
     },
     "activity": {
       "title": "Actividad"
@@ -673,6 +723,7 @@
     "tab_notifications": "Notificaciones",
     "tab_integrations": "Integraciones",
     "tab_security": "Seguridad",
+    "tabs_aria": "Secciones de configuración",
     "profile": {
       "personal_info": "Información personal",
       "personal_info_description": "Actualiza tu foto y tus datos personales.",
@@ -771,7 +822,12 @@
     "login_failed": "Falló el inicio de sesión",
     "project_not_found_or_no_access": "Este proyecto no existe o ya no tienes acceso.",
     "back_to_tasks": "Volver a tareas",
-    "user_must_be_logged_in": "El usuario debe haber iniciado sesión"
+    "user_must_be_logged_in": "El usuario debe haber iniciado sesión",
+    "boot_config_title": "La configuración de la app está incompleta",
+    "boot_config_description": "PlanterPlan no pudo iniciar porque faltan variables de entorno públicas obligatorias.",
+    "boot_config_missing_label": "Variables faltantes",
+    "boot_config_help": "Configúralas en el archivo local .env.local o en la configuración del proyecto de Vercel, luego recompila o recarga la app.",
+    "boot_config_no_values": "Aquí solo se muestran los nombres de las variables; nunca se muestran secretos ni tokens."
   },
   "ics": {
     "card_title": "Feeds de calendario (ICS)",
@@ -907,11 +963,22 @@
     "users_reset_password_button": "Enviar restablecimiento de contraseña",
     "users_reset_password_aria": "Generar un enlace de restablecimiento de contraseña para {{name}}",
     "users_reset_password_confirm_title": "¿Generar un enlace de restablecimiento de contraseña?",
-    "users_reset_password_confirm_description": "Se generará un enlace de recuperación de un solo uso para {{name}} y se copiará al portapapeles. Compártelo por otro canal (Slack, correo, en persona). El enlace expira aproximadamente en 24 horas. No se envía ningún correo automáticamente.",
+    "users_reset_password_confirm_description": "Se generará un enlace de recuperación de un solo uso para {{name}}. Si el portapapeles lo permite, se copiará automáticamente; de lo contrario, usa el diálogo seguro para revelarlo y copiarlo. El enlace expira aproximadamente en 24 horas. No se envía ningún correo automáticamente.",
     "users_reset_password_confirm_button": "Generar enlace",
     "users_reset_password_copied_toast": "Enlace de restablecimiento copiado al portapapeles. Compártelo con el usuario.",
-    "users_reset_password_manual_toast": "Enlace de restablecimiento generado — el portapapeles está bloqueado, copia manualmente:",
+    "users_reset_password_manual_toast": "Enlace de restablecimiento generado. El portapapeles está bloqueado; usa el diálogo seguro para revelarlo y copiarlo.",
     "users_reset_password_failed_toast": "No se pudo generar el enlace de restablecimiento",
+    "users_reset_password_ready_title": "Enlace de restablecimiento generado",
+    "users_reset_password_ready_description": "Trata este enlace como una contraseña temporal para {{name}}. Permanece oculto hasta que lo reveles.",
+    "users_reset_password_link_label": "Enlace de recuperación",
+    "users_reset_password_hidden_link": "Enlace de recuperación oculto",
+    "users_reset_password_reveal_button": "Revelar enlace",
+    "users_reset_password_hide_button": "Ocultar enlace",
+    "users_reset_password_copy_button": "Copiar enlace",
+    "users_reset_password_copied_button": "Copiado",
+    "users_reset_password_copied_note": "Copiado al portapapeles.",
+    "users_reset_password_close_button": "Cerrar",
+    "users_reset_password_copy_failed_toast": "El portapapeles está bloqueado. Revela el enlace y cópialo desde el diálogo.",
     "untitled": "(sin título)",
     "templates_title": "Plantillas",
     "templates_subtitle": "Todas las plantillas de todos los creadores. Filtra por estado de publicación.",

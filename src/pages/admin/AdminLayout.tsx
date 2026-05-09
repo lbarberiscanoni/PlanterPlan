@@ -63,15 +63,15 @@ export default function AdminLayout() {
     }
 
     return (
-        <div className="flex h-full w-full" data-testid="admin-layout">
+        <div className="flex h-full w-full flex-col overflow-hidden lg:flex-row" data-testid="admin-layout">
             <aside
-                className="w-64 flex-shrink-0 border-r border-border bg-card px-4 py-6"
+                className="w-full flex-shrink-0 border-b border-border bg-card px-4 py-3 lg:w-64 lg:border-b-0 lg:border-r lg:py-6"
                 aria-label={t('admin.nav_aria')}
             >
-                <h2 className="mb-6 px-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                <h2 className="mb-3 px-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground lg:mb-6">
                     {t('admin.shell_title')}
                 </h2>
-                <nav className="flex flex-col gap-1">
+                <nav className="flex gap-2 overflow-x-auto lg:flex-col lg:gap-1 lg:overflow-visible">
                     {NAV_ITEMS.map((item) => {
                         const Icon = item.icon;
                         return (
@@ -81,7 +81,7 @@ export default function AdminLayout() {
                                 end={item.end}
                                 className={({ isActive }) =>
                                     cn(
-                                        'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
+                                        'flex shrink-0 items-center gap-3 whitespace-nowrap rounded-lg px-3 py-2 text-sm font-medium transition-colors',
                                         isActive
                                             ? 'bg-brand-50 text-brand-700'
                                             : 'text-slate-700 hover:bg-slate-100',
@@ -96,7 +96,7 @@ export default function AdminLayout() {
                     })}
                 </nav>
             </aside>
-            <main className="flex-1 overflow-y-auto bg-background" data-testid="admin-main">
+            <main className="min-w-0 flex-1 overflow-y-auto bg-background" data-testid="admin-main">
                 <Outlet />
             </main>
         </div>

@@ -935,9 +935,10 @@ export const planter: PlanterClient = {
              * orchestrator for multi-row state that triggers cannot express):
              *   - **Cascade DOWN**: a `completed` status propagates to every
              *     descendant task.
-             *   - **Bubble UP**: `reconcileAncestors` walks parents/grandparents,
-             *     marking them `completed` when every child is complete, or
-             *     reverting to a derived non-completed status otherwise.
+             *   - **Bubble UP**: `reconcileAncestors` walks the bounded affected
+             *     ancestor chain, marking parents `completed` when every child
+             *     is complete, or reverting to a derived non-completed status
+             *     otherwise.
              */
             updateStatus: async (taskId: string, status: string): Promise<{ data: Task | null, error: Error | null }> => {
                 // Inner helper: derive parent status from child statuses when parent is not fully complete.
@@ -951,8 +952,8 @@ export const planter: PlanterClient = {
                 // Inner helper: walk UP the tree reconciling ancestor completion/status whenever
                 // any child status changes (milestone-level automation — §3.3).
                 // Wave 23: parent patch writes only `status`; the DB trigger keeps `is_complete` in sync.
-                const reconcileAncestors = async (parentId: string, depth: number): Promise<void> => {
-                    if (depth > 1) return; // guard: hierarchy is max 1 level of subtasks (§3.3)
+                const reconcileAncestors = async (parentId: string, depth: number, maxDepth: number): Promise<void> => {
+                    if (depth > maxDepth) return; // guard: hierarchy is finite; subtasks need one extra ancestor.
                     try {
                         const children = await planter.entities.Task.filter({ parent_task_id: parentId });
                         if (!children.length) return;
@@ -964,7 +965,7 @@ export const planter: PlanterClient = {
 
                         const parent = await planter.entities.Task.update(parentId, parentPatch);
                         if (parent?.parent_task_id) {
-                            await reconcileAncestors(parent.parent_task_id, depth + 1);
+                            await reconcileAncestors(parent.parent_task_id, depth + 1, maxDepth);
                         }
                     } catch (err) {
                         console.error('[PlanterClient.updateStatus.reconcileAncestors] Error:', err);
@@ -992,7 +993,8 @@ export const planter: PlanterClient = {
 
                     // Reconcile UP: update parent milestone/phase whether child moved into or out of completed.
                     if (data?.parent_task_id) {
-                        await reconcileAncestors(data.parent_task_id, 0);
+                        const maxAncestorDepth = data.task_type === 'subtask' ? 2 : 1;
+                        await reconcileAncestors(data.parent_task_id, 0, maxAncestorDepth);
                     }
                     return { data, error: null };
                 } catch (error: unknown) {

@@ -410,5 +410,35 @@ describe('useProjectBoard', () => {
       const mapped = result.current.computed.mapTaskWithState(selfRef);
       expect(mapped.id).toBe('self');
     });
+
+    it('builds board state for a 500+ task tree from the shared child index', () => {
+      const parents = Array.from({ length: 20 }, (_, parentIndex) =>
+        makeTask({
+          id: `parent-${parentIndex}`,
+          parent_task_id: `milestone-${parentIndex % 4}`,
+          position: parentIndex,
+        }),
+      );
+      const children = parents.flatMap((parent, parentIndex) =>
+        Array.from({ length: 25 }, (_, childIndex) =>
+          makeTask({
+            id: `child-${parentIndex}-${childIndex}`,
+            parent_task_id: parent.id,
+            position: 25 - childIndex,
+          }),
+        ),
+      );
+      const tasks = [...parents, ...children];
+
+      const { result } = renderProjectBoard(projectId, tasks);
+
+      const milestoneTasks = result.current.computed.getTasksWithStateForParent('milestone-0');
+
+      expect(milestoneTasks).toHaveLength(5);
+      const mappedParent = milestoneTasks.find((task) => task.id === 'parent-0');
+      expect(mappedParent?.children).toHaveLength(25);
+      expect(mappedParent?.children?.[0].id).toBe('child-0-24');
+      expect(mappedParent?.children?.[24].id).toBe('child-0-0');
+    });
   });
 });

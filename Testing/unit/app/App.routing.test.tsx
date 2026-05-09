@@ -39,6 +39,19 @@ vi.mock('@/pages/Team', () => ({
   default: () => <div data-testid="team-page" />,
 }));
 
+vi.mock('@/shared/config/public-env', async () => {
+  const actual = await vi.importActual<typeof import('@/shared/config/public-env')>('@/shared/config/public-env');
+  return {
+    ...actual,
+    publicEnvValidation: {
+      isValid: true,
+      missingKeys: [],
+      supabaseUrl: 'https://placeholder.supabase.co',
+      supabaseAnonKey: 'placeholder-key',
+    },
+  };
+});
+
 import App from '@/app/App';
 
 describe('App routing', () => {

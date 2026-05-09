@@ -97,11 +97,11 @@ Then('a loading spinner appears on the save button', async ({ page }) => {
 });
 
 Then('the {string} tab is marked as active', async ({ page }, tabName: string) => {
-  await expect(page.getByText(tabName).first()).toBeVisible();
+  await expect(page.getByRole('tab', { name: new RegExp(tabName, 'i') })).toHaveAttribute('aria-selected', 'true');
 });
 
 Then('the {string} tab is available', async ({ page }, tabName: string) => {
-  await expect(page.getByRole('button', { name: new RegExp(tabName, 'i') })).toBeEnabled();
+  await expect(page.getByRole('tab', { name: new RegExp(tabName, 'i') })).toBeEnabled();
 });
 
 Then('no settings tab shows {string}', async ({ page }, text: string) => {

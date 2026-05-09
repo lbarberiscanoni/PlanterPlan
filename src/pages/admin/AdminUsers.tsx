@@ -3,7 +3,20 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
-import { ArrowUpDown, ArrowUp, ArrowDown, Loader2, Shield, ShieldOff, Ban, KeyRound, CheckCircle2 } from 'lucide-react';
+import {
+    ArrowUpDown,
+    ArrowUp,
+    ArrowDown,
+    Loader2,
+    Shield,
+    ShieldOff,
+    Ban,
+    KeyRound,
+    CheckCircle2,
+    Copy,
+    Eye,
+    EyeOff,
+} from 'lucide-react';
 import { useAdminUsers, useAdminUserDetail } from '@/features/admin/hooks/useAdminUsers';
 import { useAuth } from '@/shared/contexts/auth-context';
 import { formatDisplayDate, getNow, isBeforeDate } from '@/shared/lib/date-engine';
@@ -18,6 +31,14 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/shared/ui/select';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from '@/shared/ui/dialog';
 
 /**
  * Wave 34 Task 2 — admin user-management table. Server-side filter via the
@@ -43,6 +64,21 @@ type SortKey =
     | 'overdue_task_count';
 type SortDir = 'asc' | 'desc';
 
+interface ResetLinkState {
+    link: string;
+    displayName: string;
+    copied: boolean;
+    revealed: boolean;
+}
+
+function maskResetLink(link: string, fallback: string): string {
+    try {
+        return `${new URL(link).origin}/...`;
+    } catch {
+        return fallback;
+    }
+}
+
 export default function AdminUsers() {
     const { t } = useTranslation();
     const { uid: uidParam } = useParams<{ uid: string }>();
@@ -60,6 +96,7 @@ export default function AdminUsers() {
     // wave if user feedback demands it.
     const [sort, setSort] = useState<{ key: SortKey; dir: SortDir } | null>(null);
     const [selectedUid, setSelectedUid] = useState<string | null>(uidParam ?? null);
+    const [resetLinkState, setResetLinkState] = useState<ResetLinkState | null>(null);
     const list = useAdminUsers(filter, { limit: PAGE_SIZE, offset: page * PAGE_SIZE });
     const detail = useAdminUserDetail(selectedUid);
 
@@ -202,25 +239,39 @@ export default function AdminUsers() {
     // email from this flow, which is intentional (admin-driven reset
     // vs. user-initiated forgot-password).
     const resetPasswordMutation = useMutation({
-        mutationFn: (uid: string) => planter.admin.generatePasswordResetLink(uid),
-        onSuccess: async (link) => {
+        mutationFn: ({ uid }: { uid: string; displayName: string }) =>
+            planter.admin.generatePasswordResetLink(uid),
+        onSuccess: async (link, vars) => {
+            let copied = false;
             try {
                 await navigator.clipboard.writeText(link);
+                copied = true;
                 toast.success(t('admin.users_reset_password_copied_toast'));
             } catch {
-                // Clipboard may be blocked (http://, iframe). Fall back
-                // to showing the link in the toast so the admin can
-                // copy it manually.
-                toast.success(t('admin.users_reset_password_manual_toast'), {
-                    description: link,
-                    duration: 30_000,
-                });
+                toast.success(t('admin.users_reset_password_manual_toast'));
             }
+            setResetLinkState({
+                link,
+                displayName: vars.displayName,
+                copied,
+                revealed: false,
+            });
         },
         onError: (err: Error) => {
             toast.error(t('admin.users_reset_password_failed_toast'), { description: err.message });
         },
     });
+
+    const handleCopyResetLink = async () => {
+        if (!resetLinkState) return;
+        try {
+            await navigator.clipboard.writeText(resetLinkState.link);
+            setResetLinkState((state) => state ? { ...state, copied: true } : state);
+            toast.success(t('admin.users_reset_password_copied_toast'));
+        } catch {
+            toast.error(t('admin.users_reset_password_copy_failed_toast'));
+        }
+    };
 
     const handleResetPassword = async (uid: string, displayName: string) => {
         const ok = await confirm({
@@ -229,7 +280,7 @@ export default function AdminUsers() {
             confirmText: t('admin.users_reset_password_confirm_button'),
         });
         if (!ok) return;
-        resetPasswordMutation.mutate(uid);
+        resetPasswordMutation.mutate({ uid, displayName });
     };
 
     // Keep the selection in sync with the URL param (deep-linking from
@@ -237,14 +288,14 @@ export default function AdminUsers() {
     const effectiveSelectedUid = useMemo(() => selectedUid ?? uidParam ?? null, [selectedUid, uidParam]);
 
     return (
-        <div className="p-8" data-testid="admin-users">
+        <div className="p-4 sm:p-6 lg:p-8" data-testid="admin-users">
             <header className="mb-6">
                 <h1 className="text-2xl font-bold text-slate-900 tracking-tight">{t('admin.users_title')}</h1>
                 <p className="mt-1 text-sm text-muted-foreground">{t('admin.users_subtitle')}</p>
             </header>
 
             <div className="mb-4 flex flex-wrap items-end gap-3" data-testid="admin-users-filters">
-                <div className="flex flex-col gap-1">
+                <div className="flex w-full flex-col gap-1 sm:w-auto">
                     <span className="text-xs text-muted-foreground">{t('admin.users_filter_role')}</span>
                     <Select
                         value={filter.role ?? 'all'}
@@ -253,7 +304,7 @@ export default function AdminUsers() {
                         }
                     >
                         <SelectTrigger
-                            className="w-36 bg-card"
+                            className="w-full bg-card sm:w-36"
                             aria-label={t('admin.users_filter_role_aria')}
                             data-testid="admin-users-filter-role"
                         >
@@ -266,7 +317,7 @@ export default function AdminUsers() {
                         </SelectContent>
                     </Select>
                 </div>
-                <div className="flex flex-col gap-1">
+                <div className="flex w-full flex-col gap-1 sm:w-auto">
                     <span className="text-xs text-muted-foreground">{t('admin.users_filter_last_signin')}</span>
                     <Select
                         value={filter.lastLogin ?? 'all'}
@@ -275,7 +326,7 @@ export default function AdminUsers() {
                         }
                     >
                         <SelectTrigger
-                            className="w-48 bg-card"
+                            className="w-full bg-card sm:w-48"
                             aria-label={t('admin.users_filter_last_signin_aria')}
                             data-testid="admin-users-filter-lastLogin"
                         >
@@ -298,7 +349,7 @@ export default function AdminUsers() {
                     />
                     <span>{t('admin.users_filter_overdue')}</span>
                 </label>
-                <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+                <label className="flex w-full flex-col gap-1 text-xs text-muted-foreground sm:w-auto">
                     {t('admin.users_filter_search')}
                     <input
                         type="search"
@@ -311,8 +362,8 @@ export default function AdminUsers() {
                 </label>
             </div>
 
-            <div className="flex gap-6">
-                <div className="flex-1 overflow-hidden rounded-lg border border-border bg-card shadow-sm">
+            <div className="flex flex-col gap-6 xl:flex-row">
+                <div className="min-w-0 flex-1 overflow-hidden rounded-lg border border-border bg-card shadow-sm">
                     <div className="overflow-x-auto">
                     <table className="w-full text-sm" data-testid="admin-users-table">
                         <thead className="bg-slate-50 text-xs uppercase tracking-wide text-muted-foreground">
@@ -383,13 +434,13 @@ export default function AdminUsers() {
                       * enabled Next that fetches an empty page — but cheaper
                       * than adding a separate count RPC and the user is
                       * immediately visually informed of the empty page. */}
-                    <div className="flex items-center justify-between gap-3 border-t border-border px-4 py-2 text-sm">
+                    <div className="flex flex-col gap-3 border-t border-border px-4 py-3 text-sm sm:flex-row sm:items-center sm:justify-between sm:py-2">
                         <span className="text-muted-foreground" data-testid="admin-users-page-info">
                             {list.data && list.data.length > 0
                                 ? t('admin.users_showing_range', { start: page * PAGE_SIZE + 1, end: page * PAGE_SIZE + list.data.length })
                                 : t('admin.users_no_results')}
                         </span>
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
                             <button
                                 type="button"
                                 className="rounded border border-border bg-card px-3 py-1 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -417,7 +468,7 @@ export default function AdminUsers() {
 
                 {effectiveSelectedUid && (
                     <aside
-                        className="w-80 flex-shrink-0 rounded-lg border border-border bg-card p-5 shadow-sm"
+                        className="w-full flex-shrink-0 rounded-lg border border-border bg-card p-5 shadow-sm xl:w-80"
                         data-testid="admin-users-detail"
                     >
                         {detail.isLoading ? (
@@ -591,6 +642,92 @@ export default function AdminUsers() {
                     </aside>
                 )}
             </div>
+
+            <Dialog
+                open={resetLinkState !== null}
+                onOpenChange={(open) => {
+                    if (!open) setResetLinkState(null);
+                }}
+            >
+                <DialogContent className="sm:max-w-lg" data-testid="admin-users-reset-link-dialog">
+                    <DialogHeader>
+                        <DialogTitle>{t('admin.users_reset_password_ready_title')}</DialogTitle>
+                        <DialogDescription>
+                            {resetLinkState
+                                ? t('admin.users_reset_password_ready_description', { name: resetLinkState.displayName })
+                                : ''}
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    {resetLinkState && (
+                        <div className="space-y-2">
+                            <span className="text-sm font-medium text-slate-900">
+                                {t('admin.users_reset_password_link_label')}
+                            </span>
+                            <code
+                                className="block max-h-32 overflow-auto break-all rounded-md border border-border bg-slate-50 p-3 text-xs text-slate-800"
+                                data-testid="admin-users-reset-link-value"
+                            >
+                                {resetLinkState.revealed
+                                    ? resetLinkState.link
+                                    : maskResetLink(
+                                        resetLinkState.link,
+                                        t('admin.users_reset_password_hidden_link'),
+                                    )}
+                            </code>
+                            {resetLinkState.copied && (
+                                <p
+                                    className="text-xs text-muted-foreground"
+                                    data-testid="admin-users-reset-link-copied-note"
+                                    role="status"
+                                >
+                                    {t('admin.users_reset_password_copied_note')}
+                                </p>
+                            )}
+                        </div>
+                    )}
+
+                    <DialogFooter className="gap-3">
+                        <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() =>
+                                setResetLinkState((state) =>
+                                    state ? { ...state, revealed: !state.revealed } : state,
+                                )
+                            }
+                            data-testid="admin-users-reset-link-toggle-reveal"
+                        >
+                            {resetLinkState?.revealed ? (
+                                <EyeOff aria-hidden="true" className="mr-2 h-4 w-4" />
+                            ) : (
+                                <Eye aria-hidden="true" className="mr-2 h-4 w-4" />
+                            )}
+                            {resetLinkState?.revealed
+                                ? t('admin.users_reset_password_hide_button')
+                                : t('admin.users_reset_password_reveal_button')}
+                        </Button>
+                        <Button
+                            type="button"
+                            onClick={() => void handleCopyResetLink()}
+                            data-testid="admin-users-reset-link-copy"
+                        >
+                            <Copy aria-hidden="true" className="mr-2 h-4 w-4" />
+                            {resetLinkState?.copied
+                                ? t('admin.users_reset_password_copied_button')
+                                : t('admin.users_reset_password_copy_button')}
+                        </Button>
+                        <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => setResetLinkState(null)}
+                            data-testid="admin-users-reset-link-close"
+                        >
+                            {t('admin.users_reset_password_close_button')}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }

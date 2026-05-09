@@ -66,8 +66,11 @@ describe('ProjectGantt (Wave 28)', () => {
                 onIncludeLeafTasksChange={() => {}}
             />,
         );
-        const pdfBtn = screen.getByRole('button', { name: /export gantt via browser print dialog/i });
+        const pdfBtn = screen.getByRole('button', {
+            name: /export gantt via browser print dialog \(choose 'save as pdf' as the destination\)/i,
+        });
         expect(pdfBtn).toBeEnabled();
+        expect(screen.queryByText(/coming soon/i)).not.toBeInTheDocument();
         pdfBtn.click();
         expect(printSpy).toHaveBeenCalledTimes(1);
         printSpy.mockRestore();

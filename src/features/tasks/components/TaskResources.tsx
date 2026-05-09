@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import type { FormEvent } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 import type { TaskResourceRow } from '@/shared/db/app.types';
 import { Button } from '@/shared/ui/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/shared/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/shared/ui/dialog';
 import { Input } from '@/shared/ui/input';
 import { Textarea } from '@/shared/ui/textarea';
 import { Label } from '@/shared/ui/label';
@@ -19,14 +20,17 @@ const resourceTypeIcons = {
  text: StickyNote,
 } as const;
 
-const resourceTypeLabels = {
- url: 'External Link',
- pdf: 'Document',
- text: 'Note',
+const resourceTypeLabelKeys = {
+ url: 'projects.resources.types.url',
+ pdf: 'projects.resources.types.pdf',
+ text: 'projects.resources.types.text',
 } as const;
 
 type ResourceType = keyof typeof resourceTypeIcons;
 
+function normalizeResourceType(type: string | null | undefined): ResourceType {
+ return type === 'pdf' || type === 'text' || type === 'url' ? type : 'url';
+}
 
 interface TaskResourcesProps {
  taskId: string;
@@ -35,6 +39,7 @@ interface TaskResourcesProps {
 }
 
 export default function TaskResources({ taskId, primaryResourceId, onUpdate }: TaskResourcesProps) {
+ const { t } = useTranslation();
  const [showAddModal, setShowAddModal] = useState(false);
  const [formData, setFormData] = useState({
  type: 'url' as ResourceType,
@@ -92,25 +97,26 @@ export default function TaskResources({ taskId, primaryResourceId, onUpdate }: T
  return (
  <div data-testid="task-resources">
  <div className="flex items-center justify-between mb-4">
- <h4 className="text-sm font-semibold text-card-foreground uppercase tracking-wider">Resources</h4>
+ <h4 className="text-sm font-semibold text-card-foreground uppercase tracking-wider">{t('projects.resources.title')}</h4>
  <Button
  size="sm"
  onClick={() => setShowAddModal(true)}
  className="bg-brand-500 hover:bg-brand-600 text-white"
  >
  <Plus className="w-4 h-4 mr-1" />
- Add Resource
+ {t('projects.resources.add_button')}
  </Button>
  </div>
 
  <div className="space-y-2">
  {resources.length === 0 ? (
- <p className="text-sm text-muted-foreground py-4 text-center">No resources yet</p>
+ <p className="text-sm text-muted-foreground py-4 text-center">{t('projects.resources.empty')}</p>
  ) : (
  resources.map((resource) => {
- const type = (resource.resource_type || 'url') as ResourceType;
+ const type = normalizeResourceType(resource.resource_type);
  const Icon = resourceTypeIcons[type] || FileText;
  const isPrimary = primaryResourceId === resource.id;
+ const label = t(resourceTypeLabelKeys[type]);
 
  return (
  <div
@@ -133,7 +139,7 @@ export default function TaskResources({ taskId, primaryResourceId, onUpdate }: T
  </div>
  <div className="flex-1 min-w-0">
  <p className="text-sm font-medium text-card-foreground truncate">
- {resourceTypeLabels[type] || type}
+ {label}
  </p>
  {type === 'url' && resource.resource_url && (
  <a
@@ -158,6 +164,7 @@ export default function TaskResources({ taskId, primaryResourceId, onUpdate }: T
  size="icon"
  variant="ghost"
  onClick={() => setPrimaryMutation.mutate(resource.id)}
+ aria-label={t(isPrimary ? 'projects.resources.unset_primary_aria' : 'projects.resources.set_primary_aria', { type: label })}
  className={cn('h-8 w-8', isPrimary && 'text-brand-600 hover:text-brand-700')}
  >
  <Star className={cn('w-4 h-4', isPrimary && 'fill-brand-600')} />
@@ -166,6 +173,7 @@ export default function TaskResources({ taskId, primaryResourceId, onUpdate }: T
  size="icon"
  variant="ghost"
  onClick={() => deleteResourceMutation.mutate(resource.id)}
+ aria-label={t('projects.resources.delete_aria', { type: label })}
  className="h-8 w-8 text-rose-600 hover:bg-rose-50 "
  >
  <Trash2 className="w-4 h-4" />
@@ -180,11 +188,12 @@ export default function TaskResources({ taskId, primaryResourceId, onUpdate }: T
  <Dialog open={showAddModal} onOpenChange={setShowAddModal}>
  <DialogContent className="sm:max-w-md bg-card text-card-foreground">
  <DialogHeader>
- <DialogTitle>Add Resource</DialogTitle>
+ <DialogTitle>{t('projects.resources.add_modal_title')}</DialogTitle>
+ <DialogDescription>{t('projects.resources.add_modal_description')}</DialogDescription>
  </DialogHeader>
  <form onSubmit={handleSubmit} className="space-y-4">
  <div>
- <Label>Resource Type</Label>
+ <Label>{t('projects.resources.resource_type_label')}</Label>
  <Select
  value={formData.type}
  onValueChange={(value) => setFormData({ ...formData, type: value as ResourceType })}
@@ -193,21 +202,21 @@ export default function TaskResources({ taskId, primaryResourceId, onUpdate }: T
  <SelectValue />
  </SelectTrigger>
  <SelectContent>
- <SelectItem value="url">External Link</SelectItem>
- <SelectItem value="text">Note</SelectItem>
- <SelectItem value="pdf">Document</SelectItem>
+ <SelectItem value="url">{t(resourceTypeLabelKeys.url)}</SelectItem>
+ <SelectItem value="text">{t(resourceTypeLabelKeys.text)}</SelectItem>
+ <SelectItem value="pdf">{t(resourceTypeLabelKeys.pdf)}</SelectItem>
  </SelectContent>
  </Select>
  </div>
 
  {formData.type === 'url' && (
  <div>
- <Label>URL</Label>
+ <Label>{t('projects.resources.url_label')}</Label>
  <Input
  type="url"
  value={formData.resource_url}
  onChange={(e) => setFormData({ ...formData, resource_url: e.target.value })}
- placeholder="https://example.com"
+ placeholder={t('projects.resources.url_placeholder')}
  required
  />
  </div>
@@ -215,11 +224,11 @@ export default function TaskResources({ taskId, primaryResourceId, onUpdate }: T
 
  {formData.type === 'text' && (
  <div>
- <Label>Content</Label>
+ <Label>{t('projects.resources.content_label')}</Label>
  <Textarea
  value={formData.resource_text}
  onChange={(e) => setFormData({ ...formData, resource_text: e.target.value })}
- placeholder="Enter your note..."
+ placeholder={t('projects.resources.content_placeholder')}
  rows={4}
  required
  />
@@ -228,11 +237,11 @@ export default function TaskResources({ taskId, primaryResourceId, onUpdate }: T
 
  {formData.type === 'pdf' && (
  <div>
- <Label>Storage Path</Label>
+ <Label>{t('projects.resources.storage_path_label')}</Label>
  <Input
  value={formData.storage_path}
  onChange={(e) => setFormData({ ...formData, storage_path: e.target.value })}
- placeholder="path/to/document.pdf"
+ placeholder={t('projects.resources.storage_path_placeholder')}
  required
  />
  </div>
@@ -240,10 +249,10 @@ export default function TaskResources({ taskId, primaryResourceId, onUpdate }: T
 
  <div className="flex gap-2 justify-end pt-4">
  <Button type="button" variant="outline" onClick={() => setShowAddModal(false)}>
- Cancel
+ {t('common.cancel')}
  </Button>
  <Button type="submit" className="bg-brand-500 hover:bg-brand-600 text-white">
- Add Resource
+ {t('projects.resources.add_button')}
  </Button>
  </div>
  </form>

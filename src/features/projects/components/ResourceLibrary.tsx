@@ -1,9 +1,11 @@
 import { useState, useMemo } from 'react';
 import { ExternalLink, FileText, StickyNote, Search, BookOpen } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { Input } from '@/shared/ui/input';
 import { cn } from '@/shared/lib/utils';
 import { safeUrl } from '@/shared/lib/safe-url';
 import { useProjectResources } from '@/features/projects/hooks/useProjectResources';
+import { formatNumberLocalized } from '@/shared/i18n/formatters';
 import type { ResourceWithTask } from '@/shared/db/app.types';
 
 // ---------------------------------------------------------------------------
@@ -18,11 +20,15 @@ const resourceTypeIcons: Record<ResourceType, React.ElementType> = {
     text: StickyNote,
 };
 
-const resourceTypeLabels: Record<ResourceType, string> = {
-    url: 'External Link',
-    pdf: 'Document',
-    text: 'Note',
-};
+const resourceTypeLabelKeys = {
+    url: 'projects.resources.types.url',
+    pdf: 'projects.resources.types.pdf',
+    text: 'projects.resources.types.text',
+} as const;
+
+function normalizeResourceType(type: string | null | undefined): ResourceType {
+    return type === 'pdf' || type === 'text' || type === 'url' ? type : 'url';
+}
 
 // ---------------------------------------------------------------------------
 // Filter tab definitions
@@ -30,22 +36,23 @@ const resourceTypeLabels: Record<ResourceType, string> = {
 
 type FilterTab = 'all' | ResourceType;
 
-const FILTER_TABS: { id: FilterTab; label: string }[] = [
-    { id: 'all', label: 'All' },
-    { id: 'url', label: 'Links' },
-    { id: 'pdf', label: 'Documents' },
-    { id: 'text', label: 'Notes' },
-];
+const FILTER_TABS = [
+    { id: 'all', label: 'projects.resources.filters.all' },
+    { id: 'url', label: 'projects.resources.filters.url' },
+    { id: 'pdf', label: 'projects.resources.filters.pdf' },
+    { id: 'text', label: 'projects.resources.filters.text' },
+] as const;
 
 // ---------------------------------------------------------------------------
 // Resource card
 // ---------------------------------------------------------------------------
 
 function ResourceCard({ resource }: { resource: ResourceWithTask }) {
-    const type = (resource.resource_type ?? 'url') as ResourceType;
+    const { t } = useTranslation();
+    const type = normalizeResourceType(resource.resource_type);
     const Icon = resourceTypeIcons[type] ?? FileText;
-    const label = resourceTypeLabels[type] ?? type;
-    const taskTitle = resource.task?.title ?? 'Unknown task';
+    const label = t(resourceTypeLabelKeys[type]);
+    const taskTitle = resource.task?.title ?? t('projects.resources.unknown_task');
 
     return (
         <div className="flex items-start gap-3 p-4 rounded-lg border border-border bg-card hover:border-brand-300 transition-colors">
@@ -78,7 +85,7 @@ function ResourceCard({ resource }: { resource: ResourceWithTask }) {
                 )}
 
                 <p className="text-xs text-slate-400 mt-1.5">
-                    From: <span className="font-medium text-slate-500">{taskTitle}</span>
+                    {t('projects.resources.from_task', { title: taskTitle })}
                 </p>
             </div>
         </div>
@@ -94,12 +101,15 @@ interface ResourceLibraryProps {
 }
 
 export default function ResourceLibrary({ projectId }: ResourceLibraryProps) {
+    const { t } = useTranslation();
     const { data: resources = [], isLoading } = useProjectResources(projectId);
     const [search, setSearch] = useState('');
     const [activeFilter, setActiveFilter] = useState<FilterTab>('all');
+    const trimmedSearch = search.trim();
+    const hasActiveRefinement = activeFilter !== 'all' || trimmedSearch.length > 0;
 
     const filtered = useMemo(() => {
-        const q = search.trim().toLowerCase();
+        const q = trimmedSearch.toLowerCase();
 
         return resources.filter((r: ResourceWithTask) => {
             // Type filter
@@ -120,7 +130,7 @@ export default function ResourceLibrary({ projectId }: ResourceLibraryProps) {
 
             return true;
         });
-    }, [resources, search, activeFilter]);
+    }, [resources, trimmedSearch, activeFilter]);
 
     return (
         <div className="space-y-6">
@@ -129,7 +139,7 @@ export default function ResourceLibrary({ projectId }: ResourceLibraryProps) {
                 <div className="relative flex-1">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                     <Input
-                        placeholder="Search resources…"
+                        placeholder={t('projects.resources.search_placeholder')}
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}
                         className="pl-9"
@@ -148,7 +158,7 @@ export default function ResourceLibrary({ projectId }: ResourceLibraryProps) {
                                     : 'text-muted-foreground hover:text-slate-700',
                             )}
                         >
-                            {tab.label}
+                            {t(tab.label)}
                         </button>
                     ))}
                 </div>
@@ -164,13 +174,13 @@ export default function ResourceLibrary({ projectId }: ResourceLibraryProps) {
                     <BookOpen className="w-10 h-10 text-slate-300 mb-3" />
                     <p className="text-slate-500 font-medium">
                         {resources.length === 0
-                            ? 'No resources in this project yet'
-                            : 'No resources match your search'}
+                            ? t('projects.resources.empty_project_title')
+                            : t('projects.resources.empty_search_title')}
                     </p>
                     <p className="text-slate-400 text-sm mt-1">
                         {resources.length === 0
-                            ? 'Add links, documents, or notes to tasks to see them here.'
-                            : 'Try adjusting your search or filter.'}
+                            ? t('projects.resources.empty_project_description')
+                            : t('projects.resources.empty_search_description')}
                     </p>
                 </div>
             ) : (
@@ -184,8 +194,12 @@ export default function ResourceLibrary({ projectId }: ResourceLibraryProps) {
             {/* Count footer */}
             {!isLoading && filtered.length > 0 && (
                 <p className="text-xs text-slate-400 text-right">
-                    {filtered.length} {filtered.length === 1 ? 'resource' : 'resources'}
-                    {activeFilter !== 'all' || search ? ` matching` : ' total'}
+                    {t(hasActiveRefinement
+                        ? 'projects.resources.count_matching'
+                        : 'projects.resources.count_total', {
+                        count: filtered.length,
+                        formattedCount: formatNumberLocalized(filtered.length),
+                    })}
                 </p>
             )}
         </div>

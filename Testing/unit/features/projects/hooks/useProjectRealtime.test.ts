@@ -78,6 +78,13 @@ describe('useProjectRealtime', () => {
       expect(mockChannel.subscribe).toHaveBeenCalled();
     });
 
+    it('does not subscribe when disabled', () => {
+      renderHook(() => useProjectRealtime(null, { enabled: false }), { wrapper: createWrapper() });
+
+      expect(supabase.channel).not.toHaveBeenCalled();
+      expect(mockChannel.subscribe).not.toHaveBeenCalled();
+    });
+
     it('removes channel on unmount', () => {
       const { unmount } = renderHook(() => useProjectRealtime('proj-1'), { wrapper: createWrapper() });
 
@@ -203,6 +210,22 @@ describe('useProjectRealtime', () => {
   });
 
   describe('channel lifecycle on rerender', () => {
+    it('keeps a single channel when projectId is stable', () => {
+      const { rerender } = renderHook(
+        ({ pid }) => useProjectRealtime(pid),
+        { initialProps: { pid: 'proj-1' as string | null }, wrapper: createWrapper() },
+      );
+
+      expect(supabase.channel).toHaveBeenCalledTimes(1);
+      expect(mockChannel.subscribe).toHaveBeenCalledTimes(1);
+
+      rerender({ pid: 'proj-1' });
+
+      expect(supabase.channel).toHaveBeenCalledTimes(1);
+      expect(mockChannel.subscribe).toHaveBeenCalledTimes(1);
+      expect(mockRemoveChannel).not.toHaveBeenCalled();
+    });
+
     it('recreates channel when projectId changes', () => {
       const { rerender } = renderHook(
         ({ pid }) => useProjectRealtime(pid),

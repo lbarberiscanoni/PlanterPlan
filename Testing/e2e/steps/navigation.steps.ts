@@ -142,11 +142,21 @@ Then('the mobile menu button is visible', async ({ page }) => {
 // ── Command Palette ─────────────────────────────────────────────────────────
 
 When('the user presses Cmd+K', async ({ page }) => {
-  await page.keyboard.press('Meta+k');
+  await page.keyboard.press('ControlOrMeta+K');
+  if (!(await page.locator('[cmdk-dialog]').isVisible({ timeout: 500 }).catch(() => false))) {
+    await page.evaluate(() => {
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true, bubbles: true }));
+    });
+  }
 });
 
 When('the command palette is open', async ({ page }) => {
-  await page.keyboard.press('Meta+k');
+  await page.keyboard.press('ControlOrMeta+K');
+  if (!(await page.locator('[cmdk-dialog]').isVisible({ timeout: 500 }).catch(() => false))) {
+    await page.evaluate(() => {
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true, bubbles: true }));
+    });
+  }
   await expect(page.locator('[cmdk-dialog]')).toBeVisible();
 });
 

@@ -33,8 +33,8 @@ table.
 ### `trg_enqueue_comment_mentions` (Wave 30 Task 3)
 
 `AFTER INSERT ON public.task_comments → public.enqueue_comment_mentions()`.
-For each resolved uuid in `NEW.mentions` that is **not** `NEW.author_id`,
-inserts a row:
+For each resolved uuid in `NEW.mentions` that is **not** `NEW.author_id`
+and is still an active member of the comment's project, inserts a row:
 
 ```
 notification_log (user_id, channel, event_type, payload)
@@ -52,7 +52,9 @@ VALUES (mention_uuid, 'email', 'mention_pending',
 The `channel` column is a placeholder — the dispatcher decides per
 recipient whether email, push, or both fire. The trigger coerces
 `mentions` strings to uuid via regex guard and logs a warning when invalid
-entries are supplied. `resolveMentions` now returns an empty array and emits a
+entries are supplied; valid UUIDs outside the current project membership are
+also ignored with a warning so comment previews are not delivered across
+project boundaries. `resolveMentions` now returns an empty array and emits a
 client warning when the handle RPC fails, so mention misses are observable
 instead of being hidden by trigger-side invalid-value drops.
 
@@ -96,7 +98,11 @@ file was descoped during the post-Wave-31 roadmap renumber).
 See `docs/dev-notes.md`.
 
 `dispatch-push` contract: `{ user_ids, title, body, url?, tag?, event_type }`.
-For each user/sub pair: send via web-push, DELETE on 410, log outcome.
+For each user/sub pair: send via web-push, DELETE on 410, log outcome. If
+VAPID env is missing, `dispatch-push` returns `success: false` with
+`error: 'vapid_unconfigured'` to its service-role caller instead of writing
+per-user transport rows; the caller's state machine owns the terminal
+`notification_log` entry.
 
 ## Dispatch state machine (mention path)
 
@@ -181,8 +187,9 @@ Triggers (preferred), GitHub Actions, or external pingers.
 
 * **No notifications firing** — check `SUPABASE_SERVICE_ROLE_KEY` is set
   on each function; confirm `EMAIL_PROVIDER_API_KEY` + `RESEND_FROM_ADDRESS`
-  for email; VAPID keys for push. Each missing env degrades to log-only
-  with a canonical `error` string.
+  for email; VAPID keys for push. Missing email env degrades to log-only;
+  missing VAPID env is returned to the caller as `vapid_unconfigured` so the
+  notification dispatcher can write the terminal failure once.
 * **Specific user not receiving** — `SELECT * FROM notification_log
   WHERE user_id = '<uid>' ORDER BY sent_at DESC LIMIT 20`. The `error`
   column tells you which skip/fail branch fired.

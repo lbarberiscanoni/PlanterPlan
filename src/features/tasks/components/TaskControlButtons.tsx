@@ -1,4 +1,4 @@
-import { Edit, Plus, UserPlus, Trash2 } from 'lucide-react';
+import { Edit, MoveRight, Plus, UserPlus, Trash2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { TaskRow } from '@/shared/db/app.types';
 
@@ -6,6 +6,7 @@ interface TaskControlButtonsProps {
  task: TaskRow;
  onEdit?: (task: TaskRow) => void;
  onAddChild?: (task: TaskRow) => void;
+ onMove?: (task: TaskRow) => void;
  onInvite?: (task: TaskRow) => void;
  onDelete?: (id: string) => void;
  canHaveChildren?: boolean;
@@ -25,6 +26,7 @@ export default function TaskControlButtons({
  task,
  onEdit,
  onAddChild,
+ onMove,
  onInvite,
  onDelete,
  canHaveChildren
@@ -55,6 +57,18 @@ export default function TaskControlButtons({
  title={t('tasks.add_subtask')}
  >
  <Plus className="w-3.5 h-3.5" aria-hidden="true" />
+ </button>
+ )}
+
+ {onMove && (
+ <button
+ type="button"
+ className="inline-flex h-6 w-6 items-center justify-center rounded text-slate-500 hover:text-brand-600 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 transition-colors"
+ onClick={(e) => { e.stopPropagation(); onMove(task); }}
+ aria-label={t('tasks.move_task_aria', { title: taskTitle })}
+ title={t('tasks.move_task')}
+ >
+ <MoveRight className="w-3.5 h-3.5" aria-hidden="true" />
  </button>
  )}
 

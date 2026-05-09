@@ -9,6 +9,7 @@ import type { TaskRow, TaskInsert } from '@/shared/db/app.types';
 // Mock planterClient
 const mockCreate = vi.fn();
 const mockUpdate = vi.fn();
+const mockUpdateStatus = vi.fn();
 const mockDelete = vi.fn();
 
 vi.mock('@/shared/api/planterClient', () => ({
@@ -17,6 +18,7 @@ vi.mock('@/shared/api/planterClient', () => ({
       Task: {
         create: (...args: unknown[]) => mockCreate(...args),
         update: (...args: unknown[]) => mockUpdate(...args),
+        updateStatus: (...args: unknown[]) => mockUpdateStatus(...args),
         delete: (...args: unknown[]) => mockDelete(...args),
       },
     },
@@ -112,6 +114,45 @@ describe('useUpdateTask', () => {
     });
 
     expect(mockUpdate).toHaveBeenCalledWith('t1', expect.objectContaining({ id: 't1', title: 'Updated' }));
+  });
+
+  it('routes pure status updates through Task.updateStatus for cascade and rollup orchestration', async () => {
+    const updated = makeTask({ id: 't1', status: 'completed' });
+    mockUpdateStatus.mockResolvedValueOnce({ data: updated, error: null });
+    const { Wrapper } = createWrapper();
+
+    const { result } = renderHook(() => useUpdateTask(), { wrapper: Wrapper });
+
+    await act(async () => {
+      await result.current.mutateAsync({ id: 't1', status: 'completed', root_id: 'proj-1' });
+    });
+
+    expect(mockUpdateStatus).toHaveBeenCalledWith('t1', 'completed');
+    expect(mockUpdate).not.toHaveBeenCalled();
+  });
+
+  it('keeps mixed-field saves on Task.update so the DB trigger owns completion-flag reconciliation', async () => {
+    const updated = makeTask({ id: 't1', title: 'Updated', status: 'completed' });
+    mockUpdate.mockResolvedValueOnce(updated);
+    const { Wrapper } = createWrapper();
+
+    const { result } = renderHook(() => useUpdateTask(), { wrapper: Wrapper });
+
+    await act(async () => {
+      await result.current.mutateAsync({
+        id: 't1',
+        title: 'Updated',
+        status: 'completed',
+        root_id: 'proj-1',
+      });
+    });
+
+    expect(mockUpdate).toHaveBeenCalledWith('t1', expect.objectContaining({
+      id: 't1',
+      title: 'Updated',
+      status: 'completed',
+    }));
+    expect(mockUpdateStatus).not.toHaveBeenCalled();
   });
 
   it('applies optimistic update to projectHierarchy cache', async () => {

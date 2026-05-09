@@ -1,9 +1,7 @@
-import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import { useAuth } from '@/shared/contexts/auth-context';
 import { useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/shared/db/client';
-import type { RealtimePostgresChangesPayload } from '@supabase/supabase-js';
 import { useProjectData } from '@/features/projects/hooks/useProjectData';
 import { useProjectBoard } from "@/features/projects/hooks/useProjectBoard";
 import { ROLES, TASK_STATUS } from '@/shared/constants';
@@ -18,6 +16,8 @@ import { Loader2, Plus } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/shared/ui/button';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/shared/ui/dialog';
+import { Label } from '@/shared/ui/label';
 import { useCreateTask, useDeleteTask, useUpdateTask } from '@/features/tasks/hooks/useTaskMutations';
 import { toast } from 'sonner';
 import type { TaskRow, Project as ProjectType, TaskFormData } from '@/shared/db/app.types';
@@ -33,6 +33,7 @@ import MasterLibrarySearch from '@/features/library/components/MasterLibrarySear
 import ResourceLibrary from '@/features/projects/components/ResourceLibrary';
 import ProjectActivityTab from '@/features/projects/components/ProjectActivityTab';
 import { useProjectPresence } from '@/features/projects/hooks/useProjectPresence';
+import { useProjectRealtime } from '@/features/projects/hooks/useProjectRealtime';
 import { PresenceBar } from '@/features/projects/components/PresenceBar';
 import {
     canCreateChildTask,
@@ -42,6 +43,7 @@ import {
     canUpdateTaskProgress,
 } from '@/features/tasks/lib/task-permissions';
 import { canManageProjectMembers } from '@/features/projects/lib/project-member-permissions';
+import { getTaskMoveParentOptions } from '@/features/tasks/lib/task-move-options';
 
 export default function Project() {
     // Canonical URL form is /Project/:projectId. The legacy /Project?id=X
@@ -85,12 +87,14 @@ export default function Project() {
     // Wave 27: open the per-project presence channel and publish the focused
     // task through the same subscribed channel.
     const { presentUsers } = useProjectPresence(projectId ?? null, state.selectedTask?.id ?? null);
+    useProjectRealtime(projectId ?? null, { enabled: !!projectId });
 
     const queryClient = useQueryClient();
-    const lastUpdateRef = useRef(0);
 
     // Form states restored
     const [taskFormState, setTaskFormState] = useState<{ mode?: 'create' | 'edit'; origin?: 'instance' | 'template'; isPhase?: boolean } | null>(null);
+    const [moveDialogTask, setMoveDialogTask] = useState<TaskRow | null>(null);
+    const [moveTargetParentId, setMoveTargetParentId] = useState<string>('');
 
     const handleTaskSubmit = async (formData: TaskFormData) => {
         try {
@@ -162,81 +166,70 @@ export default function Project() {
         }
     };
 
-    useEffect(() => {
-        if (!projectId) return;
-
-        // Comments use a per-task channel mounted by TaskComments — see useTaskCommentsRealtime. Don't merge here.
-        const channel = supabase
-            .channel(`project-tasks:${projectId}`)
-            .on(
-                'postgres_changes',
-                {
-                    event: '*',
-                    schema: 'public',
-                    table: 'tasks',
-                },
-                (payload: RealtimePostgresChangesPayload<TaskRow>) => {
-                    const now = Date.now();
-                    // Debounce bursts (e.g. cascade updates)
-                    if (now - lastUpdateRef.current < 500) return;
-                    lastUpdateRef.current = now;
-
-                    // Note: payload.old is only fully populated if replica identity is set to full on the DB.
-                    // Usually payload.new is what we care about for INSERT/UPDATE. We cast appropriately.
-                    const newRecord = payload.new as TaskRow | undefined;
-                    const oldRecord = payload.old as TaskRow | undefined;
-                    const record = newRecord || oldRecord;
-
-                    if (!record) return;
-
-                    // We only care if:
-                    // 1. It IS the project itself
-                    // 2. Its root_id matches the project
-                    // 3. Its parent_task_id matches the project (Direct child)
-                    const isRelevant =
-                        record.id === projectId ||
-                        record.root_id === projectId ||
-                        record.parent_task_id === projectId;
-
-                    if (isRelevant) {
-                        // Invalidate specific project hierarchy queries
-                        queryClient.invalidateQueries({ queryKey: ['projectHierarchy', projectId] });
-
-                        // If it changed metadata that affects the header (name, dates), refresh project too
-                        if (record.id === projectId || !record.root_id) {
-                            queryClient.invalidateQueries({ queryKey: ['project', projectId] });
-                        }
-                    }
-                }
-            )
-            .subscribe((_, err) => {
-                if (err) {
-                    console.error('[Project Realtime] Channel error:', err);
-                }
-            });
-
-        return () => {
-            supabase.removeChannel(channel);
-        };
-    }, [projectId, queryClient]);
-
     const isOwnerByProject = project?.creator === user?.id;
     const isGlobalAdmin = user?.role === ROLES.ADMIN;
     const currentMember = teamMembers?.find((m: { user_id?: string }) => m.user_id === user?.id);
     const userRole = isGlobalAdmin ? ROLES.ADMIN : currentMember?.role || (isOwnerByProject ? ROLES.OWNER : ROLES.VIEWER);
+    const projectTaskRows = useMemo(() => (projectHierarchy as TaskRow[]) || [], [projectHierarchy]);
 
     const canEdit = canEditTaskContent(userRole);
     const canCreateTasks = canCreateChildTask(userRole);
     const canReorderTasks = canReorderTask(userRole);
     const canInvite = canManageProjectMembers(userRole);
     const canManageSettings = canManageProjectMembers(userRole);
+    const canEditTaskForRow = useCallback(
+        (task: TaskRow) => canEditTaskContent(userRole, {
+            task,
+            allProjectTasks: projectTaskRows,
+            userId: user?.id ?? null,
+        }),
+        [projectTaskRows, user?.id, userRole],
+    );
     const canUpdateTaskStatusForRow = useCallback(
-        (task: TaskRow) => canUpdateTaskProgress(userRole, task),
-        [userRole],
+        (task: TaskRow) => canUpdateTaskProgress(userRole, task, {
+            allProjectTasks: projectTaskRows,
+            userId: user?.id ?? null,
+        }),
+        [projectTaskRows, user?.id, userRole],
     );
     const handleInvalidHierarchyDrop = useCallback(() => {
         toast.error(t('projects.invalid_task_hierarchy_drop'));
     }, [t]);
+    const canMoveTaskWithoutDnd = useCallback(
+        (task: TaskRow) => getTaskMoveParentOptions(task, projectTaskRows).length > 0,
+        [projectTaskRows],
+    );
+    const openMoveTaskDialog = useCallback(
+        (task: TaskRow) => {
+            const options = getTaskMoveParentOptions(task, projectTaskRows);
+            setMoveDialogTask(task);
+            setMoveTargetParentId(options[0]?.id ?? '');
+        },
+        [projectTaskRows],
+    );
+    const moveParentOptions = useMemo(
+        () => moveDialogTask ? getTaskMoveParentOptions(moveDialogTask, projectTaskRows) : [],
+        [moveDialogTask, projectTaskRows],
+    );
+    const closeMoveTaskDialog = useCallback(() => {
+        setMoveDialogTask(null);
+        setMoveTargetParentId('');
+    }, []);
+    const handleMoveTask = useCallback(() => {
+        if (!moveDialogTask || !moveTargetParentId) return;
+        if (!moveParentOptions.some((option) => option.id === moveTargetParentId)) {
+            toast.error(t('projects.invalid_task_hierarchy_drop'));
+            return;
+        }
+
+        handlers.handleTaskUpdate(moveDialogTask.id, {
+            parent_task_id: moveTargetParentId,
+            root_id: projectId ?? moveDialogTask.root_id,
+        });
+        const targetParent = projectTaskRows.find((task) => task.id === moveTargetParentId);
+        if (targetParent) handlers.handleToggleExpand(targetParent, true);
+        closeMoveTaskDialog();
+    }, [closeMoveTaskDialog, handlers, moveDialogTask, moveParentOptions, moveTargetParentId, projectId, projectTaskRows, t]);
 
     const sortedPhases = [...(phases || [])].sort((a, b) => (a.position || 0) - (b.position || 0));
     const activePhase = state.selectedPhase || sortedPhases[0];
@@ -292,7 +285,7 @@ export default function Project() {
         <>
             <div className="flex h-full gap-8 min-w-0">
             <ProjectDndShell
-                tasks={(projectHierarchy as TaskRow[]) || []}
+                tasks={projectTaskRows}
                 onTaskUpdate={canReorderTasks ? handlers.handleTaskUpdate : () => undefined}
                 onToggleExpand={handlers.handleToggleExpand}
                 onInvalidDrop={handleInvalidHierarchyDrop}
@@ -302,7 +295,7 @@ export default function Project() {
                     <ProjectHeader
                         project={project as ProjectType}
                         tasks={tasks as TaskRow[]}
-                        stateTasks={projectHierarchy as TaskRow[]}
+                        stateTasks={projectTaskRows}
                         teamMembers={teamMembers}
                         canInvite={canInvite}
                         canManageSettings={canManageSettings}
@@ -383,13 +376,15 @@ export default function Project() {
                                                     <MilestoneSection
                                                         key={milestone.id}
                                                         milestone={milestone}
-                                                        tasks={(tasks as TaskRow[] || []).map(computed.mapTaskWithState) as TaskRow[]}
+                                                        tasks={computed.getTasksWithStateForParent(milestone.id)}
                                                         onTaskUpdate={handlers.handleTaskUpdate as (id: string, updates: Partial<TaskRow>) => void}
                                                         onAddChildTask={canCreateTasks ? handlers.handleStartInlineAdd : undefined}
+                                                        onMoveTask={canReorderTasks ? openMoveTaskDialog : undefined}
+                                                        canMoveTask={canMoveTaskWithoutDnd}
                                                         onToggleExpand={handlers.handleToggleExpand}
                                                         onTaskClick={(task: TaskRow) => {
                                                             handlers.handleTaskClick(task);
-                                                            setTaskFormState(canEdit ? { mode: 'edit', origin: projectOrigin } : null);
+                                                            setTaskFormState(canEditTaskForRow(task) ? { mode: 'edit', origin: projectOrigin } : null);
                                                         }}
                                                         onInlineCommit={canCreateTasks ? handlers.handleInlineCommit : undefined}
                                                         onInlineCancel={() => actions.setInlineAddingParentId(null)}
@@ -448,7 +443,7 @@ export default function Project() {
                         taskBeingEdited={taskFormState?.mode === 'edit' ? state.selectedTask || undefined : undefined}
                         parentTaskForForm={state.inlineAddingParentId ? (tasks?.find(t => t.id === state.inlineAddingParentId) as TaskRow) : undefined}
                         membershipRole={userRole}
-                        allProjectTasks={(projectHierarchy as TaskRow[]) || []}
+                        allProjectTasks={projectTaskRows}
                         teamMembers={teamMembers}
                         showComments={false}
                         onClose={() => {
@@ -468,12 +463,13 @@ export default function Project() {
                                 excludeTemplateIds={excludedTemplateIds}
                             />
                         )}
-                        canEdit={canEdit}
+                        canEdit={state.selectedTask ? canEditTaskForRow(state.selectedTask) : canEdit}
                         onDeleteTaskWrapper={
                             state.selectedTask && canDeleteTaskForRole(userRole, state.selectedTask)
                                 ? async () => { if (state.selectedTask) await handlers.handleDeleteTask(state.selectedTask); }
                                 : undefined
                         }
+                        handleAddChildTask={canCreateTasks ? handlers.handleStartInlineAdd : undefined}
                         handleEditTask={(task) => {
                             actions.setSelectedTask(task as TaskRow);
                             setTaskFormState({ mode: 'edit', origin: projectOrigin });
@@ -489,6 +485,59 @@ export default function Project() {
                     onInviteSuccess={() => { }}
                 />
             )}
+
+            <Dialog
+                open={moveDialogTask !== null}
+                onOpenChange={(open) => {
+                    if (!open) closeMoveTaskDialog();
+                }}
+            >
+                <DialogContent data-testid="move-task-dialog">
+                    <DialogHeader>
+                        <DialogTitle>
+                            {t('tasks.move_dialog.title', {
+                                title: moveDialogTask?.title ?? t('common.untitled_task'),
+                            })}
+                        </DialogTitle>
+                        <DialogDescription>{t('tasks.move_dialog.description')}</DialogDescription>
+                    </DialogHeader>
+
+                    {moveParentOptions.length > 0 ? (
+                        <div className="space-y-2">
+                            <Label htmlFor="move-task-target">{t('tasks.move_dialog.target_label')}</Label>
+                            <select
+                                id="move-task-target"
+                                value={moveTargetParentId}
+                                onChange={(event) => setMoveTargetParentId(event.target.value)}
+                                className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                                data-testid="move-task-target"
+                            >
+                                {moveParentOptions.map((option) => (
+                                    <option key={option.id} value={option.id}>
+                                        {option.title ?? t('common.untitled_task')}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                    ) : (
+                        <p className="text-sm text-muted-foreground">{t('tasks.move_dialog.no_targets')}</p>
+                    )}
+
+                    <DialogFooter>
+                        <Button type="button" variant="outline" onClick={closeMoveTaskDialog}>
+                            {t('common.cancel')}
+                        </Button>
+                        <Button
+                            type="button"
+                            onClick={handleMoveTask}
+                            disabled={!moveTargetParentId}
+                            data-testid="move-task-submit"
+                        >
+                            {t('tasks.move_dialog.submit')}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </>
     );
 }

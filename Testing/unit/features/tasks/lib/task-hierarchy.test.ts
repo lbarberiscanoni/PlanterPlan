@@ -33,9 +33,16 @@ describe('task hierarchy guard helpers', () => {
     });
 
     it('rejects subtask children, cycle moves, and moves that push descendants too deep', () => {
+        expect(canReparentTask('task-a', 'task-a', rows)).toBe(false);
         expect(canReparentTask('task-a', 'subtask-a', rows)).toBe(false);
         expect(canReparentTask('task-with-subtask', 'task-b', rows)).toBe(false);
         expect(canReparentTask('task-with-subtask', 'subtask-a', rows)).toBe(false);
+    });
+
+    it('rejects malformed reparent payloads with missing active tasks or parents', () => {
+        expect(canReparentTask('missing-task', 'task-b', rows)).toBe(false);
+        expect(canReparentTask('task-a', 'missing-parent', rows)).toBe(false);
+        expect(canReparentTask('task-a', 'task-b', [])).toBe(false);
     });
 
     it('hides child-creation affordances only at the final subtask level', () => {

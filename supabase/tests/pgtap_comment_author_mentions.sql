@@ -1,6 +1,6 @@
 BEGIN;
 
-SELECT plan(13);
+SELECT plan(14);
 
 TRUNCATE TABLE
     public.activity_log,
@@ -60,6 +60,7 @@ VALUES (
         '00000000-0000-0000-0000-000000000703',
         '00000000-0000-0000-0000-000000000703',
         '00000000-0000-0000-0000-000000000702',
+        '00000000-0000-0000-0000-000000000704',
         'not-a-uuid'
     ]::text[]
 );
@@ -98,6 +99,17 @@ SELECT is(
     (SELECT user_id::text FROM public.notification_log WHERE event_type = 'mention_pending' LIMIT 1),
     '00000000-0000-0000-0000-000000000703',
     'notification row recipient is the mentioned user'
+);
+
+SELECT is(
+    (
+        SELECT count(*)
+        FROM public.notification_log
+        WHERE event_type = 'mention_pending'
+          AND user_id = '00000000-0000-0000-0000-000000000704'
+    ),
+    0::bigint,
+    'mention trigger does not notify users outside the project membership'
 );
 
 SELECT is(

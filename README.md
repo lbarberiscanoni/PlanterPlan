@@ -35,8 +35,15 @@ Directives and context constraints specifically formatted for AI agents and auto
 
 ## 🚀 Quick Start
 ```bash
-npm install
+npm ci
+npm run verify-dependencies
+npm run verify-architecture
+npm run lint
+npm test
 npm run dev          # Start Vite dev server
 npm run build        # TypeScript check + Vite production build
-npm test             # Vitest unit/integration tests
+npm run test:e2e:release
 ```
+
+Client runtime configuration uses Vite env names only:
+`VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`.

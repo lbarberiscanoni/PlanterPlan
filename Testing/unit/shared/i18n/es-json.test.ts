@@ -39,6 +39,8 @@ describe('es.json', () => {
     const meta = (es as JsonObject)._meta as JsonObject;
     const spanishLocale = SUPPORTED_LOCALES.find((locale) => locale.code === 'es');
 
+    expect(meta.status).toContain('machine-translated');
+    expect(meta.review_required_before_marketing).toBe(true);
     expect(spanishLocale).toMatchObject({
       code: 'es',
       launchStatus: 'review_required',

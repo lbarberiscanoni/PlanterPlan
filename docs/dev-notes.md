@@ -12,9 +12,8 @@ Technical debt and architectural notes for the team.
 
 ### Active (Wave 36 → future)
 
-- **Server-side delete enforcement** — v1 ships an app-side guard only; a per-row RLS policy would be brittle and owner-bypass is clearer in app code. Revisit if abuse reports materialize.
 - **UI to "update this project to the latest template version"** — deferred (would require a three-way merge).
-- **Tracking edits to template-origin tasks** — closed by PR 2 for protected structural/content/template-provenance fields; broad reconciliation/sync from source templates remains deliberately out of scope.
+- **Broad template-instance synchronization** — deliberately out of scope; stale-version visibility is informational only.
 
 ## Wave 35 — External Integrations (ICS)
 
@@ -147,13 +146,21 @@ and project identifiers in every `mention_pending` payload.
 
 Do not grow `sw.js` beyond lifecycle + push responsibilities. The current handler implements `install` / `activate` / `push` / `notificationclick`, intentionally omits `fetch`/cache handling to avoid stale cache poisoning, normalizes malformed push payloads, and sanitizes notification click targets to same-origin paths. Any additional SW responsibility (offline queue, asset precache) waits for the TS rewrite.
 
-### `task_comments.author_id ON DELETE RESTRICT` blocks account deletion
+### Account deletion user-reference blockers
 
-**Active. Target: Wave 34 (Admin Management).** `task_comments.author_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE RESTRICT` (Wave 26). This matches `tasks.creator` / `project_members.user_id` — the RESTRICT was chosen deliberately per the Wave 26 plan so a comment can't go authorless while the app's `TaskCommentWithAuthor.author` contract treats non-soft-deleted rows as having an author. Trade-off: deleting an `auth.users` row is blocked if they've ever posted a comment (same blocker exists on the other two FKs).
+**Resolved (Release hardening PR 4).** The old Wave 26 note that
+`task_comments.author_id ON DELETE RESTRICT` blocked `auth.users` deletion is
+no longer accurate. `task_comments.author_id`, `tasks.creator`,
+`tasks.assignee_id`, and `activity_log.actor_id` are nullable `auth.users`
+references with `ON DELETE SET NULL`, so historical comments, tasks,
+assignments, and activity rows survive deleted/anonymized accounts.
 
-The right fix is cross-cutting, not local: when the admin / account-deletion flow ships (Wave 34 Admin Management — the original Licensing/Monetization track that would have owned account deletion was descoped during the post-Wave-31 renumber), it needs to decide how to anonymise or reassign user-owned rows across all three tables (`tasks.creator`, `project_members.user_id`, `task_comments.author_id`, plus whatever Wave 27 adds on `activity_log` / presence). Options: (a) nullable FKs with `ON DELETE SET NULL` + tombstone display everywhere, (b) a `public.deleted_users` row-retention table that every FK can reassign to during account-deletion, (c) hard-delete cascade gated by an admin-only "purge" action. (b) is cleanest for GDPR audit trails.
-
-Flagging at the Wave 26 level so the admin-flow plan doesn't miss `task_comments` when it audits the FK surface.
+Rows that are private to the account, or only meaningful while the account
+exists, intentionally cascade: `project_members`, `admin_users`,
+`notification_preferences`, `notification_log`, `push_subscriptions`, and
+`ics_feed_tokens`. The behavior is covered by
+`supabase/tests/pgtap_account_lifecycle.sql` and mirrored in the schema-source
+unit test.
 
 ### Gantt PDF export
 

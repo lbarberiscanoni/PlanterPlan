@@ -1,6 +1,6 @@
 BEGIN;
 
-SELECT plan(8);
+SELECT plan(10);
 
 TRUNCATE TABLE
     public.activity_log,
@@ -45,6 +45,21 @@ SELECT throws_like(
        VALUES ('66666666-6666-6666-6666-666666666701', 'Grandchild Attempt', 'instance', '00000000-0000-0000-0000-000000000701', '11111111-1111-1111-1111-111111111701', '55555555-5555-5555-5555-555555555701', 'todo') $$,
     '%task hierarchy depth exceeded: subtasks cannot have child tasks%',
     'cannot insert a child under a subtask'
+);
+
+SELECT throws_like(
+    $$ INSERT INTO public.tasks (id, title, origin, creator, root_id, parent_task_id, status)
+       VALUES ('66666666-6666-6666-6666-666666666702', 'Self Parent Attempt', 'instance', '00000000-0000-0000-0000-000000000701', '11111111-1111-1111-1111-111111111701', '66666666-6666-6666-6666-666666666702', 'todo') $$,
+    '%task hierarchy cannot parent a task to itself%',
+    'cannot insert a task parented to itself'
+);
+
+SELECT throws_like(
+    $$ UPDATE public.tasks
+       SET parent_task_id = id
+       WHERE id = '44444444-4444-4444-4444-444444444702' $$,
+    '%task hierarchy cannot parent a task to itself%',
+    'cannot update a task to parent itself'
 );
 
 SELECT lives_ok(

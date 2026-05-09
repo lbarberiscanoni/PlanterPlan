@@ -118,4 +118,57 @@ describe('Task.updateStatus — server payload trim (Wave 23 Task 3)', () => {
     expect(parentPayload).toHaveProperty('status', 'completed');
     expect(parentPayload).toHaveProperty('updated_at');
   });
+
+  it('reopening a subtask reconciles the task, milestone, and phase ancestors', async () => {
+    const subtask = makeTask({
+      id: 'subtask-1',
+      parent_task_id: 'task-1',
+      status: 'in_progress',
+      task_type: 'subtask',
+    });
+    const task = makeTask({
+      id: 'task-1',
+      parent_task_id: 'milestone-1',
+      status: 'in_progress',
+      task_type: 'task',
+    });
+    const milestone = makeTask({
+      id: 'milestone-1',
+      parent_task_id: 'phase-1',
+      status: 'in_progress',
+      task_type: 'milestone',
+    });
+    const phase = makeTask({
+      id: 'phase-1',
+      parent_task_id: 'project-1',
+      status: 'in_progress',
+      task_type: 'phase',
+    });
+
+    const updateSubtaskChain = createChain({ data: [subtask], error: null });
+    const filterTaskChildren = createChain({ data: [subtask], error: null });
+    const updateTaskChain = createChain({ data: [task], error: null });
+    const filterMilestoneChildren = createChain({ data: [task], error: null });
+    const updateMilestoneChain = createChain({ data: [milestone], error: null });
+    const filterPhaseChildren = createChain({ data: [milestone], error: null });
+    const updatePhaseChain = createChain({ data: [phase], error: null });
+    const unexpectedRootChain = createChain({ data: [], error: null });
+
+    mockFrom
+      .mockReturnValueOnce(updateSubtaskChain)
+      .mockReturnValueOnce(filterTaskChildren)
+      .mockReturnValueOnce(updateTaskChain)
+      .mockReturnValueOnce(filterMilestoneChildren)
+      .mockReturnValueOnce(updateMilestoneChain)
+      .mockReturnValueOnce(filterPhaseChildren)
+      .mockReturnValueOnce(updatePhaseChain)
+      .mockReturnValue(unexpectedRootChain);
+
+    await planter.entities.Task.updateStatus('subtask-1', 'in_progress');
+
+    expect(updateTaskChain.update).toHaveBeenCalledWith(expect.objectContaining({ status: 'in_progress' }));
+    expect(updateMilestoneChain.update).toHaveBeenCalledWith(expect.objectContaining({ status: 'in_progress' }));
+    expect(updatePhaseChain.update).toHaveBeenCalledWith(expect.objectContaining({ status: 'in_progress' }));
+    expect(unexpectedRootChain.update).not.toHaveBeenCalled();
+  });
 });

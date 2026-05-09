@@ -1,6 +1,6 @@
 BEGIN;
 
-SELECT plan(12);
+SELECT plan(14);
 
 TRUNCATE TABLE
     public.activity_log,
@@ -144,6 +144,23 @@ SELECT throws_like(
     'child due-only date cannot precede a dated parent envelope'
 );
 
+SELECT throws_like(
+    $$ INSERT INTO public.tasks (id, title, origin, creator, root_id, parent_task_id, status, start_date, due_date)
+       VALUES (
+           '55555555-5555-5555-5555-555555555801',
+           'Inserted Outside Envelope',
+           'instance',
+           '00000000-0000-0000-0000-000000000801',
+           '11111111-1111-1111-1111-111111111801',
+           '33333333-3333-3333-3333-333333333801',
+           'todo',
+           '2026-01-01 00:00:00+00'::timestamptz,
+           '2026-01-09 00:00:00+00'::timestamptz
+       ) $$,
+    '%task dates must stay within parent task dates%',
+    'inserting a dated child outside a dated parent envelope is rejected'
+);
+
 SELECT lives_ok(
     $$ UPDATE public.tasks
        SET start_date = '2026-01-12 00:00:00+00'::timestamptz,
@@ -162,6 +179,14 @@ SELECT is(
     (SELECT due_date::date FROM public.tasks WHERE id = '33333333-3333-3333-3333-333333333801'),
     '2026-01-18'::date,
     'valid child date edit rolls the parent due date upward'
+);
+
+SELECT throws_like(
+    $$ UPDATE public.tasks
+       SET start_date = '2026-01-13 00:00:00+00'::timestamptz
+       WHERE id = '33333333-3333-3333-3333-333333333801' $$,
+    '%existing child task dates are outside parent task dates%',
+    'parent start date cannot shrink around existing child dates'
 );
 
 SELECT throws_like(

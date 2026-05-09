@@ -33,6 +33,8 @@ interface TaskItemProps {
  onTaskClick?: (task: TaskItemData) => void;
  selectedTaskId?: string | null;
  onAddChildTask?: (task: TaskItemData) => void;
+ onMoveTask?: (task: TaskItemData) => void;
+ canMoveTask?: (task: TaskItemData) => boolean;
  onInviteMember?: (task: TaskItemData) => void;
  onStatusChange?: (id: string, status: string) => void;
  canUpdateStatus?: boolean;
@@ -72,6 +74,8 @@ const TaskItem = ({
  onTaskClick,
  selectedTaskId,
  onAddChildTask,
+ onMoveTask,
+ canMoveTask,
  onInviteMember,
  onStatusChange,
  canUpdateStatus,
@@ -187,6 +191,9 @@ const TaskItem = ({
  const handleAddChildAction = useCallback(() => {
  onAddChildTask?.(task);
  }, [onAddChildTask, task]);
+ const handleMoveAction = useCallback(() => {
+ onMoveTask?.(task);
+ }, [onMoveTask, task]);
  const handleInviteAction = useCallback(() => {
  onInviteMember?.(task);
  }, [onInviteMember, task]);
@@ -398,6 +405,7 @@ const TaskItem = ({
  task={task}
  onEdit={onEdit ? handleEditAction : undefined}
  onAddChild={onAddChildTask ? handleAddChildAction : undefined}
+ onMove={onMoveTask && (!canMoveTask || canMoveTask(task)) ? handleMoveAction : undefined}
  onInvite={onInviteMember ? handleInviteAction : undefined}
  onDelete={onDeleteTask || undefined}
  canHaveChildren={canHaveChildren}
@@ -450,6 +458,8 @@ const TaskItem = ({
  onTaskClick={onTaskClick}
  selectedTaskId={selectedTaskId}
  onAddChildTask={onAddChildTask}
+ onMoveTask={onMoveTask}
+ canMoveTask={canMoveTask}
  onInviteMember={onInviteMember}
  onStatusChange={onStatusChange}
  canUpdateStatus={canUpdateStatus}

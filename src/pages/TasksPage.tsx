@@ -1,5 +1,6 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { DndContext, closestCorners, useSensor, useSensors, PointerSensor, KeyboardSensor } from '@dnd-kit/core';
 import { sortableKeyboardCoordinates } from '@dnd-kit/sortable';
@@ -9,7 +10,7 @@ import { planter } from '@/shared/api/planterClient';
 import { STALE_TIMES } from '@/shared/lib/react-query-config';
 import TaskItem from '@/features/tasks/components/TaskItem';
 import TaskDetailsPanel from '@/features/tasks/components/TaskDetailsPanel';
-import { Loader2, List, LayoutGrid, Search, X } from 'lucide-react';
+import { FileText, Loader2, List, LayoutGrid, Plus, Search, X } from 'lucide-react';
 import { Button } from '@/shared/ui/button';
 import { Input } from '@/shared/ui/input';
 import ProjectBoardView from '@/features/tasks/components/board/ProjectBoardView';
@@ -40,6 +41,7 @@ import {
 import {
        Dialog,
        DialogContent,
+       DialogDescription,
        DialogHeader,
        DialogTitle,
 } from '@/shared/ui/dialog';
@@ -85,8 +87,15 @@ export default function TasksPage() {
                      try {
                             const task = findTask(taskId);
                             const oldParentId = task ? task.parent_task_id : null;
+                            const keys = Object.keys(updates);
+                            const statusUpdate = updates.status;
 
-                            await planter.entities.Task.update(taskId, updates as TaskUpdate);
+                            if (keys.length === 1 && typeof statusUpdate === 'string') {
+                                   const { error } = await planter.entities.Task.updateStatus(taskId, statusUpdate);
+                                   if (error) throw error;
+                            } else {
+                                   await planter.entities.Task.update(taskId, updates as TaskUpdate);
+                            }
                             await invalidateTasks();
 
                             if (task && task.origin === 'instance') {
@@ -198,7 +207,11 @@ export default function TasksPage() {
               }
               return undefined;
        }, [currentSelectedTask, selectedTeamMembers, selectedProjectRoot, currentUserId]);
-       const selectedCanEdit = canEditTaskContent(selectedMembershipRole);
+       const selectedCanEdit = canEditTaskContent(selectedMembershipRole, {
+              task: selectedTaskForPanel,
+              allProjectTasks: selectedProjectTasks,
+              userId: currentUserId,
+       });
        const selectedCanDelete = selectedTaskForPanel
               ? canDeleteTaskForRole(selectedMembershipRole, selectedTaskForPanel)
               : false;
@@ -219,6 +232,10 @@ export default function TasksPage() {
               () => tasks.filter((task) => task.origin === 'instance' && task.parent_task_id !== null).length,
               [tasks],
        );
+       const instanceProjectCount = useMemo(
+              () => tasks.filter((task) => task.origin === 'instance' && task.parent_task_id === null).length,
+              [tasks],
+       );
        const filteredTasks = useTaskFilters({ tasks, filter, sort: effectiveSort, dueDateRange, currentUserId });
        const normalizedSearchQuery = searchQuery.trim().toLowerCase();
        const visibleTasks = useMemo(() => {
@@ -237,11 +254,41 @@ export default function TasksPage() {
                      return haystack.includes(normalizedSearchQuery);
               });
        }, [filteredTasks, normalizedSearchQuery, projectTitleByRootId]);
+       const showFirstRunEmptyState = instanceProjectCount === 0
+              && actionableTaskCount === 0
+              && visibleTasks.length === 0
+              && filter === 'all_tasks'
+              && !normalizedSearchQuery
+              && !hasDueRange;
+       const childrenByParentForStatus = useMemo(() => {
+              const map = new Map<string, TaskRow[]>();
+              for (const task of tasks) {
+                     if (!task.parent_task_id) continue;
+                     const children = map.get(task.parent_task_id) ?? [];
+                     children.push(task);
+                     map.set(task.parent_task_id, children);
+              }
+              for (const children of map.values()) {
+                     children.sort((a, b) => (a.position || 0) - (b.position || 0));
+              }
+              return map;
+       }, [tasks]);
+       const withImmediateChildrenForStatus = useCallback(
+              (task: TaskRow) => ({
+                     ...task,
+                     children: childrenByParentForStatus.get(task.id) ?? [],
+              }),
+              [childrenByParentForStatus],
+       );
+       const visibleTaskRows = useMemo(
+              () => visibleTasks.map((task) => withImmediateChildrenForStatus(task)),
+              [visibleTasks, withImmediateChildrenForStatus],
+       );
        const priorityGroups = useMemo(
               () => filter === 'priority' && viewMode === 'list'
-                     ? buildPriorityTaskGroups({ tasks, candidateTasks: visibleTasks })
+                     ? buildPriorityTaskGroups({ tasks, candidateTasks: visibleTaskRows })
                      : [],
-              [filter, tasks, viewMode, visibleTasks],
+              [filter, tasks, viewMode, visibleTaskRows],
        );
 
        const sensors = useSensors(
@@ -438,11 +485,34 @@ export default function TasksPage() {
                                           <div className="h-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-8 w-full">
                                                  {visibleTasks.length === 0 ? (
                                                         <div className="bg-card rounded-xl border border-border shadow-sm p-12 text-center">
-                                                               <p className="text-muted-foreground">
-                                                                      {normalizedSearchQuery
-                                                                             ? t('tasks.search_empty')
-                                                                             : t(`tasks.filters.empty.${filter}`)}
-                                                               </p>
+                                                               {showFirstRunEmptyState ? (
+                                                                      <div className="mx-auto flex max-w-xl flex-col items-center gap-4" data-testid="tasks-first-run-empty-state">
+                                                                             <div className="space-y-2">
+                                                                                    <h2 className="text-xl font-semibold text-slate-900">{t('tasks.first_run.title')}</h2>
+                                                                                    <p className="text-slate-600">{t('tasks.first_run.description')}</p>
+                                                                             </div>
+                                                                             <div className="flex flex-col gap-3 sm:flex-row">
+                                                                                    <Button asChild>
+                                                                                           <Link to="/tasks?action=new-project">
+                                                                                                  <Plus className="w-4 h-4" aria-hidden="true" />
+                                                                                                  {t('tasks.first_run.blank_cta')}
+                                                                                           </Link>
+                                                                                    </Button>
+                                                                                    <Button asChild variant="outline">
+                                                                                           <Link to="/tasks?action=new-project&template=launch_large">
+                                                                                                  <FileText className="w-4 h-4" aria-hidden="true" />
+                                                                                                  {t('tasks.first_run.template_cta')}
+                                                                                           </Link>
+                                                                                    </Button>
+                                                                             </div>
+                                                                      </div>
+                                                               ) : (
+                                                                      <p className="text-slate-600">
+                                                                             {normalizedSearchQuery
+                                                                                    ? t('tasks.search_empty')
+                                                                                    : t(`tasks.filters.empty.${filter}`)}
+                                                                      </p>
+                                                               )}
                                                         </div>
                                                  ) : (
                                                         viewMode === 'list' ? (
@@ -497,7 +567,7 @@ export default function TasksPage() {
                                                                              ))
                                                                       ) : (
                                                                              <div className="flex flex-col gap-2">
-                                                                                    {visibleTasks.map(task => {
+                                                                                    {visibleTaskRows.map(task => {
                                                                                            const projectTitle = task.root_id && task.root_id !== task.id
                                                                                                   ? projectTitleByRootId.get(task.root_id) ?? null
                                                                                                   : null;
@@ -545,6 +615,7 @@ export default function TasksPage() {
                             >
                                    <DialogHeader className="sr-only">
                                           <DialogTitle>{selectedTaskForPanel?.title ?? t('tasks.panel.details')}</DialogTitle>
+                                          <DialogDescription>{t('tasks.panel.description')}</DialogDescription>
                                    </DialogHeader>
                                    {selectedTaskForPanel && (
                                           <TaskDetailsPanel

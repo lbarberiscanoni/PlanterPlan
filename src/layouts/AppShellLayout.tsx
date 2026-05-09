@@ -45,8 +45,8 @@ export default function AppShellLayout({ sidebar, children }: { sidebar?: React.
 
  <aside
  className={cn(
- 'fixed top-16 left-0 bottom-0 w-64 bg-card border-r border-border z-40 transition-transform duration-300 lg:translate-x-0 shadow-lg lg:shadow-none',
- sidebarOpen ? 'translate-x-0' : '-translate-x-full'
+ 'fixed top-16 left-0 bottom-0 w-64 bg-card border-r border-border z-40 transition-transform duration-300 lg:visible lg:translate-x-0 shadow-lg lg:shadow-none',
+ sidebarOpen ? 'visible translate-x-0' : 'invisible -translate-x-full'
  )}
  >
  {sidebar ? (
@@ -71,6 +71,7 @@ export default function AppShellLayout({ sidebar, children }: { sidebar?: React.
  onClick={() => setSidebarOpen(false)}
  aria-hidden="true"
  tabIndex={-1}
+ data-testid="sidebar-overlay"
  />
  )}
 

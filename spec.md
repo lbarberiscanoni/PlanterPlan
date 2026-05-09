@@ -1,10 +1,10 @@
 # PlanterPlan — Project Specification
 
 > **Version**: 1.20.0 (Wave 36 — Template Hardening) 
-> **Last Updated**: 2026-04-22 
-> **Status**: Active Development — all scoped waves (32 → 36) shipped; v1.0.0 release pending ultrareview.
+> **Last Updated**: 2026-05-09
+> **Status**: Active Development — all scoped waves (32 → 36) shipped; v1.0.0 release hardening in progress.
 
-> **Wave 36 closure note**: closes two architecture-doc known gaps. **Template versioning** — `public.tasks.template_version` + BEFORE UPDATE trigger `trg_bump_template_version` increments on text/structural edits to template rows; `Task.clone` stamps `settings.cloned_from_template_version` on clone roots. Deliberately non-propagating. Admin Templates surface at `/admin/templates` shows version drift. **Template immutability** — `public.tasks.cloned_from_task_id` stamped server-side by `clone_project_template`; app-side `TaskDetailsView` delete guard blocks non-owners from deleting template-origin tasks (owner-bypass). `TaskItem` renders a "T" badge with a "From template" tooltip on every cloned row.
+> **Wave 36 closure note**: closes two architecture-doc known gaps. **Template versioning** — `public.tasks.template_version` + BEFORE UPDATE trigger `trg_bump_template_version` increments on text/structural edits to template rows; `Task.clone` stamps `settings.cloned_from_template_version` on clone roots. Deliberately non-propagating. Admin Templates surface at `/admin/templates` shows version drift. **Template immutability** — `public.tasks.cloned_from_task_id` is stamped server-side by `clone_project_template`; `trg_enforce_template_scaffold_immutability` blocks app-role deletes and protected scaffold mutations for all cloned instance rows, including owners, while `TaskDetailsView` mirrors the DB rule with an explanatory guard. `TaskItem` renders a "T" badge with a "From template" tooltip on every cloned row.
 
 ---
 
@@ -53,7 +53,7 @@ It solves the problem of "what do I do next?" by providing curated, phase-based 
   - [x] Remove a member.
   - [x] Change member role permissions.
 - [x] **Project Settings**: Edit due date and due soon thresholds. *(Note: The `Location` field is officially deprecated and has been stripped from the UI.)*
-- [x] **Create Template affordance on Dashboard (Wave 32)**: "New Template" button shipped alongside "New Project" in the Dashboard header, wired to the already-mounted `CreateTemplateModal` via `actions.setShowTemplateModal(true)`. Matches existing auth gating. Closes the usability gap where template creation was reachable only via URL hack or in-project sidebar.
+- [x] **Create Template affordance**: Template creation is available from the app shell action host via `/tasks?action=new-template`, the project sidebar, and the mobile FAB. The old dashboard header affordance was superseded when `/dashboard` became a bookmark-compatible redirect to `/tasks`.
 - [x] **Advanced Access (Phase Lead)**: A project Owner may designate any `viewer` or `limited`-role member as the Lead of a specific phase or milestone via `settings.phase_lead_user_ids`. Additive RLS `"Enable update for phase leads"` on `public.tasks` plus the `user_is_phase_lead(target_task_id, uid)` helper walk the `parent_task_id` chain excluding the row itself — leads may edit tasks UNDER the phase/milestone but not the row itself (assignment stays owner-only). UI picker in `TaskFormFields`, purple badge in `TaskDetailsView`. (Wave 29)
 - [x] **Checkpoint-Based Architecture**: Alternate project type that drops date scheduling in favor of sequential phase-unlock. `settings.project_kind: 'date' | 'checkpoint'` on root tasks (gated by `tasks_project_kind_check` CHECK; defaults to `'date'`). Date-engine (`isCheckpointProject`, `deriveUrgencyForProject`) and nightly-sync urgency passes short-circuit checkpoint projects; `PhaseCard` swaps its progress bar for a `<PieChart>` donut; `EditProjectModal` hosts the `<RadioGroup>` picker with confirmation on revert. Existing `check_phase_unlock` trigger + `is_locked`/`prerequisite_phase_id` columns do the DB-level unlock (untouched by this wave). (Wave 29)
 - [x] **Secondary Projects**: Active menu and project switcher filter out archived (`status = 'archived'`) and completed (`is_complete = true`) projects; archive/unarchive is a toggle on the project's Edit modal. The `ProjectSwitcher` dropdown in the header lists active projects by default. **Wave 25:** two independent toggles — "Show archived" (Wave 21.5) and "Show completed" — reveal each inactive subset inline so users can navigate back to any project without typing the URL.
@@ -78,7 +78,7 @@ It solves the problem of "what do I do next?" by providing curated, phase-based 
 - [x] **Task Interactions**:
   - [x] Edit completeness status (`To Do` -> `In Progress` -> `Complete` -> `Blocked` -> `N/A`).
   - [x] Assign user as "Lead" (`assignee_id`).
-  - [x] **Horizontal Dependencies**: Map dependencies between tasks that restrict out-of-sequence completion.
+  - [x] **Horizontal Dependencies**: Map dependencies between tasks for relationship display and link management. Trusted dependency-order completion blocking is not implemented in the current release baseline; see `docs/architecture/tasks-subtasks.md`.
   - [x] **Milestone Automation**: When all child tasks of a milestone/phase are marked complete, the parent is auto-completed (`is_complete` + `status`) recursively up the hierarchy. Driven by `updateStatus` bubble-up logic in `planterClient.ts`.
 - [x] **Date Engine (Cascading Dates)**: 
   - [x] Drag-and-drop boundary recalculations based on inheritance bounds.
@@ -104,7 +104,7 @@ It solves the problem of "what do I do next?" by providing curated, phase-based 
 - [x] **Promotion**: Promote an instance task back to the Master Library.
 - [x] **Template Publishing**: Ability to mark a template as "Published/Unpublished" to control visibility.
 
-### 3.6 Dashboard, Views & Reporting
+### 3.6 Tasks, Views & Reporting
 - [x] **Metrics Overview**: View counts for current tasks, due soon, overdue.
 - [x] **Status Breakdown**: View metrics for complete, in progress, and blocked tasks.
 - [x] **Portfolio Tracking**: Number of active projects.
@@ -121,12 +121,12 @@ It solves the problem of "what do I do next?" by providing curated, phase-based 
   - **Task 1 (data layer + Settings UI)**: Bootstrap trigger on `auth.users` creates a default prefs row for every user. Settings → Notifications tab exposes email/push toggles per event class (mentions / overdue digest / assignment), quiet hours (start/end + IANA tz), and a recent-notifications transparency panel.
   - **Task 2 (Web Push transport)**: VAPID-based browser push. Service worker (`public/sw.js`, documented JS exception — TS conversion not currently scheduled) renders notifications; `usePushSubscription` handles opt-in/opt-out with per-device row scoping. `dispatch-push` edge function fans out via `web-push@3.6.7` with 410-cleanup and per-sub logging.
   - **Task 3 (mention + digest dispatchers)**: `resolve_user_handles` RPC maps @-handles → auth.users uuids. `trg_enqueue_comment_mentions` AFTER INSERT on `task_comments` enqueues `mention_pending` rows. Per-minute `dispatch-notifications` edge function drains those rows via a single-runner-wins state machine (`_pending → _processing → _sent | _failed | _skipped`), honoring quiet-hours and per-event prefs. Daily `overdue-digest` edge function emails assigned-overdue-tasks rollups with per-user cadence (daily / weekly-on-user-local-Monday). See `docs/architecture/notifications.md` and `docs/operations/edge-function-schedules.md` (pg_cron intentionally NOT enabled).
-- [x] **External Integrations (ICS) (Wave 35)**: Per-user opaque-token ICS calendar feeds. `public.ics_feed_tokens` + public `supabase/functions/ics-feed/` edge function. Tokens are 256-bit (`crypto.randomUUID()` × 2), the full credential — 404 on revoked/unknown tokens (indistinguishable). Optional `project_filter` narrows to a subset of projects. VCALENDAR payload is RFC 5545 with all-day VEVENTs + 24-hour VALARM reminders. Client UI lives in Settings → Integrations. `docs/architecture/integrations.md` documents the model.
+- [x] **External Integrations (ICS) (Wave 35)**: Per-user opaque-token ICS calendar feeds. `public.ics_feed_tokens` + public `supabase/functions/ics-feed/` edge function. Tokens use Web Crypto (`crypto.getRandomValues`, 32 bytes / 256-bit entropy), the full credential — 404 on revoked/unknown tokens (indistinguishable). Optional `project_filter` narrows to a subset of projects. VCALENDAR payload is RFC 5545 with all-day VEVENTs + 24-hour VALARM reminders. Client UI lives in Settings → Integrations. `docs/architecture/integrations.md` documents the model.
 
 ### 3.8 Technical Hardening & Infrastructure
 - [x] **Build Stabilization (Wave 16)**: Eliminated all 131 ESLint errors (`no-explicit-any`, `no-unused-vars`, Playwright false positives, etc.) and resolved TypeScript build errors across 42 files. `npm run build`, `npm run lint`, and all 385 unit tests pass cleanly. Vercel deployment blocker resolved.
 - [x] **TS 5.9 / @types/node fix (Wave 18)**: Removed deprecated `baseUrl` from `tsconfig.app.json` (TypeScript bundler mode resolves `paths` without it); installed `@types/node` required by `tsconfig.node.json`. Build: 0 errors, 385/385 tests pass.
-- [x] **Template hardening (Wave 36)**: Two architecture-doc known-gaps closed. `public.tasks.template_version int NOT NULL DEFAULT 1` + `trg_bump_template_version` BEFORE UPDATE trigger; `Task.clone` stamps `settings.cloned_from_template_version` on cloned roots. Non-propagating by design — admins spot drift via `/admin/templates`. `public.tasks.cloned_from_task_id uuid` tracks template-origin per cloned descendant; `TaskDetailsView` delete guard blocks non-owners from deleting template-origin tasks (owner-bypass); `TaskItem` renders a "T" badge.
+- [x] **Template hardening (Wave 36)**: Two architecture-doc known-gaps closed. `public.tasks.template_version int NOT NULL DEFAULT 1` + `trg_bump_template_version` BEFORE UPDATE trigger; `Task.clone` stamps `settings.cloned_from_template_version` on cloned roots. Non-propagating by design — admins spot drift via `/admin/templates`. `public.tasks.cloned_from_task_id uuid` tracks template-origin per cloned descendant; `trg_enforce_template_scaffold_immutability` blocks app-role deletes and protected scaffold mutations for cloned instance rows, including owners; `TaskDetailsView` mirrors the block with an explanatory guard; `TaskItem` renders a "T" badge.
 
 ---
 

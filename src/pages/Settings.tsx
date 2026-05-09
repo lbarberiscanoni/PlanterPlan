@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import type { ElementType, KeyboardEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/shared/ui/button';
 import { Input } from '@/shared/ui/input';
@@ -24,6 +25,35 @@ export default function Settings() {
  const { profile, loading, avatarError, passwordForm, passwordError, passwordLoading } = state;
 
  const [activeTab, setActiveTab] = useState<SettingsTab>('profile');
+ const tabs: Array<{ label: string; icon: ElementType; tab: SettingsTab }> = [
+ { label: t('settings.tab_profile'), icon: User, tab: 'profile' },
+ { label: t('settings.tab_notifications'), icon: Bell, tab: 'notifications' },
+ { label: t('settings.tab_integrations'), icon: Calendar, tab: 'integrations' },
+ { label: t('settings.tab_security'), icon: Lock, tab: 'security' },
+ ];
+ const focusTab = (tab: SettingsTab) => {
+ setActiveTab(tab);
+ requestAnimationFrame(() => {
+ document.getElementById(`settings-tab-${tab}`)?.focus();
+ });
+ };
+ const handleTabKeyDown = (event: KeyboardEvent<HTMLButtonElement>, currentIndex: number) => {
+ let nextIndex: number | null = null;
+
+ if (event.key === 'ArrowRight' || event.key === 'ArrowDown') {
+ nextIndex = (currentIndex + 1) % tabs.length;
+ } else if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') {
+ nextIndex = (currentIndex - 1 + tabs.length) % tabs.length;
+ } else if (event.key === 'Home') {
+ nextIndex = 0;
+ } else if (event.key === 'End') {
+ nextIndex = tabs.length - 1;
+ }
+
+ if (nextIndex === null) return;
+ event.preventDefault();
+ focusTab(tabs[nextIndex].tab);
+ };
 
  return (
  <>
@@ -33,20 +63,26 @@ export default function Settings() {
  <p className="text-muted-foreground mt-2">{t('settings.page_subtitle')}</p>
  </div>
 
- <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
+ <div className="grid grid-cols-1 gap-6 md:grid-cols-4 md:gap-8">
  {/* Settings Navigation */}
- <div className="md:col-span-1 space-y-1">
- {([
- { label: t('settings.tab_profile'), icon: User, tab: 'profile' as SettingsTab },
- { label: t('settings.tab_notifications'), icon: Bell, tab: 'notifications' as SettingsTab },
- { label: t('settings.tab_integrations'), icon: Calendar, tab: 'integrations' as SettingsTab },
- { label: t('settings.tab_security'), icon: Lock, tab: 'security' as SettingsTab },
- ] as Array<{ label: string; icon: React.ElementType; tab: SettingsTab }>).map((item) => (
+ <div
+ className="flex gap-2 overflow-x-auto pb-2 md:col-span-1 md:flex-col md:overflow-visible md:pb-0"
+ role="tablist"
+ aria-label={t('settings.tabs_aria')}
+ >
+ {tabs.map((item, index) => (
  <Button
  key={item.label}
+ id={`settings-tab-${item.tab}`}
+ role="tab"
+ type="button"
+ aria-selected={activeTab === item.tab}
+ aria-controls={`settings-panel-${item.tab}`}
+ tabIndex={activeTab === item.tab ? 0 : -1}
  variant="ghost"
  onClick={() => setActiveTab(item.tab)}
- className={`w-full justify-start ${activeTab === item.tab
+ onKeyDown={(event) => handleTabKeyDown(event, index)}
+ className={`w-auto shrink-0 justify-start whitespace-nowrap md:w-full ${activeTab === item.tab
  ? 'text-brand-600 bg-brand-50 font-semibold'
  : 'text-muted-foreground'
  } hover:text-foreground hover:bg-muted`}
@@ -59,7 +95,13 @@ export default function Settings() {
 
  {/* Content Area */}
  <div className="md:col-span-3">
- <div key={activeTab} className="animate-slide-up">
+ <div
+ key={activeTab}
+ id={`settings-panel-${activeTab}`}
+ role="tabpanel"
+ aria-labelledby={`settings-tab-${activeTab}`}
+ className="animate-slide-up"
+ >
 
  {/* Profile Tab */}
  {activeTab === 'profile' && (
@@ -81,7 +123,7 @@ export default function Settings() {
  </div>
 
  <form onSubmit={(e) => { e.preventDefault(); actions.handleSave(); }} className="space-y-4">
- <div className="grid grid-cols-2 gap-4">
+ <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
  <div className="space-y-2">
  <Label htmlFor="full_name" className="text-foreground">{t('common.full_name')}</Label>
  <Input
@@ -119,7 +161,7 @@ export default function Settings() {
  {avatarError && <p className="text-xs text-destructive" data-testid="avatar-error">{avatarError}</p>}
  </div>
 
- <div className="grid grid-cols-2 gap-4">
+ <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
  <div className="space-y-2">
  <Label htmlFor="role">{t('settings.profile.role_label')}</Label>
  <Input

@@ -117,6 +117,29 @@ describe('public/sw.js', () => {
         }));
     });
 
+    it('falls back to defaults when push JSON and text parsing both fail', async () => {
+        const { listeners, showNotification } = loadWorker();
+        const { event, waits } = makeWaitEvent({
+            data: {
+                json: () => {
+                    throw new Error('invalid json');
+                },
+                text: () => {
+                    throw new Error('unreadable payload');
+                },
+            },
+        });
+
+        listeners.get('push')?.(event);
+        await Promise.all(waits);
+
+        expect(showNotification).toHaveBeenCalledWith('PlanterPlan', expect.objectContaining({
+            body: '',
+            icon: '/icon-192.png',
+            data: { url: '/' },
+        }));
+    });
+
     it('opens only sanitized same-origin paths from notification clicks', async () => {
         const { listeners, openWindow } = loadWorker();
         const close = vi.fn();

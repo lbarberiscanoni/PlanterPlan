@@ -4,9 +4,10 @@
 -- populated by the patched `clone_project_template` RPC shipped in the
 -- adjacent `2026_04_18_clone_rpc_wave36_patch.sql` migration (required for
 -- the app-side delete guard to ever fire). NULL means
--- "post-instantiation custom addition" — owners can freely delete those.
--- NOT-NULL rows are template-origin; the Wave 36 UI guard blocks deletes
--- for non-owners.
+-- "post-instantiation custom addition" — project delete permissions apply
+-- normally. NOT-NULL rows are template-origin; release hardening now blocks
+-- app-role deletes below UI for every authenticated project role, including
+-- owners.
 --
 -- Additive only.
 --
@@ -25,4 +26,4 @@ CREATE INDEX IF NOT EXISTS idx_tasks_cloned_from_task_id
     WHERE cloned_from_task_id IS NOT NULL;
 
 COMMENT ON COLUMN public.tasks.cloned_from_task_id IS
-    'Wave 36 — stamped during clone_project_template for every cloned descendant. Points to the source template task. NULL on pre-Wave-36 rows and on post-instantiation additions. App-layer UI guard in TaskDetailsView warns non-owners before deleting a template-origin task; owners can delete freely.';
+    'Stamped during clone_project_template for every cloned descendant. Points to the source template task. NULL on pre-Wave-36 rows and on post-instantiation additions. Cloned instance scaffold rows are protected below UI from app-role deletes and structural/content/provenance edits; postgres/service_role bypass is reserved for audited maintenance.';

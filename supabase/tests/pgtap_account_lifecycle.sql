@@ -1,8 +1,9 @@
 BEGIN;
 
-SELECT plan(12);
+SELECT plan(14);
 
 TRUNCATE TABLE
+    public.admin_users,
     public.activity_log,
     public.notification_log,
     public.push_subscriptions,
@@ -86,9 +87,34 @@ VALUES (
     '{}'::jsonb
 );
 
+INSERT INTO public.admin_users (user_id, email)
+VALUES (
+    '00000000-0000-0000-0000-000000000402',
+    'lifecycle-deleted@example.com'
+);
+
+INSERT INTO public.activity_log (
+    id,
+    project_id,
+    actor_id,
+    entity_type,
+    entity_id,
+    action,
+    payload
+)
+VALUES (
+    '77777777-7777-7777-7777-777777777401',
+    NULL,
+    '00000000-0000-0000-0000-000000000402',
+    'member',
+    '00000000-0000-0000-0000-000000000402',
+    'admin_granted',
+    '{}'::jsonb
+);
+
 SELECT lives_ok(
     $$ DELETE FROM auth.users WHERE id = '00000000-0000-0000-0000-000000000402' $$,
-    'auth user deletion succeeds when the user authored comments, created tasks, assignments, memberships, and private rows'
+    'auth user deletion succeeds when the user authored comments, created tasks, assignments, memberships, admin rows, and private rows'
 );
 
 SELECT is(
@@ -143,6 +169,18 @@ SELECT is(
     (SELECT count(*) FROM public.notification_log WHERE user_id = '00000000-0000-0000-0000-000000000402'),
     0::bigint,
     'deleted users lose private notification log rows by cascade'
+);
+
+SELECT is(
+    (SELECT count(*) FROM public.admin_users WHERE user_id = '00000000-0000-0000-0000-000000000402'),
+    0::bigint,
+    'deleted users lose admin whitelist rows by cascade'
+);
+
+SELECT is(
+    (SELECT actor_id::text FROM public.activity_log WHERE id = '77777777-7777-7777-7777-777777777401'),
+    NULL::text,
+    'historical activity rows survive with actor_id nulled'
 );
 
 SET LOCAL ROLE authenticated;

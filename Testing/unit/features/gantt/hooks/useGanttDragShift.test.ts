@@ -96,6 +96,23 @@ describe('useGanttDragShift (Wave 28)', () => {
         expect(toastError).toHaveBeenCalledWith('Move the parent phase first.');
     });
 
+    it('rejects when drag starts before the parent phase start-date', async () => {
+        const tasks = [
+            makeTask({ id: 'ph1', parent_task_id: 'p1', task_type: 'phase', start_date: '2026-01-05', due_date: '2026-01-31' }),
+            makeTask({ id: 'm1', parent_task_id: 'ph1', start_date: '2026-01-10', due_date: '2026-01-15' }),
+        ];
+
+        const { result } = renderHook(
+            () => useGanttDragShift({ projectId: 'p1', tasks, updateTaskDates: mutateAsync }),
+            { wrapper },
+        );
+
+        await result.current('m1', new Date('2026-01-01T00:00:00Z'), new Date('2026-01-12T00:00:00Z'));
+
+        expect(mutateAsync).not.toHaveBeenCalled();
+        expect(toastError).toHaveBeenCalledWith('Move the parent phase first.');
+    });
+
     it('rejects inverted dates (end before start)', async () => {
         const tasks = [
             makeTask({ id: 'ph1', parent_task_id: 'p1', task_type: 'phase', start_date: '2026-01-01', due_date: '2026-01-31' }),

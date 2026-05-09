@@ -26,6 +26,8 @@ export interface MilestoneSectionProps {
     tasks?: TaskWithState[];
     onTaskUpdate?: (id: string, data: Partial<TaskUpdate>) => void;
     onAddChildTask?: (parent: TaskRow) => void;
+    onMoveTask?: (task: TaskRow) => void;
+    canMoveTask?: (task: TaskRow) => boolean;
     onTaskClick: (task: TaskRow) => void;
     onToggleExpand?: (task: TaskRow, expanded: boolean) => void;
     onInlineCommit?: (parentId: string, title: string, templateData?: Partial<TaskRow>) => Promise<void>;
@@ -46,6 +48,8 @@ export default function MilestoneSection({
     tasks = [],
     onTaskUpdate,
     onAddChildTask,
+    onMoveTask,
+    canMoveTask,
     onTaskClick,
     onToggleExpand,
     onInlineCommit,
@@ -181,6 +185,8 @@ export default function MilestoneSection({
                                                     canUpdateStatus={canUpdateTaskStatus ? canUpdateTaskStatus(task) : Boolean(onTaskUpdate)}
                                                     canUpdateStatusForTask={canUpdateTaskStatus}
                                                     onAddChildTask={onAddChildTask}
+                                                    onMoveTask={onMoveTask}
+                                                    canMoveTask={canMoveTask}
                                                     onToggleExpand={onToggleExpand}
                                                     disableDrag={disableDrag}
                                                     isAddingInline={task.isAddingInline}

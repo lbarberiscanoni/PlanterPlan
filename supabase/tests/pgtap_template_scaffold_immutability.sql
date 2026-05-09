@@ -1,6 +1,6 @@
 BEGIN;
 
-SELECT plan(14);
+SELECT plan(17);
 
 TRUNCATE TABLE
     public.activity_log,
@@ -173,6 +173,21 @@ SELECT throws_like(
     'coach field-scope enforcement blocks protected scaffold content edits before scaffold immutability runs'
 );
 
+SELECT set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000000501', true);
+SELECT set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-000000000501"}', true);
+
+SELECT throws_like(
+    $$ UPDATE public.tasks SET title = 'Owner content edit' WHERE id = '44444444-4444-4444-4444-444444444501' $$,
+    '%protected template scaffold fields cannot be changed%',
+    'project owners cannot update scaffold content on cloned template-origin tasks'
+);
+
+SELECT throws_like(
+    $$ DELETE FROM public.tasks WHERE id = '44444444-4444-4444-4444-444444444501' $$,
+    '%protected template scaffold tasks cannot be deleted%',
+    'project owners cannot delete cloned template-origin tasks'
+);
+
 SET LOCAL ROLE service_role;
 
 SELECT lives_ok(
@@ -183,6 +198,17 @@ SELECT lives_ok(
 SELECT lives_ok(
     $$ DELETE FROM public.tasks WHERE id = '44444444-4444-4444-4444-444444444501' $$,
     'service_role maintenance can explicitly delete protected scaffold content'
+);
+
+SELECT is(
+    (
+        SELECT col_description('public.tasks'::regclass, attnum)
+        FROM pg_attribute
+        WHERE attrelid = 'public.tasks'::regclass
+          AND attname = 'cloned_from_task_id'
+    ),
+    'Stamped during clone_project_template for every cloned descendant. Points to the source template task. NULL on pre-Wave-36 rows and on post-instantiation additions. Cloned instance scaffold rows are protected below UI from app-role deletes and structural/content/provenance edits; postgres/service_role bypass is reserved for audited maintenance.',
+    'cloned_from_task_id metadata documents DB-level scaffold protection'
 );
 
 SELECT * FROM finish();

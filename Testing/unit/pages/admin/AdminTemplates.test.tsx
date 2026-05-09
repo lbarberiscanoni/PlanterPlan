@@ -44,6 +44,7 @@ describe('AdminTemplates', () => {
  it('loads template roots and clone drift through admin RPC wrappers', async () => {
   const user = userEvent.setup();
   renderWithProviders(<AdminTemplates />);
+  expect(screen.getByTestId('admin-templates')).toHaveClass('p-4', 'sm:p-6', 'lg:p-8');
 
   await screen.findByText('Launch Template');
   expect(listTemplateRoots).toHaveBeenCalledOnce();
@@ -54,6 +55,7 @@ describe('AdminTemplates', () => {
    expect(listTemplateClones).toHaveBeenCalledWith('tpl-1');
   });
   expect(await screen.findByText('Alpha Plant')).toBeInTheDocument();
+  expect(screen.getByTestId('admin-templates-clones')).toHaveClass('w-full', 'xl:w-96');
   expect(screen.getByText('stale')).toBeInTheDocument();
   expect(screen.getByText('Template changed; existing projects are not auto-updated.')).toBeInTheDocument();
   expect(screen.queryByRole('button', { name: /update|sync|reconcile/i })).not.toBeInTheDocument();

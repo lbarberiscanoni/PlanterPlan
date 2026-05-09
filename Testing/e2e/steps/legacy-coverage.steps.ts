@@ -460,7 +460,21 @@ Then('the floating action button is visible', async ({ page }) => {
 });
 
 Then('the {string} option is visible', async ({ page }, label: string) => {
-  await expect(page.getByRole('menuitem', { name: textPattern(label) }).or(page.getByRole('option', { name: textPattern(label) })).or(page.getByText(textPattern(label))).first()).toBeVisible({ timeout: 5000 });
+  const candidates = page
+    .getByRole('menuitem', { name: textPattern(label) })
+    .or(page.getByRole('option', { name: textPattern(label) }))
+    .or(page.getByText(textPattern(label)));
+  const count = await candidates.count();
+
+  for (let i = 0; i < count; i++) {
+    const candidate = candidates.nth(i);
+    if (await candidate.isVisible({ timeout: 500 }).catch(() => false)) {
+      await expect(candidate).toBeVisible();
+      return;
+    }
+  }
+
+  await expect(candidates.first()).toBeVisible({ timeout: 5000 });
 });
 
 Then('the task details panel uses full viewport width', async ({ page }) => {

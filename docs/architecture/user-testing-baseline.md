@@ -5,6 +5,12 @@ hardening series that follows the first user-testing PR tranche. It is a
 planning and release-control source of truth: it separates verified current
 `main` behavior from remaining implementation work.
 
+> **Release-hardening continuation note (2026-05-09):** The R1-R6 sequence
+> below is complete and retained as historical context. Current pre-release
+> hardening work continues from the repository state after PR #254, with
+> dependency guardrails, release E2E, pgTAP, mobile, accessibility, and i18n
+> gates documented in `docs/testing/gap-findings.md`.
+
 ## Source Status
 
 Verified primary-source facts from the 2026-05-05 planning pass:

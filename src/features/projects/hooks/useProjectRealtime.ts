@@ -14,12 +14,18 @@ const TaskPayloadSchema = z.object({
  * Hook to subscribe to real-time changes for tasks within a specific project context.
  * Strict Zod payload validation applied to mutation events.
  */
-export const useProjectRealtime = (projectId: string | null = null): void => {
+export const useProjectRealtime = (
+  projectId: string | null = null,
+  options: { enabled?: boolean } = {},
+): void => {
   const queryClient = useQueryClient();
   const { user } = useAuth();
   const userId = user?.id;
+  const { enabled = true } = options;
 
   useEffect(() => {
+    if (!enabled) return;
+
     const channelName = projectId ? `db-changes:project-${projectId}` : 'db-changes:global';
     const channel = supabase
       .channel(channelName)
@@ -75,10 +81,14 @@ export const useProjectRealtime = (projectId: string | null = null): void => {
           }
         }
       )
-      .subscribe();
+      .subscribe((status, err) => {
+        if (err) {
+          console.error('[Realtime] Channel error:', status, err);
+        }
+      });
 
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [queryClient, projectId, userId]);
+  }, [enabled, queryClient, projectId, userId]);
 };
