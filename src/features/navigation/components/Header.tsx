@@ -10,7 +10,7 @@ import {
     DropdownMenuTrigger,
 } from '@/shared/ui/dropdown-menu';
 import { Avatar, AvatarFallback } from '@/shared/ui/avatar';
-import { CheckCircle2, User, Settings, LogOut, Menu, ChevronRight } from 'lucide-react';
+import { CheckCircle2, Settings, LogOut, Menu, ChevronRight } from 'lucide-react';
 
 import { useUser } from '@/shared/hooks/useUser';
 import { useAuth } from '@/shared/contexts/auth-context';
@@ -108,10 +108,6 @@ export default function Header({ onMenuToggle, showMenuButton = false, projectSw
                                         </div>
                                     </div>
                                     <DropdownMenuSeparator />
-                                    <DropdownMenuItem>
-                                        <User className="mr-2 h-4 w-4" />
-                                        <span>{t('nav.profile')}</span>
-                                    </DropdownMenuItem>
                                     <Link to="/Settings">
                                         <DropdownMenuItem>
                                             <Settings className="mr-2 h-4 w-4" />
