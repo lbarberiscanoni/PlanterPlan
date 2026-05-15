@@ -365,7 +365,7 @@
       "project_name_placeholder": "p. ej. Lanzamiento Hope City",
       "description": "Descripción",
       "description_placeholder": "¿Cuál es la visión de este proyecto?",
-      "launch_date": "Fecha de lanzamiento",
+      "start_date": "Fecha de inicio",
       "create_project": "Crear proyecto",
       "loading_templates": "Cargando plantillas…",
       "no_templates_match": "Ninguna plantilla coincide con tu búsqueda."
@@ -480,7 +480,18 @@
       "role_viewer": "Observador (solo lectura)",
       "role_coach": "Coach (comentar y revisar)",
       "role_editor": "Editor (puede editar tareas)",
-      "role_limited": "Limitado (solo tareas asignadas)"
+      "role_limited": "Limitado (solo tareas asignadas)",
+      "role_full": "Usuario completo (puede editar el proyecto)",
+      "role_limited_short": "Usuario limitado (solo elementos asignados)",
+      "error_codes": {
+        "email_address_invalid": "Dirección de correo rechazada. Supabase Auth bloquea dominios desechables/de prueba — usa una dirección real.",
+        "over_email_send_rate_limit": "Se enviaron demasiadas invitaciones recientemente. Espera un minuto e intenta de nuevo.",
+        "email_send_failed": "No se pudo enviar el correo de invitación. Revisa la configuración SMTP del proyecto.",
+        "auth_invite_failed": "Supabase Auth rechazó la invitación. Revisa los registros de la función para ver el error subyacente.",
+        "user_lookup_failed": "Se invitó al usuario, pero no se pudo localizar después. Vuelve a intentarlo; si persiste, revisa los registros.",
+        "member_insert_failed": "No se pudo agregar al usuario al proyecto. Es posible que ya sea miembro.",
+        "admin_check_failed": "No se pudieron verificar tus permisos. Vuelve a intentarlo; si persiste, revisa los registros."
+      }
     },
     "team_page": {
       "title": "Equipo",
@@ -504,6 +515,9 @@
       "remove_confirm_description": "Esto quita al miembro del proyecto. Su actividad histórica en tareas y comentarios se conserva.",
       "remove_success": "Miembro quitado correctamente",
       "remove_failed": "No se pudo quitar el miembro",
+      "role_update_success": "Rol actualizado",
+      "role_update_failed": "No se pudo actualizar el rol",
+      "role_select_aria": "Cambiar el rol de {{name}}",
       "project_required": "Selecciona un proyecto antes de invitar a un miembro.",
       "roles": {
         "owner": "Propietario",

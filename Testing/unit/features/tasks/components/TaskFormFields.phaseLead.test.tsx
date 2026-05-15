@@ -53,13 +53,13 @@ describe('TaskFormFields — Phase Lead picker (Wave 29)', () => {
         expect(screen.getByTestId('phase-lead-picker')).toBeInTheDocument();
     });
 
-    it('hides the picker on leaf tasks even for owners', () => {
+    it('also renders the picker on leaf tasks for owners (Wave: unified assignees)', () => {
         render(
             <Harness>
                 <TaskFormFields origin="instance" membershipRole="owner" taskType="task" projectId="p1" teamMembers={mockTeamMembers as TeamMemberWithProfile[]} />
             </Harness>,
         );
-        expect(screen.queryByTestId('phase-lead-picker')).toBeNull();
+        expect(screen.getByTestId('phase-lead-picker')).toBeInTheDocument();
     });
 
     it('hides the picker for non-owner roles (editor/coach/viewer/limited)', () => {

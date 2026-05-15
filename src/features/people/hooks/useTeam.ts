@@ -46,6 +46,18 @@ export function useTeam(projectId: string | null) {
         },
     });
 
+    const updateMemberRoleMutation = useMutation({
+        mutationFn: ({ id, role }: { id: string, role: string }) =>
+            planter.entities.TeamMember.updateRole(id, role),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['teamMembers', projectId] });
+            toast.success(t('projects.team_page.role_update_success'));
+        },
+        onError: (error: Error) => {
+            toast.error(t('projects.team_page.role_update_failed'), { description: error.message });
+        },
+    });
+
     return {
         project,
         teamMembers,
@@ -55,6 +67,7 @@ export function useTeam(projectId: string | null) {
             deleteMember: deleteMemberMutation,
             addMember: inviteMemberMutation,
             inviteMember: inviteMemberMutation,
+            updateMemberRole: updateMemberRoleMutation,
         }
     };
 }

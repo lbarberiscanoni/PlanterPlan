@@ -32,14 +32,14 @@ describe('CreateProjectModal', () => {
         );
 
         fireEvent.click(screen.getByRole('button', { name: /continue to details/i }));
-        expect(screen.getByLabelText(/launch date/i)).toHaveValue('2026-06-01');
+        expect(screen.getByLabelText(/start date/i)).toHaveValue('2026-06-01');
 
         rerender(<CreateProjectModal open={false} onClose={onClose} onSubmit={onSubmit} />);
         dateState.now = '2026-06-02T12:00:00.000Z';
         rerender(<CreateProjectModal open onClose={onClose} onSubmit={onSubmit} />);
 
         fireEvent.click(screen.getByRole('button', { name: /continue to details/i }));
-        expect(screen.getByLabelText(/launch date/i)).toHaveValue('2026-06-02');
+        expect(screen.getByLabelText(/start date/i)).toHaveValue('2026-06-02');
     });
 
     it('applies initial onboarding values and resolves seeded template choices', async () => {
@@ -62,7 +62,7 @@ describe('CreateProjectModal', () => {
         );
 
         expect(screen.getByLabelText(/project name/i)).toHaveValue('Onboarding Church');
-        expect(screen.getByLabelText(/launch date/i)).toHaveValue('2026-07-04');
+        expect(screen.getByLabelText(/start date/i)).toHaveValue('2026-07-04');
 
         fireEvent.click(screen.getByRole('button', { name: /create project/i }));
 

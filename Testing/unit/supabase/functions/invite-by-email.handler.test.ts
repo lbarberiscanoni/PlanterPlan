@@ -286,7 +286,9 @@ describe('invite-by-email handler', () => {
         const logText = JSON.stringify(harness.logger.error.mock.calls);
 
         expect(response.status).toBe(400);
-        expect(JSON.parse(bodyText)).toEqual({ error: 'Invite failed' });
+        // Forwards the upstream code (`smtp_failed`) as a stable identifier
+        // — never the raw message, which can contain provider PII / secrets.
+        expect(JSON.parse(bodyText)).toEqual({ error: 'Invite failed', code: 'smtp_failed' });
         expect(bodyText).not.toContain(SERVICE_ROLE_KEY);
         expect(logText).not.toContain(SERVICE_ROLE_KEY);
     });

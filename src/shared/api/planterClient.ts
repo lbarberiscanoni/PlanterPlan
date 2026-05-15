@@ -80,14 +80,30 @@ function isObjectRecord(value: unknown): value is Record<string, unknown> {
     return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-async function getEdgeFunctionErrorMessage(error: unknown, fallback: string): Promise<string> {
+/**
+ * Parse a Supabase Edge Function error response into a `{ message, code }`
+ * pair. Edge Functions return `{ error: string, code?: string }`; the code
+ * is a stable identifier (e.g. `email_address_invalid`,
+ * `member_insert_failed`) that callers can map to user-facing messages
+ * without parsing the raw error text.
+ */
+async function getEdgeFunctionErrorDetail(
+    error: unknown,
+    fallback: string,
+): Promise<{ message: string, code?: string }> {
     if (isObjectRecord(error)) {
         const context = error.context;
         if (context instanceof Response) {
             try {
                 const body: unknown = await context.clone().json();
-                if (isObjectRecord(body) && typeof body.error === 'string' && body.error.length > 0) {
-                    return body.error;
+                if (isObjectRecord(body)) {
+                    const message = typeof body.error === 'string' && body.error.length > 0
+                        ? body.error
+                        : fallback;
+                    const code = typeof body.code === 'string' && body.code.length > 0
+                        ? body.code
+                        : undefined;
+                    return { message, code };
                 }
             } catch {
                 // Keep the fallback when the function did not return JSON.
@@ -95,11 +111,11 @@ async function getEdgeFunctionErrorMessage(error: unknown, fallback: string): Pr
         }
 
         if (typeof error.message === 'string' && error.message.length > 0) {
-            return error.message;
+            return { message: error.message };
         }
     }
 
-    return fallback;
+    return { message: fallback };
 }
 
 /**
@@ -343,6 +359,7 @@ interface TeamMemberEntityClient extends EntityClient<TeamMemberRow, Database['p
      * @returns Hydrated team member rows visible to the current user.
      */
     listByProjectWithProfiles: (projectId: string) => Promise<TeamMemberWithProfile[]>;
+    updateRole: (memberId: string, role: string) => Promise<TeamMemberRow>;
 }
 
 interface ProjectEntityClient extends Omit<EntityClient<Project, TaskInsert, TaskUpdate>, 'create' | 'listByCreator'> {
@@ -852,17 +869,15 @@ export const planter: PlanterClient = {
             },
             inviteMemberByEmail: async (projectId: string, email: string, role: string): Promise<ProjectInviteResult> => {
                 return retry(async () => {
-                    const { data, error } = await supabase.functions.invoke<ProjectInviteResult & { error?: string }>('invite-by-email', {
+                    const { data, error } = await supabase.functions.invoke<ProjectInviteResult & { error?: string, code?: string }>('invite-by-email', {
                         body: { projectId, email, role },
                     });
                     if (error) {
-                        throw new PlanterError(
-                            await getEdgeFunctionErrorMessage(error, 'Invite failed'),
-                            400,
-                        );
+                        const detail = await getEdgeFunctionErrorDetail(error, 'Invite failed');
+                        throw new PlanterError(detail.message, 400, { code: detail.code });
                     }
                     if (!data || data.error) {
-                        throw new PlanterError(data?.error || 'Invite failed', 400);
+                        throw new PlanterError(data?.error || 'Invite failed', 400, { code: data?.code });
                     }
                     return data;
                 });
@@ -1295,6 +1310,16 @@ export const planter: PlanterClient = {
                     if (error) throw new PlanterError(error.message, error.code ?? '500');
                     return (data ?? []).map(normalizeTeamMemberWithProfile);
                 });
+            },
+            updateRole: async (memberId: string, role: string): Promise<TeamMemberRow> => {
+                const { data, error } = await supabase
+                    .from('project_members')
+                    .update({ role })
+                    .eq('id', memberId)
+                    .select('*')
+                    .single();
+                if (error) throw new PlanterError(error.message, error.code ?? '500');
+                return data as TeamMemberRow;
             },
         },
         Person: createEntityClient<PersonRow, Database['public']['Tables']['people']['Insert'], Database['public']['Tables']['people']['Update']>('people'),

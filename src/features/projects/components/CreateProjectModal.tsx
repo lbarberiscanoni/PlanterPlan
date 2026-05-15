@@ -385,7 +385,7 @@ export default function CreateProjectModal({
                                 </div>
                                 <div className="space-y-2">
                                     <Label htmlFor="start_date" className="text-slate-700 font-semibold">
-                                        {t('projects.create_project_modal.launch_date')}
+                                        {t('projects.create_project_modal.start_date')}
                                     </Label>
                                     <Input
                                         id="start_date"

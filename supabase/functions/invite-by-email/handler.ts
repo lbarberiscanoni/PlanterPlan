@@ -74,6 +74,13 @@ export interface InviteByEmailHandlerDeps {
 const ASSIGNABLE_ROLES = new Set(['owner', 'editor', 'coach', 'viewer', 'limited']);
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+class InviteError extends Error {
+  constructor(public readonly code: string, message: string) {
+    super(message);
+    this.name = 'InviteError';
+  }
+}
+
 function jsonString(body: string, status = 200): Response {
   return new Response(body, {
     status,
@@ -81,8 +88,9 @@ function jsonString(body: string, status = 200): Response {
   });
 }
 
-function jsonError(error: string, status = 400): Response {
-  return jsonString(JSON.stringify({ error }), status);
+function jsonError(error: string, status = 400, code?: string): Response {
+  const payload = code ? { error, code } : { error };
+  return jsonString(JSON.stringify(payload), status);
 }
 
 function jsonSuccess(user: { id: string; email: string }): Response {
@@ -167,13 +175,20 @@ export async function handleInviteByEmailRequest(
       global: { headers: { Authorization: authorization } },
     }) as UserClient;
 
-    const { data: { user }, error: userError } = await userClient.auth.getUser();
+    // Pass the JWT explicitly to getUser() instead of relying on a stored
+    // session — Edge Functions are stateless and supabase-js v2.7.1's
+    // global-header fallback path is unreliable across Edge Runtime versions.
+    const jwt = authorization.startsWith('Bearer ') ? authorization.slice(7) : authorization;
+    const { data: { user }, error: userError } = await userClient.auth.getUser(jwt);
     if (userError || !user) throw new Error('Unauthorized: invalid session');
 
     const { data: isAdmin, error: adminError } = await userClient.rpc<boolean>('is_admin', {
       p_user_id: user.id,
     });
-    if (adminError) throw new Error('Invite failed');
+    if (adminError) {
+      logSafeError(logger, 'is_admin RPC error:', adminError);
+      throw new InviteError('admin_check_failed', 'Invite failed');
+    }
 
     if (!isAdmin) {
       const { data: memberData, error: memberError } = await userClient
@@ -197,7 +212,11 @@ export async function handleInviteByEmailRequest(
     if (inviteError) {
       if (!isExistingUserError(inviteError)) {
         logSafeError(logger, 'Supabase invite error:', inviteError);
-        throw new Error('Invite failed');
+        // Pass through the upstream Supabase Auth code (e.g.
+        // `email_address_invalid`, `over_email_send_rate_limit`) so the
+        // client can render a meaningful message. Codes are stable
+        // identifiers, not raw error text — safe to expose.
+        throw new InviteError(inviteError.code ?? 'auth_invite_failed', 'Invite failed');
       }
 
       logger.log?.('User exists, looking up ID via get_user_id_by_email...');
@@ -208,7 +227,7 @@ export async function handleInviteByEmailRequest(
 
       if (lookupError || !existingUserId) {
         logSafeError(logger, 'User lookup failed:', lookupError);
-        throw new Error('Invite failed');
+        throw new InviteError('user_lookup_failed', 'Invite failed');
       }
 
       targetUserId = existingUserId;
@@ -216,7 +235,7 @@ export async function handleInviteByEmailRequest(
       targetUserId = inviteData?.user?.id ?? null;
     }
 
-    if (!targetUserId) throw new Error('Invite failed');
+    if (!targetUserId) throw new InviteError('user_lookup_failed', 'Invite failed');
 
     const { error: insertError } = await adminClient.from('project_members').upsert({
       project_id: projectId,
@@ -226,13 +245,14 @@ export async function handleInviteByEmailRequest(
 
     if (insertError) {
       logSafeError(logger, 'Member insert error:', insertError);
-      throw new Error('Invite failed');
+      throw new InviteError(insertError.code ?? 'member_insert_failed', 'Invite failed');
     }
 
     return jsonSuccess({ id: targetUserId, email });
   } catch (error) {
     const message = clientSafeMessage(error);
-    logger.error('Edge Function Exception:', { message });
-    return jsonError(message, statusForMessage(message));
+    const code = error instanceof InviteError ? error.code : undefined;
+    logger.error('Edge Function Exception:', code ? { message, code } : { message });
+    return jsonError(message, statusForMessage(message), code);
   }
 }

@@ -18,9 +18,9 @@ interface TaskFormFieldsProps {
   * checkbox stay hidden. Project.tsx derives this from `teamMembers`.
   */
  membershipRole?: string;
- /** Wave 29: the row's task_type — gates the Phase Lead picker to phases/milestones. */
+ /** No longer gates the Assignee picker — kept for back-compat with callers; safe to omit. */
  taskType?: string | null;
- /** Wave 29: the project root id — required for `useTeam(projectId)` when the Phase Lead picker renders. */
+ /** Wave 29: the project root id — required for `useTeam(projectId)` when the Assignee picker renders. */
  projectId?: string | null;
  /** Project team members supplied by the page/composition layer. */
  teamMembers?: TeamMemberWithProfile[];
@@ -39,14 +39,12 @@ function getMemberLabel(member: TeamMemberWithProfile): string {
  */
 function PhaseLeadPicker({
  projectId,
- taskType,
  teamMembers,
 }: {
  projectId: string | null | undefined;
- taskType: string | null | undefined;
  teamMembers: TeamMemberWithProfile[];
 }) {
- const active = Boolean(projectId) && (taskType === 'phase' || taskType === 'milestone');
+ const active = Boolean(projectId);
  const { setValue, control } = useFormContext<TaskFormData>();
  const eligibleMembers = useMemo(
  () => teamMembers.filter((m) => m.role === 'viewer' || m.role === 'limited'),
@@ -75,9 +73,9 @@ function PhaseLeadPicker({
   data-testid="phase-lead-picker"
  >
   <div className="flex flex-col gap-0.5">
-   <Label className="text-sm font-medium">Phase Leads</Label>
+   <Label className="text-sm font-medium">Assignees</Label>
    <p className="text-xs text-slate-500">
-    Viewer/Limited members chosen here may edit tasks under this {taskType}.
+    Limited users chosen here may edit this item and anything under it.
    </p>
   </div>
   <Popover>
@@ -133,7 +131,6 @@ const TaskFormFields = ({
  itemLabel = 'Task',
  renderExtraFields,
  membershipRole,
- taskType,
  projectId,
  teamMembers = [],
 }: TaskFormFieldsProps) => {
@@ -155,8 +152,7 @@ const TaskFormFields = ({
  const canTagStrategy = canEditTemplateFlags;
  const canAssignPhaseLeads =
  origin === 'instance'
- && membershipRole === 'owner'
- && (taskType === 'phase' || taskType === 'milestone')
+ && (membershipRole === 'owner' || membershipRole === 'admin')
  && Boolean(projectId);
 
  return (
@@ -288,7 +284,7 @@ const TaskFormFields = ({
  )}
 
  {canAssignPhaseLeads && (
- <PhaseLeadPicker projectId={projectId} taskType={taskType} teamMembers={teamMembers} />
+ <PhaseLeadPicker projectId={projectId} teamMembers={teamMembers} />
  )}
 
  {renderExtraFields && renderExtraFields()}

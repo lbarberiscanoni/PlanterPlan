@@ -52,7 +52,7 @@ describe('InviteMemberModal', () => {
         fireEvent.click(screen.getByRole('button', { name: /send invite/i }));
 
         await waitFor(() => {
-            expect(mockInviteMemberByEmail).toHaveBeenCalledWith('project-1', 'New@Example.com', 'viewer');
+            expect(mockInviteMemberByEmail).toHaveBeenCalledWith('project-1', 'New@Example.com', 'editor');
         });
         expect(mockAddMember).not.toHaveBeenCalled();
         expect(onInviteSuccess).toHaveBeenCalled();

@@ -359,7 +359,7 @@
       "project_name_placeholder": "e.g. Hope City Launch",
       "description": "Description",
       "description_placeholder": "What's the vision for this project?",
-      "launch_date": "Launch Date",
+      "start_date": "Start Date",
       "create_project": "Create Project",
       "loading_templates": "Loading templates…",
       "no_templates_match": "No templates match your search."
@@ -474,7 +474,18 @@
       "role_viewer": "Viewer (Read-only)",
       "role_coach": "Coach (Comment & Review)",
       "role_editor": "Editor (Can edit tasks)",
-      "role_limited": "Limited (Assigned tasks only)"
+      "role_limited": "Limited (Assigned tasks only)",
+      "role_full": "Full user (can edit project)",
+      "role_limited_short": "Limited user (assigned items only)",
+      "error_codes": {
+        "email_address_invalid": "Email address rejected. Supabase Auth blocks disposable / test domains — use a real address.",
+        "over_email_send_rate_limit": "Too many invites sent recently. Wait a minute and try again.",
+        "email_send_failed": "Couldn't send the invite email. Check your project's SMTP settings.",
+        "auth_invite_failed": "Supabase Auth rejected the invite. Check the function logs for the underlying error.",
+        "user_lookup_failed": "User was invited but couldn't be looked up afterward. Try again — if it persists, check the function logs.",
+        "member_insert_failed": "Couldn't add the user to the project. They may already be a member.",
+        "admin_check_failed": "Couldn't verify your permissions. Try again — if it persists, check the function logs."
+      }
     },
     "team_page": {
       "title": "Team",
@@ -498,6 +509,9 @@
       "remove_confirm_description": "This removes the member from the project. Their historical task and comment activity remains intact.",
       "remove_success": "Member removed successfully",
       "remove_failed": "Failed to remove member",
+      "role_update_success": "Role updated",
+      "role_update_failed": "Failed to update role",
+      "role_select_aria": "Change role for {{name}}",
       "project_required": "Select a project before inviting a member.",
       "roles": {
         "owner": "Owner",

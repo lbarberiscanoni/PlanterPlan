@@ -83,7 +83,9 @@ describe('Team page', () => {
     expect(await screen.findByRole('heading', { name: 'Launch Project Team' })).toBeInTheDocument();
     expect(screen.getByText('Owner Person')).toBeInTheDocument();
     expect(screen.getByText('editor@example.com')).toBeInTheDocument();
-    expect(screen.getByText('Editor')).toBeInTheDocument();
+    // Owner-row keeps its role badge; editor-row gets the role-change Select instead.
+    expect(screen.getByText('Owner')).toBeInTheDocument();
+    expect(screen.getByRole('combobox', { name: /change role for ed itor/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /add member/i })).toBeInTheDocument();
     expect(mockListTeamMembersWithProfiles).toHaveBeenCalledWith('p1');
   });

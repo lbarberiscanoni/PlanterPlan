@@ -39,7 +39,7 @@ interface InviteMemberModalProps {
 const InviteMemberModal: React.FC<InviteMemberModalProps> = ({ project, onClose, onInviteSuccess }) => {
     const { t } = useTranslation();
     const [userId, setUserId] = useState('');
-    const [role, setRole] = useState<string>(ROLES.VIEWER);
+    const [role, setRole] = useState<string>(ROLES.EDITOR);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [success, setSuccess] = useState(false);
@@ -48,7 +48,7 @@ const InviteMemberModal: React.FC<InviteMemberModalProps> = ({ project, onClose,
     // an email prompts for Discard. `success === true` short-circuits the
     // guard because we auto-close 1.5s after a successful invite; prompting
     // there would be jarring.
-    const isDirty = !success && (userId.trim().length > 0 || role !== ROLES.VIEWER);
+    const isDirty = !success && (userId.trim().length > 0 || role !== ROLES.EDITOR);
     const guardedClose = useDirtyCloseGuard(isDirty, onClose);
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -82,7 +82,16 @@ const InviteMemberModal: React.FC<InviteMemberModalProps> = ({ project, onClose,
             }
         } catch (err: unknown) {
             console.error('[InviteMemberModal] Exception during invite:', err);
-            if (
+            const errMetadata = (typeof err === 'object' && err !== null && 'metadata' in err)
+                ? (err as { metadata?: { code?: string } }).metadata
+                : undefined;
+            const inviteCode = errMetadata?.code;
+            const friendly = inviteCode
+                ? t(`projects.invite_modal.error_codes.${inviteCode}`, { defaultValue: '' })
+                : '';
+            if (friendly) {
+                result = { error: friendly };
+            } else if (
                 (typeof err === 'object' && err !== null && 'code' in err && (err as { code: string }).code === '42501') ||
                 (typeof err === 'object' && err !== null && 'message' in err && typeof (err as { message: string }).message === 'string' && (err as { message: string }).message.includes('policy'))
             ) {
@@ -162,10 +171,8 @@ const InviteMemberModal: React.FC<InviteMemberModalProps> = ({ project, onClose,
                                 <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
-                                <SelectItem value={ROLES.VIEWER}>{t('projects.invite_modal.role_viewer')}</SelectItem>
-                                <SelectItem value={ROLES.COACH}>{t('projects.invite_modal.role_coach')}</SelectItem>
-                                <SelectItem value={ROLES.EDITOR}>{t('projects.invite_modal.role_editor')}</SelectItem>
-                                <SelectItem value={ROLES.LIMITED}>{t('projects.invite_modal.role_limited')}</SelectItem>
+                                <SelectItem value={ROLES.EDITOR}>{t('projects.invite_modal.role_full')}</SelectItem>
+                                <SelectItem value={ROLES.VIEWER}>{t('projects.invite_modal.role_limited_short')}</SelectItem>
                             </SelectContent>
                         </Select>
                     </div>

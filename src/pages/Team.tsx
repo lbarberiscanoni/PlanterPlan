@@ -12,6 +12,13 @@ import { Button } from '@/shared/ui/button';
 import { Badge } from '@/shared/ui/badge';
 import { Label } from '@/shared/ui/label';
 import { Avatar, AvatarFallback, AvatarImage } from '@/shared/ui/avatar';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/shared/ui/select';
 import { useConfirm } from '@/shared/ui/confirm-dialog-context';
 import InviteMemberModal from '@/features/projects/components/InviteMemberModal';
 import { useTeam } from '@/features/people/hooks/useTeam';
@@ -182,7 +189,10 @@ export default function Team() {
                         {teamMembers.map(member => {
                             const name = memberName(member, t('projects.team_page.unknown_member'));
                             const email = member.email ?? t('projects.team_page.email_unavailable');
-                            const canRemoveMember = canManageMembers && member.user_id !== user?.id;
+                            const isSelf = member.user_id === user?.id;
+                            const isOwnerRow = member.role === ROLES.OWNER;
+                            const canRemoveMember = canManageMembers && !isSelf;
+                            const canChangeMemberRole = canManageMembers && !isSelf && !isOwnerRow;
 
                             return (
                                 <article
@@ -204,9 +214,32 @@ export default function Team() {
                                                         <span className="truncate">{email}</span>
                                                     </div>
                                                 </div>
-                                                <Badge variant="outline" className="shrink-0 capitalize">
-                                                    {t(`projects.team_page.roles.${member.role}` as const, { defaultValue: member.role })}
-                                                </Badge>
+                                                {canChangeMemberRole ? (
+                                                    <Select
+                                                        value={member.role === ROLES.EDITOR ? ROLES.EDITOR : ROLES.VIEWER}
+                                                        onValueChange={(next) => {
+                                                            if (next !== member.role) {
+                                                                mutations.updateMemberRole.mutate({ id: member.id, role: next });
+                                                            }
+                                                        }}
+                                                        disabled={mutations.updateMemberRole.isPending}
+                                                    >
+                                                        <SelectTrigger
+                                                            className="h-8 w-[150px] shrink-0"
+                                                            aria-label={t('projects.team_page.role_select_aria', { name })}
+                                                        >
+                                                            <SelectValue />
+                                                        </SelectTrigger>
+                                                        <SelectContent>
+                                                            <SelectItem value={ROLES.EDITOR}>{t('projects.invite_modal.role_full')}</SelectItem>
+                                                            <SelectItem value={ROLES.VIEWER}>{t('projects.invite_modal.role_limited_short')}</SelectItem>
+                                                        </SelectContent>
+                                                    </Select>
+                                                ) : (
+                                                    <Badge variant="outline" className="shrink-0 capitalize">
+                                                        {t(`projects.team_page.roles.${member.role}` as const, { defaultValue: member.role })}
+                                                    </Badge>
+                                                )}
                                             </div>
 
                                             <div className="mt-4 flex items-center justify-between gap-3">
