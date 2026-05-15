@@ -169,7 +169,7 @@ export default function Project() {
     const isOwnerByProject = project?.creator === user?.id;
     const isGlobalAdmin = user?.role === ROLES.ADMIN;
     const currentMember = teamMembers?.find((m: { user_id?: string }) => m.user_id === user?.id);
-    const userRole = isGlobalAdmin ? ROLES.ADMIN : currentMember?.role || (isOwnerByProject ? ROLES.OWNER : ROLES.VIEWER);
+    const userRole = isGlobalAdmin ? ROLES.ADMIN : currentMember?.role || (isOwnerByProject ? ROLES.PLANTER : ROLES.TEAM);
     const projectTaskRows = useMemo(() => (projectHierarchy as TaskRow[]) || [], [projectHierarchy]);
 
     const canEdit = canEditTaskContent(userRole);
@@ -178,19 +178,18 @@ export default function Project() {
     const canInvite = canManageProjectMembers(userRole);
     const canManageSettings = canManageProjectMembers(userRole);
     const canEditTaskForRow = useCallback(
-        (task: TaskRow) => canEditTaskContent(userRole, {
-            task,
-            allProjectTasks: projectTaskRows,
-            userId: user?.id ?? null,
-        }),
-        [projectTaskRows, user?.id, userRole],
+        (_task?: TaskRow) => {
+            void _task;
+            return canEditTaskContent(userRole);
+        },
+        [userRole],
     );
     const canUpdateTaskStatusForRow = useCallback(
-        (task: TaskRow) => canUpdateTaskProgress(userRole, task, {
-            allProjectTasks: projectTaskRows,
-            userId: user?.id ?? null,
-        }),
-        [projectTaskRows, user?.id, userRole],
+        (_task: TaskRow) => {
+            void _task;
+            return canUpdateTaskProgress(userRole);
+        },
+        [userRole],
     );
     const handleInvalidHierarchyDrop = useCallback(() => {
         toast.error(t('projects.invalid_task_hierarchy_drop'));

@@ -143,7 +143,13 @@ RLS is enabled on all tables. Authorization is role-based per project.
 
 ### Role Hierarchy
 
-`owner > editor > coach > viewer > limited` — defined in `project_members.role` (Refer to `docs/architecture/auth-rbac.md` for specific permissions).
+`Admin > Planter > Team` (collapsed from 5 roles on 2026-05-15).
+
+- **Admin** — global `admin_users` whitelist (P4P staff). Bypasses every project RLS gate, exclusively creates/edits templates, owns the `/admin/*` surface.
+- **Planter** — `project_members.role = 'planter'`. Per-project top role: full task CRUD plus invite/manage members and project settings. Cannot edit templates.
+- **Team** — `project_members.role = 'team'`. Full task CRUD plus comments. Cannot invite or manage members.
+
+The Coach role + `is_coaching_task` trigger and the Wave 29 viewer/limited Phase Lead carve-out were dropped in migration `20260515000000_role_hierarchy_collapse.sql`. See `docs/architecture/auth-rbac.md` for the full permission matrix.
 
 ### Admin SECURITY DEFINER RPCs (Wave 34)
 
@@ -161,16 +167,18 @@ The `admin_users` whitelist is the sole admin gate — `is_admin(auth.uid())` re
 
 - **`has_project_role(pid, uid, roles[])`** — Primary gate. Used in nearly every policy. Checks `project_members` for matching role.
 - **`is_admin(uid)`** — Checks `admin_users` table. Used as fallback override in every policy.
-- **`check_project_ownership(pid, uid)`** — Checks `tasks.creator = uid`. Note: checks *creatorship*, not the `owner` role.
+- **`check_project_ownership_by_role(pid, uid)`** — Checks `project_members.role = 'planter'`. Used by member-management policies.
+- **`check_project_creatorship(pid, uid)`** — Checks `tasks.creator = uid`. Used to bootstrap the very first project_members row at project creation.
 - **`is_active_member(pid, uid)`** — Checks existence in `project_members` (any role).
 
 ### RLS Policy Pattern
 
-Most tables follow the same pattern:
-- **SELECT**: project members (any role) OR admin
-- **INSERT/UPDATE/DELETE**: owner + editor OR admin
-- **`tasks` table**: also allows `creator` to read/update/delete their own tasks, and templates (`origin = 'template'`) are publicly readable by authenticated users
-- **`task_comments`**: INSERT allowed for any project member (not just owner/editor) — comments are a collaboration surface, not a structural mutation.
+Most tables follow the same pattern after the 2026-05-15 collapse:
+- **SELECT**: project members (Planter or Team) OR admin
+- **INSERT/UPDATE/DELETE on tasks**: any project member OR creator OR admin
+- **INSERT/UPDATE/DELETE on people / project_invites / project_members**: Planter OR admin
+- **`tasks` table**: also allows `creator` to read/update/delete their own tasks; templates (`origin = 'template'`) are publicly readable by authenticated users and writable only by admins
+- **`task_comments`**: INSERT allowed for any project member.
 
 ### Trigger Functions (on `tasks` table)
 

@@ -52,15 +52,15 @@ describe('InviteMemberModal', () => {
         fireEvent.click(screen.getByRole('button', { name: /send invite/i }));
 
         await waitFor(() => {
-            expect(mockInviteMemberByEmail).toHaveBeenCalledWith('project-1', 'New@Example.com', 'editor');
+            expect(mockInviteMemberByEmail).toHaveBeenCalledWith('project-1', 'New@Example.com', 'planter');
         });
         expect(mockAddMember).not.toHaveBeenCalled();
         expect(onInviteSuccess).toHaveBeenCalled();
     });
 
-    it('surfaces owner-only invite failures without falling back to UUID membership', async () => {
+    it('surfaces planter-only invite failures without falling back to UUID membership', async () => {
         vi.spyOn(console, 'error').mockImplementation(() => undefined);
-        mockInviteMemberByEmail.mockRejectedValue(new Error('Forbidden: only project owners can invite users.'));
+        mockInviteMemberByEmail.mockRejectedValue(new Error('Forbidden: only Planters can invite users.'));
 
         render(
             <InviteMemberModal
@@ -74,7 +74,7 @@ describe('InviteMemberModal', () => {
         });
         fireEvent.click(screen.getByRole('button', { name: /send invite/i }));
 
-        expect(await screen.findByRole('alert')).toHaveTextContent('Forbidden: only project owners can invite users.');
+        expect(await screen.findByRole('alert')).toHaveTextContent('Forbidden: only Planters can invite users.');
         expect(mockInviteMemberByEmail).toHaveBeenCalledTimes(1);
         expect(mockAddMember).not.toHaveBeenCalled();
     });

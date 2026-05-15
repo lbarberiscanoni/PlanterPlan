@@ -36,8 +36,8 @@ async function responseJson<T extends Record<string, unknown>>(response: Respons
 }
 
 function makeHarness(options: HarnessOptions = {}) {
-    const callerId = options.callerId ?? 'owner-user';
-    const callerRole = options.callerRole === undefined ? 'owner' : options.callerRole;
+    const callerId = options.callerId ?? 'planter-user';
+    const callerRole = options.callerRole === undefined ? 'planter' : options.callerRole;
     const upsertRows: Record<string, unknown>[] = [];
 
     const getUser = vi.fn().mockResolvedValue({
@@ -131,11 +131,11 @@ describe('invite-by-email handler', () => {
         vi.clearAllMocks();
     });
 
-    it('lets project owners invite users and upserts membership after authorization', async () => {
-        const harness = makeHarness({ callerRole: 'owner', inviteUserId: 'new-user' });
+    it('lets Planters invite users and upserts membership after authorization', async () => {
+        const harness = makeHarness({ callerRole: 'planter', inviteUserId: 'new-user' });
 
         const response = await handleInviteByEmailRequest(
-            request({ projectId: 'project-1', email: 'TARGET@example.com', role: 'viewer' }),
+            request({ projectId: 'project-1', email: 'TARGET@example.com', role: 'team' }),
             harness.deps,
         );
 
@@ -144,27 +144,27 @@ describe('invite-by-email handler', () => {
             message: 'Invite processed successfully',
             user: { id: 'new-user', email: 'TARGET@example.com' },
         });
-        expect(harness.userRpc).toHaveBeenCalledWith('is_admin', { p_user_id: 'owner-user' });
+        expect(harness.userRpc).toHaveBeenCalledWith('is_admin', { p_user_id: 'planter-user' });
         expect(harness.inviteUserByEmail).toHaveBeenCalledWith('TARGET@example.com');
         expect(harness.upsertRows[0]).toEqual({
             project_id: 'project-1',
             user_id: 'new-user',
-            role: 'viewer',
+            role: 'team',
         });
     });
 
-    it('denies editor invites before service-role operations are created', async () => {
-        const harness = makeHarness({ callerId: 'editor-user', callerRole: 'editor' });
+    it('denies team invites before service-role operations are created', async () => {
+        const harness = makeHarness({ callerId: 'team-user', callerRole: 'team' });
 
         const response = await handleInviteByEmailRequest(
-            request({ projectId: 'project-1', email: 'target@example.com', role: 'viewer' }),
+            request({ projectId: 'project-1', email: 'target@example.com', role: 'team' }),
             harness.deps,
         );
         const bodyText = await response.text();
 
         expect(response.status).toBe(403);
         expect(JSON.parse(bodyText)).toEqual({
-            error: 'Forbidden: only project owners can invite users.',
+            error: 'Forbidden: only Planters can invite users.',
         });
         expect(harness.createClient).toHaveBeenCalledTimes(1);
         expect(harness.inviteUserByEmail).not.toHaveBeenCalled();
@@ -172,27 +172,24 @@ describe('invite-by-email handler', () => {
         expect(bodyText).not.toContain(SERVICE_ROLE_KEY);
     });
 
-    it('denies viewer invites before service-role operations are created', async () => {
-        const harness = makeHarness({ callerId: 'viewer-user', callerRole: 'viewer' });
+    it('rejects invites with unknown roles before service-role operations', async () => {
+        const harness = makeHarness({ callerRole: 'planter' });
 
         const response = await handleInviteByEmailRequest(
             request({ projectId: 'project-1', email: 'target@example.com', role: 'viewer' }),
             harness.deps,
         );
 
-        expect(response.status).toBe(403);
-        await expect(responseJson(response)).resolves.toEqual({
-            error: 'Forbidden: only project owners can invite users.',
-        });
-        expect(harness.createClient).toHaveBeenCalledTimes(1);
+        expect(response.status).toBe(400);
+        await expect(responseJson(response)).resolves.toEqual({ error: 'Invalid role' });
         expect(harness.inviteUserByEmail).not.toHaveBeenCalled();
     });
 
     it('rejects malformed email addresses before service-role operations are created', async () => {
-        const harness = makeHarness({ callerRole: 'owner' });
+        const harness = makeHarness({ callerRole: 'planter' });
 
         const response = await handleInviteByEmailRequest(
-            request({ projectId: 'project-1', email: 'not-an-email', role: 'viewer' }),
+            request({ projectId: 'project-1', email: 'not-an-email', role: 'team' }),
             harness.deps,
         );
 
@@ -211,7 +208,7 @@ describe('invite-by-email handler', () => {
         });
 
         const response = await handleInviteByEmailRequest(
-            request({ projectId: 'project-1', email: 'target@example.com', role: 'limited' }),
+            request({ projectId: 'project-1', email: 'target@example.com', role: 'team' }),
             harness.deps,
         );
 
@@ -222,7 +219,7 @@ describe('invite-by-email handler', () => {
         expect(harness.userFrom).not.toHaveBeenCalled();
         expect(harness.upsertRows[0]).toMatchObject({
             user_id: 'admin-invited-user',
-            role: 'limited',
+            role: 'team',
         });
     });
 
@@ -233,7 +230,7 @@ describe('invite-by-email handler', () => {
         });
 
         const response = await handleInviteByEmailRequest(
-            request({ projectId: 'project-1', email: 'existing@example.com', role: 'coach' }),
+            request({ projectId: 'project-1', email: 'existing@example.com', role: 'planter' }),
             harness.deps,
         );
 
@@ -244,7 +241,7 @@ describe('invite-by-email handler', () => {
         expect(harness.upsertRows[0]).toMatchObject({
             project_id: 'project-1',
             user_id: 'existing-user',
-            role: 'coach',
+            role: 'planter',
         });
     });
 
@@ -255,7 +252,7 @@ describe('invite-by-email handler', () => {
         });
 
         const response = await handleInviteByEmailRequest(
-            request({ projectId: 'project-1', email: ' MixedCase@Example.com ', role: 'viewer' }),
+            request({ projectId: 'project-1', email: ' MixedCase@Example.com ', role: 'team' }),
             harness.deps,
         );
 
@@ -266,7 +263,7 @@ describe('invite-by-email handler', () => {
         });
         expect(harness.upsertRows[0]).toMatchObject({
             user_id: 'mixed-case-user',
-            role: 'viewer',
+            role: 'team',
         });
     });
 
@@ -279,7 +276,7 @@ describe('invite-by-email handler', () => {
         });
 
         const response = await handleInviteByEmailRequest(
-            request({ projectId: 'project-1', email: 'target@example.com', role: 'viewer' }),
+            request({ projectId: 'project-1', email: 'target@example.com', role: 'team' }),
             harness.deps,
         );
         const bodyText = await response.text();

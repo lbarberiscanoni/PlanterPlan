@@ -163,7 +163,7 @@ describe('AuthContext', () => {
   });
 
   describe('role hydration', () => {
-    it('preserves existing role on localhost for non-admin (prev.role || fallback)', async () => {
+    it('defaults non-admin sessions to the team role', async () => {
       mockCheckIsAdmin.mockResolvedValue(false);
 
       render(
@@ -172,13 +172,12 @@ describe('AuthContext', () => {
 
       act(() => { authStateCallback?.('SIGNED_IN', fakeSession()); });
 
-      // Role hydration runs: prev.role || 'owner' — but prev.role is 'viewer' (truthy), so stays
       await waitFor(() => {
         expect(mockCheckIsAdmin).toHaveBeenCalledWith('user-1');
       });
 
       const user = JSON.parse(screen.getByTestId('user').textContent!);
-      expect(user.role).toBe('viewer');
+      expect(user.role).toBe('team');
     });
 
     it('sets admin role on localhost when checkIsAdmin returns true', async () => {
@@ -215,7 +214,7 @@ describe('AuthContext', () => {
       });
     });
 
-    it('falls back to viewer role on error', async () => {
+    it('falls back to team role on error', async () => {
       mockCheckIsAdmin.mockRejectedValue(new Error('network error'));
 
       render(
@@ -226,8 +225,7 @@ describe('AuthContext', () => {
 
       await waitFor(() => {
         const user = JSON.parse(screen.getByTestId('user').textContent!);
-        // Falls back to existing role or 'viewer'
-        expect(['viewer', 'owner']).toContain(user.role);
+        expect(user.role).toBe('team');
       });
     });
   });

@@ -25,11 +25,9 @@ import { Textarea } from '@/shared/ui/textarea';
 import { Button } from '@/shared/ui/button';
 import { Label } from '@/shared/ui/label';
 import type { TaskItemData } from '@/features/tasks/components/TaskItem';
-import type { TaskRow, TeamMemberWithProfile } from '@/shared/db/app.types';
-import { extractCoachingFlag } from '@/features/tasks/lib/coaching-form';
+import type { TaskRow } from '@/shared/db/app.types';
 import { extractStrategyTemplateFlag } from '@/features/tasks/lib/strategy-form';
 import { canTaskHaveChildren } from '@/features/tasks/lib/task-hierarchy';
-import { extractPhaseLeads } from '@/shared/lib/phase-lead';
 import StrategyFollowUpDialog from '@/features/tasks/components/StrategyFollowUpDialog';
 import { collectSpawnedTemplateIds } from '@/shared/lib/tree-helpers';
 
@@ -37,10 +35,6 @@ const emailDetailsSchema = z.object({
     recipient: z.string().email(),
 });
 type EmailDetailsFormData = z.infer<typeof emailDetailsSchema>;
-
-function getMemberEmail(member: TeamMemberWithProfile | undefined): string | undefined {
-    return typeof member?.email === 'string' && member.email.length > 0 ? member.email : undefined;
-}
 
 function buildEmailBody(task: TaskItemData, t: TFunction): string {
     const emptyDate = t('tasks.detail.email_body_empty_date');
@@ -66,7 +60,6 @@ interface TaskDetailsViewProps {
     allProjectTasks?: TaskItemData[];
     /** Retained for call-site compatibility; cloned scaffold delete bypass no longer depends on role. */
     membershipRole?: string;
-    teamMembers?: TeamMemberWithProfile[];
     showComments?: boolean;
     [key: string]: unknown;
 }
@@ -78,7 +71,6 @@ const TaskDetailsView = ({
     onTaskUpdated,
     canEdit = true,
     allProjectTasks = [],
-    teamMembers = [],
     showComments = true,
 }: TaskDetailsViewProps) => {
     const { t } = useTranslation();
@@ -97,18 +89,6 @@ const TaskDetailsView = ({
     // with the already-completed row in cache.
     const prevStatusRef = useRef<string | null | undefined>(task?.status);
     const isStrategyTask = extractStrategyTemplateFlag(task as TaskRow | undefined);
-    const phaseLeadIds = useMemo(
-        () => extractPhaseLeads(task as TaskRow | undefined),
-        [task],
-    );
-    const phaseLeadLabels = useMemo(
-        () => phaseLeadIds.map((id) => {
-            const member = teamMembers.find((m) => m.user_id === id);
-            const email = getMemberEmail(member);
-            return email ?? t('tasks.detail.phase_lead_fallback', { id: id.slice(0, 8) });
-        }),
-        [phaseLeadIds, teamMembers, t],
-    );
     useEffect(() => {
         const prev = prevStatusRef.current;
         const curr = task?.status;
@@ -298,20 +278,6 @@ const TaskDetailsView = ({
                         </div>
                     )}
 
-                    {extractCoachingFlag(task as TaskRow) && (
-                        <div className="flex flex-col gap-1" data-testid="coaching-badge-group">
-                            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-                                {t('tasks.detail.access_label')}
-                            </span>
-                            <span
-                                data-testid="coaching-badge"
-                                className="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-bold border bg-sky-50 text-sky-700 border-sky-100"
-                            >
-                                {t('tasks.detail.coaching_label')}
-                            </span>
-                        </div>
-                    )}
-
                     {isStrategyTask && (
                         <div className="flex flex-col gap-1" data-testid="strategy-badge-group">
                             <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
@@ -326,19 +292,6 @@ const TaskDetailsView = ({
                         </div>
                     )}
 
-                    {phaseLeadIds.length > 0 && (
-                        <div className="flex flex-col gap-1" data-testid="phase-lead-badge-group">
-                            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-                                {t('tasks.detail.phase_leads_label')}
-                            </span>
-                            <span
-                                data-testid="phase-lead-badge"
-                                className="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-bold border bg-purple-50 text-purple-700 border-purple-100"
-                            >
-                                {phaseLeadLabels.join(', ')}
-                            </span>
-                        </div>
-                    )}
                 </div>
             </div>
 

@@ -6,9 +6,9 @@ The Auth & RBAC system manages application-level authentication, user account li
 ## Core Entities & Data Models
 * **App User:** The foundational identity object managed via Supabase Auth.
 * **Global Roles:**
-  * **Admin:** System-wide administrator. Manages Templates, Master Library, Resource Library, Analytics Dashboard, User Licenses, and Discount Codes.
+  * **Admin:** System-wide administrator (the `admin_users` whitelist; P4P staff). Bypasses every project gate, exclusively manages Templates / Master Library / Resource Library, and owns the `/admin/*` surface (Analytics Dashboard, User Licenses, Discount Codes).
   * **User:** Standard application user. Can sign up, create projects (subject to licensing), and join projects.
-* **Project Roles:** Contextual permissions applied per project instance (`Owner`, `Editor`, `Viewer`, `Coach`).
+* **Project Roles:** Contextual permissions applied per project instance — `Planter` and `Team`.
 
 ## State Machines / Lifecycles
 ### Authentication Lifecycle
@@ -39,21 +39,21 @@ Runtime coverage lives in `supabase/tests/pgtap_account_lifecycle.sql`; the
 schema-source unit test also guards the intended FK actions.
 
 ## Business Rules & Constraints
-* **Project Role Permission Matrix:**
+* **Project Role Permission Matrix (post role-collapse, 2026-05-15):**
 
-| Permission / Action | Owner | Editor | Viewer (Limited) | Coach |
-| :--- | :--- | :--- | :--- | :--- |
-| **View all tasks/hierarchy** | Yes | Yes | Yes | Yes |
-| **Edit task text info/fields**| Yes | Yes | Yes (If Assigned Lead) | No |
-| **Update task status** | Yes | Yes | Yes (If Assigned Lead) | Yes (Coaching Tasks Only)|
-| **Add tasks / subtasks** | Yes | Yes | No | No |
-| **Delete tasks / subtasks** | Yes | Yes | No | No |
-| **Assign Lead to task** | Yes | No | No | No |
-| **Drag & Drop (Mutate)** | Yes | Yes | No | No |
-| **Invite / Manage Users** | Yes | No | No | No |
-| **Edit project settings** | Yes | No | No | No |
+| Permission / Action | Admin (global) | Planter | Team |
+| :--- | :--- | :--- | :--- |
+| **View all tasks/hierarchy** | Yes | Yes | Yes |
+| **Edit task content / status** | Yes | Yes | Yes |
+| **Add tasks / subtasks** | Yes | Yes | Yes |
+| **Delete tasks / subtasks** | Yes | Yes | Yes |
+| **Drag & Drop (Mutate)** | Yes | Yes | Yes |
+| **Comment on tasks** | Yes | Yes | Yes |
+| **Invite / Manage members** | Yes | Yes | No |
+| **Edit project settings** | Yes | Yes | No |
+| **Create / edit templates** | Yes | No | No |
 
-> **Footnote (Wave 29):** Viewer/Limited users may also edit tasks **under** any phase or milestone they are designated as Phase Lead for (not the phase/milestone row itself — assignment stays owner-only). See "Phase Lead" section below.
+> **Note (2026-05-15 role collapse):** The previous 5-tier model (`owner > editor > coach > viewer > limited`) was collapsed into Planter/Team. The Coach role, the per-task `is_coaching_task` write trigger, and the Phase Lead (Wave 29) viewer/limited carve-out were all dropped. Existing `settings.is_coaching_task` and `settings.phase_lead_user_ids` JSON keys remain in the DB but are inert. Migration: `supabase/migrations/20260515000000_role_hierarchy_collapse.sql`.
 
 ### Creatorship vs. Ownership (resolved Wave 24)
 
@@ -96,24 +96,15 @@ Migration: `docs/db/migrations/2026_04_18_rewrite_project_members_policies.sql`.
 
 ## Resolved
 
-* **Coach Role Tagging (Wave 22, hardened PR 3):** Resolved. Tasks intended for coach progress updates are flagged via `settings -> 'is_coaching_task' = true`. PR F moved authoring to template forms only; project instance forms hide the toggle and strip hidden flag values before submit. TaskDetailsView surfaces a read-only "Coaching" badge on tagged instances. The RLS UPDATE policy `"Enable update for coaches on coaching tasks"` scopes coach rows to non-template Coaching tasks and includes a matching `WITH CHECK`; `trg_enforce_coach_task_update_scope` then restricts coach writes to progress/status fields only. Coaches cannot edit text/content, settings, assignee, priority, hierarchy, origin/template metadata, resources, or delete tasks. Owner/editor/admin UPDATE behavior is unchanged.
+* **Coach Role Tagging (Wave 22, retired 2026-05-15):** The Coach role, the `is_coaching_task` flag workflow, the `"Enable update for coaches on coaching tasks"` UPDATE policy, and the `trg_enforce_coach_task_update_scope` column-scope trigger were dropped in the 5->2 role collapse. Former coaches were migrated to the Team role and now have full task edit authority. The `settings.is_coaching_task` JSON key still exists on legacy rows but is inert.
 
 * **Comments (Wave 26):** SELECT inherits project membership; INSERT requires `author_id = auth.uid()`; UPDATE restricted to authors on undeleted rows; DELETE allowed for authors, project owners (`check_project_ownership_by_role`), or admins. Full policy text in `docs/architecture/tasks-subtasks.md`.
 
 * **Activity Log (Wave 27):** SELECT inherits project membership; INSERT/UPDATE/DELETE denied at policy level — only SECURITY DEFINER trigger functions write rows.
 
-### Phase Lead (Wave 29)
+### Phase Lead (Wave 29, retired 2026-05-15)
 
-A project Owner may designate any `viewer` or `limited`-role member as the **Lead** of a specific phase or milestone via `settings.phase_lead_user_ids` (a JSONB array on the phase/milestone row). The list allows multiple leads per phase; a single user can lead multiple phases.
-
-**RLS** (migration `docs/db/migrations/2026_04_18_phase_lead_rls.sql`):
-* Helper: `user_is_phase_lead(target_task_id uuid, uid uuid)` walks up the `parent_task_id` chain **starting at the parent** (the row itself is never matched) and returns true if any ancestor's `settings.phase_lead_user_ids` contains `uid`. Self-exclusion is load-bearing: a Phase Lead can edit tasks UNDER a phase but cannot edit the phase row itself.
-* Policy: `"Enable update for phase leads"` on `public.tasks` — `USING (origin = 'instance' AND user_is_phase_lead(id, auth.uid()))` with a matching `WITH CHECK`.
-* **Additive only** — owner/editor UPDATE policies are unchanged. Coach progress-only scope is enforced separately by `trg_enforce_coach_task_update_scope`. SELECT for viewers is unchanged (already project-wide).
-
-**UI** (`src/features/tasks/components/TaskFormFields.tsx`): the `<PhaseLeadPicker>` sub-component (multi-select popover) renders only for `membershipRole === 'owner'` on phase/milestone rows. Options come from `useTeam(projectId).teamMembers.filter(m => m.role === 'viewer' || m.role === 'limited')` — owners/editors/admins already have task edit privileges, while coaches are governed by the separate Coaching-task progress scope. Badge in `TaskDetailsView.tsx` lists current leads.
-
-**Permission matrix update**: limited viewers may now edit existing tasks under any phase/milestone they are designated as Phase Lead for. Phase Lead scope does not grant INSERT, DELETE, drag/reparent, task assignment, project settings, or phase-lead assignment authority; those remain owner/editor/admin-controlled below UI.
+The Phase Lead carve-out — designed to grant viewer/limited members scoped edit access under a phase or milestone via `settings.phase_lead_user_ids` — was retired in the 5->2 role collapse. The `user_is_phase_lead()` helper, the `"Enable update for phase leads"` policy, the `trg_enforce_phase_lead_task_update_scope` trigger, and the `<PhaseLeadPicker>` UI were all removed because the simpler model lets any project member edit any task. Legacy `settings.phase_lead_user_ids` JSON values remain on disk but are inert.
 
 ### Notification Preferences (Wave 30)
 

@@ -42,7 +42,7 @@ export function useCreateTemplate() {
             const ownerMembership = {
                 project_id: template.id,
                 user_id: data.userId,
-                role: 'owner',
+                role: 'planter',
             } satisfies ProjectMemberInsert;
 
             await planter.entities.TeamMember.create(ownerMembership);

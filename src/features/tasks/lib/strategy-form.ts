@@ -19,8 +19,7 @@ export function extractStrategyTemplateFlag(task?: Partial<TaskRow> | null): boo
 
 /**
  * Normalise the flat `is_strategy_template` form field emitted by TaskForm
- * into a patch for the outgoing `settings` JSONB. Mirrors
- * {@link applyStrategyTemplateFlag}'s sibling in `coaching-form.ts`.
+ * into a patch for the outgoing `settings` JSONB.
  *
  * Return semantics:
  *   - `true`  → caller should set `settings.is_strategy_template = true`
@@ -42,9 +41,8 @@ export function formDataToStrategyTemplateFlag(data: TaskFormData): boolean | nu
  * nothing to persist (`flag === null` AND no existing settings), so the
  * caller can skip including `settings` in the outgoing payload entirely.
  *
- * Designed to chain with {@link applyCoachingFlag} — both helpers preserve
- * the keys they don't own, so callers can apply them in sequence to build a
- * single merged settings patch.
+ * Preserves any other keys present on `currentSettings`, so callers may
+ * compose multiple flag patches into a single merged settings update.
  *
  * Companion UX (Wave 24): when this flag is true on an instance task and the
  * task's status transitions into `completed`, `StrategyFollowUpDialog` opens

@@ -41,9 +41,6 @@ function copyTemplateBehaviorSettings(settings: TaskRow['settings']): JsonObject
     const source = settings as Record<string, unknown>;
     const next: JsonObject = {};
 
-    if (source.is_coaching_task === true) {
-        next.is_coaching_task = true;
-    }
     if (source.is_strategy_template === true) {
         next.is_strategy_template = true;
     }

@@ -203,15 +203,11 @@ export default function TasksPage() {
               const row = selectedTeamMembers.find((m) => m.user_id === currentUserId);
               if (row?.role) return row.role;
               if (selectedProjectRoot?.creator && currentUserId && selectedProjectRoot.creator === currentUserId) {
-                     return ROLES.OWNER;
+                     return ROLES.PLANTER;
               }
               return undefined;
        }, [currentSelectedTask, selectedTeamMembers, selectedProjectRoot, currentUserId]);
-       const selectedCanEdit = canEditTaskContent(selectedMembershipRole, {
-              task: selectedTaskForPanel,
-              allProjectTasks: selectedProjectTasks,
-              userId: currentUserId,
-       });
+       const selectedCanEdit = canEditTaskContent(selectedMembershipRole);
        const selectedCanDelete = selectedTaskForPanel
               ? canDeleteTaskForRole(selectedMembershipRole, selectedTaskForPanel)
               : false;

@@ -60,7 +60,7 @@ describe('useCreateTemplate', () => {
         expect(mockTeamMemberCreate).toHaveBeenCalledWith({
             project_id: 'template-1',
             user_id: 'user-1',
-            role: 'owner',
+            role: 'planter',
         });
         await waitFor(() => {
             expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['projects'] });

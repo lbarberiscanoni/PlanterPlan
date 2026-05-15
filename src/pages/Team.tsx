@@ -190,9 +190,8 @@ export default function Team() {
                             const name = memberName(member, t('projects.team_page.unknown_member'));
                             const email = member.email ?? t('projects.team_page.email_unavailable');
                             const isSelf = member.user_id === user?.id;
-                            const isOwnerRow = member.role === ROLES.OWNER;
                             const canRemoveMember = canManageMembers && !isSelf;
-                            const canChangeMemberRole = canManageMembers && !isSelf && !isOwnerRow;
+                            const canChangeMemberRole = canManageMembers && !isSelf;
 
                             return (
                                 <article
@@ -216,7 +215,7 @@ export default function Team() {
                                                 </div>
                                                 {canChangeMemberRole ? (
                                                     <Select
-                                                        value={member.role === ROLES.EDITOR ? ROLES.EDITOR : ROLES.VIEWER}
+                                                        value={member.role === ROLES.PLANTER ? ROLES.PLANTER : ROLES.TEAM}
                                                         onValueChange={(next) => {
                                                             if (next !== member.role) {
                                                                 mutations.updateMemberRole.mutate({ id: member.id, role: next });
@@ -231,8 +230,8 @@ export default function Team() {
                                                             <SelectValue />
                                                         </SelectTrigger>
                                                         <SelectContent>
-                                                            <SelectItem value={ROLES.EDITOR}>{t('projects.invite_modal.role_full')}</SelectItem>
-                                                            <SelectItem value={ROLES.VIEWER}>{t('projects.invite_modal.role_limited_short')}</SelectItem>
+                                                            <SelectItem value={ROLES.PLANTER}>{t('projects.invite_modal.role_planter')}</SelectItem>
+                                                            <SelectItem value={ROLES.TEAM}>{t('projects.invite_modal.role_team')}</SelectItem>
                                                         </SelectContent>
                                                     </Select>
                                                 ) : (

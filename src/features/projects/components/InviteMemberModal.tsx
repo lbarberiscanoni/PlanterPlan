@@ -39,7 +39,7 @@ interface InviteMemberModalProps {
 const InviteMemberModal: React.FC<InviteMemberModalProps> = ({ project, onClose, onInviteSuccess }) => {
     const { t } = useTranslation();
     const [userId, setUserId] = useState('');
-    const [role, setRole] = useState<string>(ROLES.EDITOR);
+    const [role, setRole] = useState<string>(ROLES.PLANTER);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [success, setSuccess] = useState(false);
@@ -48,7 +48,7 @@ const InviteMemberModal: React.FC<InviteMemberModalProps> = ({ project, onClose,
     // an email prompts for Discard. `success === true` short-circuits the
     // guard because we auto-close 1.5s after a successful invite; prompting
     // there would be jarring.
-    const isDirty = !success && (userId.trim().length > 0 || role !== ROLES.EDITOR);
+    const isDirty = !success && (userId.trim().length > 0 || role !== ROLES.PLANTER);
     const guardedClose = useDirtyCloseGuard(isDirty, onClose);
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -171,8 +171,8 @@ const InviteMemberModal: React.FC<InviteMemberModalProps> = ({ project, onClose,
                                 <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
-                                <SelectItem value={ROLES.EDITOR}>{t('projects.invite_modal.role_full')}</SelectItem>
-                                <SelectItem value={ROLES.VIEWER}>{t('projects.invite_modal.role_limited_short')}</SelectItem>
+                                <SelectItem value={ROLES.PLANTER}>{t('projects.invite_modal.role_planter')}</SelectItem>
+                                <SelectItem value={ROLES.TEAM}>{t('projects.invite_modal.role_team')}</SelectItem>
                             </SelectContent>
                         </Select>
                     </div>

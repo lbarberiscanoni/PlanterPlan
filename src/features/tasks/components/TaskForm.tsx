@@ -8,10 +8,8 @@ import TaskFormFields from '@/features/tasks/components/TaskFormFields';
 import RecurrencePicker from '@/features/tasks/components/RecurrencePicker';
 import { Button } from '@/shared/ui/button';
 import { isRecurrenceRule } from '@/shared/lib/recurrence';
-import { extractCoachingFlag } from '@/features/tasks/lib/coaching-form';
 import { extractStrategyTemplateFlag } from '@/features/tasks/lib/strategy-form';
 import { sanitizeTemplateFlagFormData } from '@/features/tasks/lib/task-form-flags';
-import { extractPhaseLeads } from '@/shared/lib/phase-lead';
 import type { TaskFormData, TaskRow, TeamMemberWithProfile } from '@/shared/db/app.types';
 
 const extractDateInput = (value?: string | null) => {
@@ -45,7 +43,6 @@ const getTaskSchema = (origin: 'instance' | 'template') => z.object({
  return isNaN(num) ? undefined : num;
  }, z.number().min(1).max(28).optional()),
  recurrence_target_project_id: z.string().optional().nullable(),
- is_coaching_task: z.boolean().optional(),
  is_strategy_template: z.boolean().optional(),
 }).refine((data) => {
  if (origin === 'instance' && data.start_date && data.due_date) {
@@ -96,9 +93,7 @@ const createInitialState = (task?: Partial<TaskRow> | null) => {
  recurrence_weekday: rec?.kind === 'weekly' ? rec.weekday : 1,
  recurrence_day_of_month: rec?.kind === 'monthly' ? rec.dayOfMonth : 1,
  recurrence_target_project_id: rec?.targetProjectId ?? '',
- is_coaching_task: extractCoachingFlag(task),
  is_strategy_template: extractStrategyTemplateFlag(task),
- phase_lead_user_ids: extractPhaseLeads(task),
  };
 };
 

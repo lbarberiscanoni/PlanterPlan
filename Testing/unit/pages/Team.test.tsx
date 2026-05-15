@@ -9,7 +9,7 @@ const mockProjectList = vi.fn();
 const mockProjectGet = vi.fn();
 const mockListTeamMembersWithProfiles = vi.fn();
 const mockDeleteMember = vi.fn();
-let mockUser = { id: 'owner-user', email: 'owner@example.com', role: 'viewer' };
+let mockUser = { id: 'planter-user', email: 'planter@example.com', role: 'team' };
 
 vi.mock('@/shared/api/planterClient', () => ({
   planter: {
@@ -45,32 +45,32 @@ function renderTeam(initialPath = '/team?project=p1') {
 describe('Team page', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockUser = { id: 'owner-user', email: 'owner@example.com', role: 'viewer' };
+    mockUser = { id: 'planter-user', email: 'planter@example.com', role: 'team' };
     mockProjectList.mockResolvedValue([{ id: 'p1', title: 'Launch Project' }]);
     mockProjectGet.mockResolvedValue({ id: 'p1', title: 'Launch Project', origin: 'instance', parent_task_id: null });
     mockListTeamMembersWithProfiles.mockResolvedValue([
       {
-        id: 'm-owner',
+        id: 'm-planter',
         project_id: 'p1',
-        user_id: 'owner-user',
-        role: 'owner',
+        user_id: 'planter-user',
+        role: 'planter',
         joined_at: '2026-05-07T00:00:00Z',
-        email: 'owner@example.com',
-        first_name: 'Owner',
+        email: 'planter@example.com',
+        first_name: 'Planter',
         last_name: 'Person',
-        display_name: 'Owner Person',
+        display_name: 'Planter Person',
         avatar_url: null,
       },
       {
-        id: 'm-editor',
+        id: 'm-team',
         project_id: 'p1',
-        user_id: 'editor-user',
-        role: 'editor',
+        user_id: 'team-user',
+        role: 'team',
         joined_at: null,
-        email: 'editor@example.com',
-        first_name: 'Ed',
-        last_name: 'Itor',
-        display_name: 'Ed Itor',
+        email: 'team@example.com',
+        first_name: 'Tee',
+        last_name: 'Mem',
+        display_name: 'Tee Mem',
         avatar_url: null,
       },
     ]);
@@ -81,11 +81,10 @@ describe('Team page', () => {
     renderTeam();
 
     expect(await screen.findByRole('heading', { name: 'Launch Project Team' })).toBeInTheDocument();
-    expect(screen.getByText('Owner Person')).toBeInTheDocument();
-    expect(screen.getByText('editor@example.com')).toBeInTheDocument();
-    // Owner-row keeps its role badge; editor-row gets the role-change Select instead.
-    expect(screen.getByText('Owner')).toBeInTheDocument();
-    expect(screen.getByRole('combobox', { name: /change role for ed itor/i })).toBeInTheDocument();
+    expect(screen.getByText('Planter Person')).toBeInTheDocument();
+    expect(screen.getByText('team@example.com')).toBeInTheDocument();
+    // Self-row keeps its role badge; other-row gets the role-change Select instead.
+    expect(screen.getByRole('combobox', { name: /change role for tee mem/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /add member/i })).toBeInTheDocument();
     expect(mockListTeamMembersWithProfiles).toHaveBeenCalledWith('p1');
   });
@@ -99,38 +98,39 @@ describe('Team page', () => {
     expect(mockListTeamMembersWithProfiles).not.toHaveBeenCalled();
   });
 
-  it('hides member-management actions from non-owner project members', async () => {
-    mockUser = { id: 'viewer-user', email: 'viewer@example.com', role: 'viewer' };
+  it('hides member-management actions from non-Planter project members', async () => {
+    mockUser = { id: 'team-user', email: 'team@example.com', role: 'team' };
     mockListTeamMembersWithProfiles.mockResolvedValue([
       {
-        id: 'm-viewer',
+        id: 'm-team',
         project_id: 'p1',
-        user_id: 'viewer-user',
-        role: 'viewer',
+        user_id: 'team-user',
+        role: 'team',
         joined_at: null,
-        email: 'viewer@example.com',
+        email: 'team@example.com',
         first_name: null,
         last_name: null,
-        display_name: 'Viewer Person',
+        display_name: 'Team Person',
         avatar_url: null,
       },
     ]);
 
     renderTeam();
 
-    expect(await screen.findByText('Viewer Person')).toBeInTheDocument();
+    expect(await screen.findByText('Team Person')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /add member/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /remove/i })).not.toBeInTheDocument();
   });
 
   it('confirms before removing another member', async () => {
+    mockUser = { id: 'planter-user', email: 'planter@example.com', role: 'planter' };
     const user = userEvent.setup();
     renderTeam();
 
-    await screen.findByText('Ed Itor');
-    await user.click(screen.getByRole('button', { name: 'Remove Ed Itor' }));
+    await screen.findByText('Tee Mem');
+    await user.click(screen.getByRole('button', { name: 'Remove Tee Mem' }));
     await user.click(await screen.findByRole('button', { name: 'Remove' }));
 
-    await waitFor(() => expect(mockDeleteMember).toHaveBeenCalledWith('m-editor'));
+    await waitFor(() => expect(mockDeleteMember).toHaveBeenCalledWith('m-team'));
   });
 });

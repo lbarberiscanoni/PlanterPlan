@@ -294,7 +294,6 @@ describe('useProjectBoard', () => {
         purpose: 'Template purpose',
         actions: 'Template actions',
         settings: {
-          is_coaching_task: true,
           is_strategy_template: true,
         },
       }));

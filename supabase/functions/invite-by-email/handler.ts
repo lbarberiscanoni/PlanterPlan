@@ -71,7 +71,7 @@ export interface InviteByEmailHandlerDeps {
   logger?: Pick<Console, 'error' | 'log'>;
 }
 
-const ASSIGNABLE_ROLES = new Set(['owner', 'editor', 'coach', 'viewer', 'limited']);
+const ASSIGNABLE_ROLES = new Set(['planter', 'team']);
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 class InviteError extends Error {
@@ -161,7 +161,7 @@ export async function handleInviteByEmailRequest(
     const body = parseBody(await req.json().catch(() => ({})));
     const projectId = typeof body.projectId === 'string' ? body.projectId : '';
     const email = typeof body.email === 'string' ? body.email.trim() : '';
-    const role = typeof body.role === 'string' && body.role.length > 0 ? body.role : 'viewer';
+    const role = typeof body.role === 'string' && body.role.length > 0 ? body.role : 'team';
 
     if (!projectId) throw new Error('Missing projectId');
     if (!email) throw new Error('Missing email');
@@ -198,8 +198,8 @@ export async function handleInviteByEmailRequest(
         .eq('user_id', user.id)
         .maybeSingle();
 
-      if (memberError || memberData?.role !== 'owner') {
-        throw new Error('Forbidden: only project owners can invite users.');
+      if (memberError || memberData?.role !== 'planter') {
+        throw new Error('Forbidden: only Planters can invite users.');
       }
     }
 

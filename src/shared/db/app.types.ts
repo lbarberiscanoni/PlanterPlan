@@ -122,7 +122,7 @@ export interface Person extends PersonRow {
 // ----------------------------------------------------------------------------
 // Auth & Users
 // ----------------------------------------------------------------------------
-export type UserRole = 'admin' | 'owner' | 'viewer';
+export type UserRole = 'admin' | 'planter' | 'team';
 
 export interface UserMetadata {
     saved_email_addresses?: string[];
@@ -166,12 +166,8 @@ export interface TaskFormData {
     recurrence_weekday?: number;
     recurrence_day_of_month?: number;
     recurrence_target_project_id?: string | null;
-    /** Wave 22: flag the task as a coaching task so project Coaches may edit it. */
-    is_coaching_task?: boolean;
     /** Wave 24: flag the task as a strategy template so completing it opens the Master Library follow-up dialog. */
     is_strategy_template?: boolean;
-    /** Wave 29: user ids designated as Phase Leads on a phase/milestone row (owner-only picker in TaskFormFields). */
-    phase_lead_user_ids?: string[];
 }
 
 /**
