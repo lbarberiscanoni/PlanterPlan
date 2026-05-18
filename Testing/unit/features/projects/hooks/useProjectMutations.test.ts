@@ -215,6 +215,63 @@ describe('useUpdateProject', () => {
     expect(mockTaskUpsert).not.toHaveBeenCalled();
   });
 
+  it('persists user start_date on root when moves earlier (defends against trigger rollup)', async () => {
+    // Regression: line 211's child upsert fires calc_task_date_rollup which
+    // recomputes root.start_date = MIN(child.start_date). The final root write
+    // must restore the user's input.
+    const tasks = [
+      makeTask({ id: 'proj-1', parent_task_id: null, start_date: '2026-01-15', due_date: '2026-01-25', is_complete: false }),
+      makeTask({ id: 't1', parent_task_id: 'proj-1', start_date: '2026-01-15', due_date: '2026-01-20', is_complete: false }),
+    ];
+    mockTaskFilter.mockResolvedValueOnce(tasks);
+    mockProjectUpdate.mockResolvedValue(makeTask());
+    mockTaskUpsert.mockResolvedValue({ data: [], error: null });
+    const { Wrapper } = createWrapper();
+
+    const { result } = renderHook(() => useUpdateProject(), { wrapper: Wrapper });
+
+    await act(async () => {
+      await result.current.mutateAsync({
+        projectId: 'proj-1',
+        updates: { start_date: '2026-01-05' },
+        oldStartDate: '2026-01-15',
+      });
+    });
+
+    expect(mockProjectUpdate).toHaveBeenLastCalledWith(
+      'proj-1',
+      expect.objectContaining({ start_date: '2026-01-05' }),
+    );
+  });
+
+  it('persists start_date when no children to shift (fall-through write)', async () => {
+    // Checkpoint projects (recalculateProjectDates returns []) or projects
+    // with no shiftable tasks fall through to line 222. The dbUpdates payload
+    // must carry start_date so the column is actually written.
+    mockTaskFilter.mockResolvedValueOnce([
+      makeTask({ id: 'proj-1', parent_task_id: null, start_date: '2026-02-01', settings: { project_kind: 'checkpoint' } }),
+    ]);
+    mockProjectUpdate.mockResolvedValue(makeTask());
+    const { Wrapper } = createWrapper();
+
+    const { result } = renderHook(() => useUpdateProject(), { wrapper: Wrapper });
+
+    await act(async () => {
+      await result.current.mutateAsync({
+        projectId: 'proj-1',
+        updates: { start_date: '2026-02-15', settings: { project_kind: 'checkpoint' } },
+        oldStartDate: '2026-02-01',
+      });
+    });
+
+    expect(mockTaskUpsert).not.toHaveBeenCalled();
+    expect(mockProjectUpdate).toHaveBeenCalledTimes(1);
+    expect(mockProjectUpdate).toHaveBeenCalledWith(
+      'proj-1',
+      expect.objectContaining({ start_date: '2026-02-15' }),
+    );
+  });
+
   it('returns shiftedCount matching incomplete tasks and skips completed ones', async () => {
     const tasks = [
       makeTask({ id: 'proj-1', parent_task_id: null, start_date: '2026-01-01', due_date: '2026-01-01', is_complete: false }),

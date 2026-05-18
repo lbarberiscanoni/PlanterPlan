@@ -16,7 +16,7 @@ import { applyProjectKind, extractProjectKind, type ProjectKind } from '@/featur
 import { toIsoDate } from '@/shared/lib/date-engine';
 import { useDirtyCloseGuard } from '@/shared/lib/use-dirty-close-guard';
 import { PROJECT_STATUS } from '@/shared/constants/domain';
-import type { TaskRow } from '@/shared/db/app.types';
+import type { TaskRow, TaskUpdate, Json } from '@/shared/db/app.types';
 import { toast } from 'sonner';
 import planter from '@/shared/api/planterClient';
 
@@ -146,6 +146,7 @@ export default function EditProjectModal({ project, isOpen, onClose }: EditProje
  const onSubmit = async (data: EditProjectFormData) => {
   try {
    const oldStartDate = toIsoDate(project.start_date || project.created_at);
+   const oldDueDate = toIsoDate(project.due_date);
    const { due_soon_threshold, due_date, supervisor_email, ...rest } = data;
 
    const mergedSettings = {
@@ -157,17 +158,18 @@ export default function EditProjectModal({ project, isOpen, onClose }: EditProje
     ? applyProjectKind(mergedSettings, projectKind) ?? mergedSettings
     : mergedSettings;
 
-   const updateData = {
+   const updateData: TaskUpdate = {
     ...rest,
     due_date: due_date ? due_date : null,
     supervisor_email: supervisor_email ? supervisor_email : null,
-    settings: settingsWithKind,
+    settings: settingsWithKind as Json,
    };
 
    const result = await updateProjectMutation.mutateAsync({
     projectId: project.id,
-    updates: updateData as Record<string, unknown>,
+    updates: updateData,
     oldStartDate,
+    oldDueDate,
    });
    if (result.shiftedCount > 0) {
     toast.success(t('projects.edit_modal.project_saved_with_shift', { count: result.shiftedCount }));

@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { planter } from '@/shared/api/planterClient';
-import { toIsoDate, recalculateProjectDates, nowUtcIso, DateEngineTask } from '@/shared/lib/date-engine';
+import { toIsoDate, recalculateProjectDates, recalculateProjectDatesByDueDate, nowUtcIso, DateEngineTask } from '@/shared/lib/date-engine';
 import { TaskUpdate, TaskInsert } from '@/shared/db/app.types';
 
 export interface CreateProjectPayload {
@@ -14,6 +14,7 @@ export interface UpdateProjectPayload {
     projectId: string;
     updates: TaskUpdate;
     oldStartDate?: string | null;
+    oldDueDate?: string | null;
 }
 
 type ProjectDateShiftUpdate = Partial<TaskUpdate> & {
@@ -142,16 +143,22 @@ export function useCreateProject() {
 export function useUpdateProject() {
     const queryClient = useQueryClient();
     return useMutation({
-        mutationFn: async ({ projectId, updates, oldStartDate }: UpdateProjectPayload) => {
-            const { start_date: newStartDateStr } = updates;
+        mutationFn: async ({ projectId, updates, oldStartDate, oldDueDate }: UpdateProjectPayload) => {
+            const { start_date: newStartDateStr, due_date: newDueDateStr } = updates;
             const newStartIso = toIsoDate(newStartDateStr);
             const oldStartIso = toIsoDate(oldStartDate);
+            const newDueIso = toIsoDate(newDueDateStr);
+            const oldDueIso = toIsoDate(oldDueDate);
 
+            // Normalize start_date / due_date to YYYY-MM-DD ISO. Raw form values
+            // are already in that shape, but `toIsoDate` defends against Date
+            // objects, trailing whitespace, or timezone-shifted ISO strings that
+            // would otherwise be sent as-is and silently mismatch the DB column.
             const dbUpdates: TaskUpdate = {
                 title: updates.title,
                 description: updates.description,
-                due_date: updates.due_date,
-                start_date: updates.start_date,
+                due_date: newDueIso ?? updates.due_date,
+                start_date: newStartIso ?? updates.start_date,
                 updated_at: nowUtcIso(),
                 settings: updates.settings,
                 status: updates.status,
@@ -210,10 +217,76 @@ export function useUpdateProject() {
 
                     await upsertDateShiftGroups(batchUpdates, tasksById, 'desc');
 
+                    // Final root write. Child upserts above fire the
+                    // calc_task_date_rollup trigger, which overwrites the root's
+                    // start_date with MIN(child.start_date). This write runs
+                    // last to restore the user's chosen launch date. Name
+                    // start_date explicitly so a future spread refactor cannot
+                    // silently drop it.
                     await planter.entities.Project.update(projectId, {
-                        ...dbUpdates,
+                        title: dbUpdates.title,
+                        description: dbUpdates.description,
+                        start_date: newStartIso,
                         due_date: rootDuePatch,
+                        settings: dbUpdates.settings,
+                        status: dbUpdates.status,
+                        supervisor_email: dbUpdates.supervisor_email,
+                        updated_at: nowUtcIso(),
                     });
+
+                    return { shiftedCount: batchUpdates.length };
+                }
+            }
+
+            // Due-date-only cascade: start_date unchanged but due_date moved.
+            // Shift all incomplete descendants by the same business-day delta;
+            // root start_date stays put. Skipped when the start_date branch above
+            // already fired (its cascade subsumes due_date shifts).
+            const startUnchanged = !newStartIso || !oldStartIso || newStartIso === oldStartIso;
+            if (startUnchanged && newDueIso && oldDueIso && newDueIso !== oldDueIso) {
+                const projectTasks = await planter.entities.Task.filter({ root_id: projectId });
+                const tasksById = new Map(
+                    (projectTasks as DateEngineTask[] || []).map((task) => [task.id, task]),
+                );
+
+                batchUpdates = recalculateProjectDatesByDueDate(
+                    projectTasks as DateEngineTask[] || [],
+                    newDueIso,
+                    oldDueIso,
+                ) as ProjectDateShiftUpdate[];
+
+                if (batchUpdates.length > 0) {
+                    const movesLater = newDueIso > oldDueIso;
+
+                    if (movesLater) {
+                        // Write child due_dates first so parent rollups widen
+                        // before they may contract under descendant adjustments.
+                        const dueOnlyUpdates = batchUpdates
+                            .filter((update) => update.due_date)
+                            .map((update) => ({
+                                id: update.id,
+                                due_date: update.due_date,
+                                updated_at: update.updated_at,
+                            }));
+                        await upsertDateShiftGroups(dueOnlyUpdates, tasksById, 'asc');
+                    } else {
+                        // Earlier move: write child start_dates first so parent
+                        // rollups don't transiently have start > due.
+                        const startOnlyUpdates = batchUpdates
+                            .filter((update) => update.start_date !== undefined)
+                            .map((update) => ({
+                                id: update.id,
+                                start_date: update.start_date,
+                                updated_at: update.updated_at,
+                            }));
+                        await upsertDateShiftGroups(startOnlyUpdates, tasksById, 'asc');
+                    }
+
+                    await upsertDateShiftGroups(batchUpdates, tasksById, 'desc');
+
+                    // Root: persist the new due_date (and the rest of the form
+                    // payload). start_date is intentionally NOT patched.
+                    await planter.entities.Project.update(projectId, dbUpdates);
 
                     return { shiftedCount: batchUpdates.length };
                 }
@@ -224,10 +297,16 @@ export function useUpdateProject() {
             return { shiftedCount: batchUpdates.length };
         },
         onSuccess: (_, variables) => {
-            queryClient.invalidateQueries({ queryKey: ['projects'] });
-            queryClient.invalidateQueries({ queryKey: ['userProjects'] });
-            queryClient.invalidateQueries({ queryKey: ['project', variables.projectId] });
-            queryClient.invalidateQueries({ queryKey: ['projectHierarchy', variables.projectId] });
+            // refetchType: 'active' forces mounted subscribers (the project
+            // page, the edit modal's parent) to refetch immediately rather
+            // than waiting for the next focus event. Without this, structural
+            // sharing can keep a stale `project` object reference around even
+            // after a successful write, hiding the new start_date in the UI.
+            queryClient.invalidateQueries({ queryKey: ['projects'], refetchType: 'active' });
+            queryClient.invalidateQueries({ queryKey: ['userProjects'], refetchType: 'active' });
+            queryClient.invalidateQueries({ queryKey: ['project', variables.projectId], refetchType: 'active' });
+            queryClient.invalidateQueries({ queryKey: ['projectHierarchy', variables.projectId], refetchType: 'active' });
+            queryClient.invalidateQueries({ queryKey: ['allTasks'], refetchType: 'active' });
         }
     });
 }
