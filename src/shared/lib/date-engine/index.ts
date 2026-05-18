@@ -466,6 +466,77 @@ export const recalculateProjectDates = (
  return updates;
 };
 
+/**
+ * Recalculates start/due dates for a project's tasks when the project due date
+ * changes (start date unchanged). Mirrors {@link recalculateProjectDates} but
+ * keys the business-day delta off the due-date pair. Only affects incomplete
+ * descendants; the root row is left untouched (the project mutation patches
+ * the root's due_date directly).
+ */
+export const recalculateProjectDatesByDueDate = (
+ projectTasks: DateEngineTask[] | null | undefined,
+ newDueDateStr: string | null | undefined,
+ oldDueDateStr: string | null | undefined,
+): DateUpdateRecord[] => {
+ if (!projectTasks || !newDueDateStr || !oldDueDateStr) return [];
+
+ // Wave 29: checkpoint projects don't bulk-shift on date changes.
+ const root = projectTasks.find((t) => !t.parent_task_id);
+ if (isCheckpointProject(root)) return [];
+
+ const oldIso = toIsoDate(oldDueDateStr);
+ const newIso = toIsoDate(newDueDateStr);
+ if (!oldIso || !newIso) return [];
+
+ const diffDays = dateProjectBusinessCalendar.diffInBusinessDays(newIso, oldIso);
+
+ if (diffDays === null || diffDays === 0) return [];
+
+ const updates: DateUpdateRecord[] = [];
+
+ projectTasks.forEach((task) => {
+ // The project root is updated directly by the project mutation. Re-shifting it
+ // here can overwrite a user-selected due date.
+ if (root && task.id === root.id) return;
+
+ // Skip if task is completed by either signal (preserve history)
+ if (task.is_complete || task.status === 'completed') return;
+
+ // Skip if task has no dates
+ if (!task.start_date) return;
+
+ const taskStartIso = toIsoDate(task.start_date);
+ if (!taskStartIso) return;
+
+ // Shift Start Date
+ const taskStart = addBusinessDaysToUtcDate(taskStartIso, diffDays);
+ if (!taskStart) return;
+ const newStartISO = toIsoDate(taskStart);
+ if (!newStartISO) return;
+
+ // Shift Due Date (if exists)
+ let newDueISO: string | null = null;
+ if (task.due_date) {
+ const taskDueIso = toIsoDate(task.due_date);
+ if (taskDueIso) {
+ const taskDue = addBusinessDaysToUtcDate(taskDueIso, diffDays);
+ if (taskDue) {
+ newDueISO = toIsoDate(taskDue);
+ }
+ }
+ }
+
+ updates.push({
+ id: task.id,
+ start_date: newStartISO,
+ due_date: newDueISO || null,
+ updated_at: nowUtcIso(),
+ });
+ });
+
+ return updates;
+};
+
 // ---------------------------------------------------------------------------
 // Urgency Derivation (Wave 20)
 // ---------------------------------------------------------------------------

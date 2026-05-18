@@ -15,6 +15,7 @@ import {
   formatDisplayDate,
   calculateMinMaxDates,
   recalculateProjectDates,
+  recalculateProjectDatesByDueDate,
   nowUtcIso,
   type DateEngineTask,
 } from '@/shared/lib/date-engine/index';
@@ -510,5 +511,80 @@ describe('recalculateProjectDates', () => {
     expect(recalculateProjectDates(null, '2026-01-01', '2025-12-01')).toEqual([]);
     expect(recalculateProjectDates(tasks, null, '2025-12-01')).toEqual([]);
     expect(recalculateProjectDates(tasks, '2026-01-01', null)).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// recalculateProjectDatesByDueDate
+// ---------------------------------------------------------------------------
+describe('recalculateProjectDatesByDueDate', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  const tasks: DateEngineTask[] = [
+    { id: 'root', parent_task_id: null, start_date: '2026-01-01', due_date: '2026-03-01', is_complete: false },
+    { id: 't1', parent_task_id: 'root', start_date: '2026-01-10', due_date: '2026-01-20', is_complete: false },
+    { id: 't2', parent_task_id: 'root', start_date: '2026-02-01', due_date: '2026-02-15', is_complete: false },
+  ];
+
+  it('shifts descendant start_date AND due_date forward by the due-date delta', () => {
+    const updates = recalculateProjectDatesByDueDate(tasks, '2026-03-06', '2026-03-01');
+    expect(updates).toHaveLength(2);
+    // Same business-day shift the existing recalculateProjectDates uses for
+    // identical start_date deltas. Both fields move by the same offset.
+    const t1 = updates.find((u) => u.id === 't1')!;
+    expect(t1.start_date).toBe('2026-01-16');
+    expect(t1.due_date).toBe('2026-01-27');
+  });
+
+  it('shifts descendant dates backward when due_date moves earlier', () => {
+    const updates = recalculateProjectDatesByDueDate(tasks, '2026-02-24', '2026-03-01');
+    expect(updates).toHaveLength(2);
+    const t1 = updates.find((u) => u.id === 't1')!;
+    expect(t1.start_date).toBe('2026-01-06');
+    expect(t1.due_date).toBe('2026-01-13');
+  });
+
+  it('excludes the project root from the batch', () => {
+    const updates = recalculateProjectDatesByDueDate(tasks, '2026-03-06', '2026-03-01');
+    expect(updates.map((u) => u.id)).not.toContain('root');
+  });
+
+  it('skips completed tasks', () => {
+    const withCompleted: DateEngineTask[] = [
+      { id: 'root', parent_task_id: null, start_date: '2026-01-01', due_date: '2026-03-01', is_complete: false },
+      { id: 't1', parent_task_id: 'root', start_date: '2026-01-10', due_date: '2026-01-20', is_complete: true },
+      { id: 't2', parent_task_id: 'root', start_date: '2026-02-01', due_date: '2026-02-15', status: 'completed' },
+      { id: 't3', parent_task_id: 'root', start_date: '2026-02-10', due_date: '2026-02-20', is_complete: false },
+    ];
+    const updates = recalculateProjectDatesByDueDate(withCompleted, '2026-03-06', '2026-03-01');
+    expect(updates.map((u) => u.id)).toEqual(['t3']);
+  });
+
+  it('returns [] for checkpoint projects', () => {
+    const checkpoint: DateEngineTask[] = [
+      { id: 'root', parent_task_id: null, start_date: '2026-01-01', due_date: '2026-03-01', settings: { project_kind: 'checkpoint' } } as DateEngineTask,
+      { id: 't1', parent_task_id: 'root', start_date: '2026-01-10', due_date: '2026-01-20' },
+    ];
+    expect(recalculateProjectDatesByDueDate(checkpoint, '2026-03-06', '2026-03-01')).toEqual([]);
+  });
+
+  it('skips tasks with no start_date', () => {
+    const noDate: DateEngineTask[] = [
+      { id: 'root', parent_task_id: null, start_date: '2026-01-01', due_date: '2026-03-01', is_complete: false },
+      { id: 't1', parent_task_id: 'root', start_date: null, due_date: null, is_complete: false },
+    ];
+    expect(recalculateProjectDatesByDueDate(noDate, '2026-03-06', '2026-03-01')).toEqual([]);
+  });
+
+  it('returns empty when diff is zero', () => {
+    expect(recalculateProjectDatesByDueDate(tasks, '2026-03-01', '2026-03-01')).toEqual([]);
+  });
+
+  it('returns empty for null inputs', () => {
+    expect(recalculateProjectDatesByDueDate(null, '2026-03-01', '2026-02-01')).toEqual([]);
+    expect(recalculateProjectDatesByDueDate(tasks, null, '2026-02-01')).toEqual([]);
+    expect(recalculateProjectDatesByDueDate(tasks, '2026-03-01', null)).toEqual([]);
   });
 });

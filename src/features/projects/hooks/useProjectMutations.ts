@@ -259,8 +259,13 @@ export function useUpdateProject() {
                     const movesLater = newDueIso > oldDueIso;
 
                     if (movesLater) {
-                        // Write child due_dates first so parent rollups widen
-                        // before they may contract under descendant adjustments.
+                        // Pre-widen root.due_date so child due_dates can exceed
+                        // the old envelope without tripping the date-envelope guard.
+                        await planter.entities.Project.update(projectId, {
+                            due_date: newDueIso,
+                            updated_at: nowUtcIso(),
+                        });
+
                         const dueOnlyUpdates = batchUpdates
                             .filter((update) => update.due_date)
                             .map((update) => ({
@@ -270,9 +275,33 @@ export function useUpdateProject() {
                             }));
                         await upsertDateShiftGroups(dueOnlyUpdates, tasksById, 'asc');
                     } else {
-                        // Earlier move: write child start_dates first so parent
-                        // rollups don't transiently have start > due.
-                        const startOnlyUpdates = batchUpdates
+                        // Earlier move: child start_dates may shift below the
+                        // current root.start_date. Pre-widen root.start_date to
+                        // the smallest new child start so the envelope guard
+                        // accepts the writes. Order matters: the rollup AFTER
+                        // each child write recomputes root.start = min(all
+                        // child starts), mixing updated and not-yet-updated
+                        // rows. We must update children in start-ascending
+                        // order so the smallest-start row lands first; that
+                        // keeps the rollup result equal to the pre-widened
+                        // value and avoids re-narrowing the envelope below
+                        // pending children.
+                        const startAscending = (a: ProjectDateShiftUpdate, b: ProjectDateShiftUpdate) => {
+                            const sa = a.start_date ?? '';
+                            const sb = b.start_date ?? '';
+                            return sa < sb ? -1 : sa > sb ? 1 : 0;
+                        };
+                        const sortedBatch = [...batchUpdates].sort(startAscending);
+
+                        const minChildStart = sortedBatch[0]?.start_date ?? null;
+                        if (minChildStart) {
+                            await planter.entities.Project.update(projectId, {
+                                start_date: minChildStart,
+                                updated_at: nowUtcIso(),
+                            });
+                        }
+
+                        const startOnlyUpdates = sortedBatch
                             .filter((update) => update.start_date !== undefined)
                             .map((update) => ({
                                 id: update.id,
@@ -280,13 +309,25 @@ export function useUpdateProject() {
                                 updated_at: update.updated_at,
                             }));
                         await upsertDateShiftGroups(startOnlyUpdates, tasksById, 'asc');
+                        await upsertDateShiftGroups(sortedBatch, tasksById, 'desc');
+
+                        const { start_date: _omitStart, ...dueOnlyDbUpdates } = dbUpdates;
+                        void _omitStart;
+                        await planter.entities.Project.update(projectId, dueOnlyDbUpdates);
+
+                        return { shiftedCount: batchUpdates.length };
                     }
 
                     await upsertDateShiftGroups(batchUpdates, tasksById, 'desc');
 
-                    // Root: persist the new due_date (and the rest of the form
-                    // payload). start_date is intentionally NOT patched.
-                    await planter.entities.Project.update(projectId, dbUpdates);
+                    // movesLater final root update: due_date already pre-widened
+                    // to the user's target above; just persist the remaining
+                    // form payload. start_date is omitted because root rollup
+                    // (min child start) keeps it consistent and rewriting the
+                    // form's value would race the rollup unnecessarily.
+                    const { start_date: _omitStart, ...dueOnlyDbUpdates } = dbUpdates;
+                    void _omitStart;
+                    await planter.entities.Project.update(projectId, dueOnlyDbUpdates);
 
                     return { shiftedCount: batchUpdates.length };
                 }
