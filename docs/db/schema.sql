@@ -699,7 +699,13 @@ BEGIN
     END IF;
 
     IF TG_OP = 'DELETE' THEN
-        IF OLD.origin = 'instance' AND OLD.cloned_from_task_id IS NOT NULL THEN
+        -- Project roots (parent_task_id IS NULL) are deletable so the
+        -- EditProjectModal "Delete Project" flow can cascade-remove a
+        -- cloned project. Only in-project scaffold rows are guarded.
+        IF OLD.origin = 'instance'
+            AND OLD.cloned_from_task_id IS NOT NULL
+            AND OLD.parent_task_id IS NOT NULL
+        THEN
             RAISE EXCEPTION 'protected template scaffold tasks cannot be deleted'
                 USING ERRCODE = 'P0001';
         END IF;
@@ -715,9 +721,12 @@ BEGIN
     END IF;
 
     IF OLD.origin = 'instance' AND OLD.cloned_from_task_id IS NOT NULL THEN
+        -- parent_task_id and position are deliberately NOT in this list so
+        -- planters and team members can drag-and-drop scaffold rows within
+        -- their own project. Content + provenance fields stay locked so
+        -- template upgrades can still match scaffold rows to their source.
         IF
             OLD.id IS DISTINCT FROM NEW.id
-            OR OLD.parent_task_id IS DISTINCT FROM NEW.parent_task_id
             OR OLD.title IS DISTINCT FROM NEW.title
             OR OLD.description IS DISTINCT FROM NEW.description
             OR OLD.origin IS DISTINCT FROM NEW.origin
@@ -725,7 +734,6 @@ BEGIN
             OR OLD.root_id IS DISTINCT FROM NEW.root_id
             OR OLD.purpose IS DISTINCT FROM NEW.purpose
             OR OLD.actions IS DISTINCT FROM NEW.actions
-            OR OLD.position IS DISTINCT FROM NEW.position
             OR OLD.created_at IS DISTINCT FROM NEW.created_at
             OR OLD.prerequisite_phase_id IS DISTINCT FROM NEW.prerequisite_phase_id
             OR OLD.parent_project_id IS DISTINCT FROM NEW.parent_project_id
@@ -759,7 +767,7 @@ $$;
 ALTER FUNCTION "public"."enforce_template_scaffold_immutability"() OWNER TO "postgres";
 
 
-COMMENT ON FUNCTION "public"."enforce_template_scaffold_immutability"() IS 'Blocks app-role structural/content mutation and deletion of cloned instance scaffold rows. Explicit postgres/service_role bypass is reserved for audited maintenance.';
+COMMENT ON FUNCTION "public"."enforce_template_scaffold_immutability"() IS 'Blocks app-role content/provenance mutation and deletion of cloned instance scaffold rows. parent_task_id and position are intentionally NOT immutable so planters and team members can rearrange scaffold rows within their own project via drag-and-drop. Explicit postgres/service_role bypass is reserved for audited maintenance.';
 
 
 CREATE OR REPLACE FUNCTION "public"."enforce_coach_task_update_scope"() RETURNS "trigger"
@@ -951,40 +959,58 @@ CREATE OR REPLACE FUNCTION "public"."calc_task_date_rollup"() RETURNS "trigger"
     SET "search_path" TO ''
     AS $$
 DECLARE
-    v_parent_id uuid;
-    v_min_start timestamptz;
-    v_max_due timestamptz;
+    v_old_parent_id uuid;
+    v_new_parent_id uuid;
 BEGIN
-    -- Recursion Guard to prevent stack overflow
+    -- Recursion guard: rollup updates the parent row, which fires this trigger
+    -- again. Depth 10 covers any realistic project hierarchy.
     IF pg_trigger_depth() > 10 THEN
         RETURN NULL;
     END IF;
 
-    -- Determine parent to update
-    IF TG_OP = 'DELETE' THEN
-        v_parent_id := OLD.parent_task_id;
+    IF TG_OP = 'INSERT' THEN
+        v_new_parent_id := NEW.parent_task_id;
+    ELSIF TG_OP = 'DELETE' THEN
+        v_old_parent_id := OLD.parent_task_id;
     ELSE
-        v_parent_id := NEW.parent_task_id;
+        -- UPDATE: when parent_task_id changed (drag-and-drop reparent), both
+        -- the old and new parents must be recomputed so the old parent stops
+        -- carrying the moved child's contribution.
+        v_old_parent_id := OLD.parent_task_id;
+        v_new_parent_id := NEW.parent_task_id;
+
+        IF v_old_parent_id IS NOT DISTINCT FROM v_new_parent_id THEN
+            v_old_parent_id := NULL;
+        END IF;
     END IF;
 
-    -- If no parent or parent is null, stop recursion
-    IF v_parent_id IS NULL THEN
-        RETURN NULL;
+    IF v_old_parent_id IS NOT NULL THEN
+        UPDATE public.tasks parent
+        SET start_date = sub.min_start,
+            due_date = sub.max_due
+        FROM (
+            SELECT MIN(start_date) AS min_start, MAX(due_date) AS max_due
+            FROM public.tasks
+            WHERE parent_task_id = v_old_parent_id
+        ) sub
+        WHERE parent.id = v_old_parent_id
+          AND (parent.start_date IS DISTINCT FROM sub.min_start
+               OR parent.due_date IS DISTINCT FROM sub.max_due);
     END IF;
 
-    -- Calculate Min Start and Max Due from siblings
-    SELECT MIN(start_date), MAX(due_date)
-    INTO v_min_start, v_max_due
-    FROM public.tasks
-    WHERE parent_task_id = v_parent_id;
-
-    -- Update Parent
-    UPDATE public.tasks
-    SET
-        start_date = v_min_start,
-        due_date = v_max_due
-    WHERE id = v_parent_id
-      AND (start_date IS DISTINCT FROM v_min_start OR due_date IS DISTINCT FROM v_max_due);
+    IF v_new_parent_id IS NOT NULL THEN
+        UPDATE public.tasks parent
+        SET start_date = sub.min_start,
+            due_date = sub.max_due
+        FROM (
+            SELECT MIN(start_date) AS min_start, MAX(due_date) AS max_due
+            FROM public.tasks
+            WHERE parent_task_id = v_new_parent_id
+        ) sub
+        WHERE parent.id = v_new_parent_id
+          AND (parent.start_date IS DISTINCT FROM sub.min_start
+               OR parent.due_date IS DISTINCT FROM sub.max_due);
+    END IF;
 
     RETURN NULL;
 END;
@@ -1619,8 +1645,9 @@ BEGIN
 
     v_new_depth := v_parent_depth + 1;
 
-    IF v_new_depth + v_descendant_height > 4 THEN
-        RAISE EXCEPTION 'task hierarchy depth exceeded: subtasks cannot have child tasks'
+    -- Cap aligned with calc_task_date_rollup's pg_trigger_depth > 10 guard.
+    IF v_new_depth + v_descendant_height > 10 THEN
+        RAISE EXCEPTION 'task hierarchy depth exceeded: max 10 levels (project root counts as level 0)'
             USING ERRCODE = 'P0001';
     END IF;
 
@@ -2407,7 +2434,22 @@ DECLARE
   v_payload    jsonb := '{}'::jsonb;
   v_changed    text[];
 BEGIN
+  -- Project-root deletes: nothing to log against (the project's entire
+  -- activity feed is about to be cascade-deleted with this row).
+  IF TG_OP = 'DELETE' AND OLD.parent_task_id IS NULL THEN
+    RETURN OLD;
+  END IF;
+
   v_project_id := COALESCE(NEW.root_id, OLD.root_id, NEW.id, OLD.id);
+
+  -- Cascade-delete of a descendant whose project root has already been
+  -- removed: the activity_log FK would fail and the project's log rows
+  -- are about to be cascade-deleted anyway. Skip silently.
+  IF TG_OP = 'DELETE'
+     AND NOT EXISTS (SELECT 1 FROM public.tasks WHERE id = v_project_id)
+  THEN
+    RETURN OLD;
+  END IF;
 
   IF TG_OP = 'INSERT' THEN
     v_action  := 'created';

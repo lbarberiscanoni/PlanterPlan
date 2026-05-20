@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { pointerWithin, closestCorners, closestCenter, useSensor, useSensors, PointerSensor } from '@dnd-kit/core';
 import type { DragEndEvent, DragStartEvent, DragOverEvent, CollisionDetection } from '@dnd-kit/core';
 import { POSITION_STEP } from '@/shared/constants';
@@ -17,6 +17,9 @@ export function useProjectDnd(
     const [dropIndicator, setDropIndicator] = useState<DropIndicator>(null);
     const pointerYRef = useRef<number>(0);
     const invalidDropRef = useRef(false);
+    // Cached at drag start so handleDragOver doesn't query the active row's
+    // height on every pointer move (forces layout reflow).
+    const activeHeightRef = useRef<number>(0);
 
     useEffect(() => {
         const handler = (e: PointerEvent) => { pointerYRef.current = e.clientY; };
@@ -24,14 +27,43 @@ export function useProjectDnd(
         return () => window.removeEventListener('pointermove', handler);
     }, []);
 
+    // O(1) task lookups for the hot path in handleDragOver. Rebuilt only when
+    // the tasks array reference changes (memoized at the project level too).
+    const tasksById = useMemo(() => {
+        const map = new Map<string, TaskRow>();
+        for (const t of tasks) map.set(t.id, t);
+        return map;
+    }, [tasks]);
+
+    // Position-sorted siblings keyed by parent. Saves a filter + sort per
+    // pointer move; sibling order is stable across moves within a drag.
+    const childrenByParent = useMemo(() => {
+        const map = new Map<string, TaskRow[]>();
+        for (const t of tasks) {
+            const key = t.parent_task_id || '';
+            const bucket = map.get(key);
+            if (bucket) bucket.push(t);
+            else map.set(key, [t]);
+        }
+        for (const bucket of map.values()) {
+            bucket.sort((a, b) => (a.position || 0) - (b.position || 0));
+        }
+        return map;
+    }, [tasks]);
+
     const sensors = useSensors(
-        useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
+        // 4px activation feels snappier than 8 while still suppressing
+        // accidental drags on click. Tested 2 → too easy to start dragging on
+        // a row click; 4 → clear separation between click and drag intent.
+        useSensor(PointerSensor, { activationConstraint: { distance: 4 } })
     );
 
     const handleDragStart = (event: DragStartEvent) => {
         setActiveDragId(event.active.id as string);
         setDropIndicator(null);
         invalidDropRef.current = false;
+        const activeEl = document.querySelector(`[data-testid="task-row-${event.active.id}"]`);
+        activeHeightRef.current = activeEl ? activeEl.getBoundingClientRect().height : 0;
     };
 
     const setValidDropIndicator = (indicator: NonNullable<DropIndicator>) => {
@@ -62,22 +94,20 @@ export function useProjectDnd(
         }
 
         if (overData.type === 'Task') {
-            const overTask = tasks.find(t => t.id === over.id);
+            const overTask = tasksById.get(over.id as string);
             if (!overTask) return;
 
             // Use fresh DOM rect — dnd-kit's over.rect can be stale (doesn't track scroll)
             const overEl = document.querySelector(`[data-testid="task-row-${over.id}"]`);
             const overRect = overEl ? overEl.getBoundingClientRect() : over.rect;
             // Offset pointer by half the dragged task's height to approximate the visual center
-            // (cursor stays at drag handle = top of card, but user perceives the card center as hover point)
-            const activeEl = document.querySelector(`[data-testid="task-row-${active.id}"]`);
-            const activeHeight = activeEl ? activeEl.getBoundingClientRect().height : 0;
-            const pointerY = pointerYRef.current + activeHeight / 2;
+            // (cursor stays at drag handle = top of card, but user perceives the card center as hover point).
+            // activeHeightRef is cached at handleDragStart so we don't reflow on every pointer move.
+            const pointerY = pointerYRef.current + activeHeightRef.current / 2;
 
             const parentId = overTask.parent_task_id || '';
-            const siblings = tasks
-                .filter(t => t.parent_task_id === parentId && t.id !== active.id)
-                .sort((a, b) => (a.position || 0) - (b.position || 0));
+            const allSiblings = childrenByParent.get(parentId) ?? [];
+            const siblings = allSiblings.filter((t) => t.id !== active.id);
             const overIndex = siblings.findIndex(t => t.id === over.id);
 
             const isWithinTask = pointerY >= overRect.top && pointerY <= overRect.top + overRect.height;

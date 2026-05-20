@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { useConfirm } from '@/shared/ui/confirm-dialog-context';
 import type { JsonObject, TaskInsert, TaskRow, TaskUpdate } from '@/shared/db/app.types';
+import { compareByDueThenPosition } from '@/shared/lib/task-sort';
 
 export interface ProjectBoardTaskActions {
     /**
@@ -72,7 +73,7 @@ export function useProjectBoard(
             index.set(task.parent_task_id, children);
         }
         for (const children of index.values()) {
-            children.sort((a, b) => (a.position || 0) - (b.position || 0));
+            children.sort(compareByDueThenPosition);
         }
         return index;
     }, [tasks]);

@@ -320,33 +320,9 @@ describe('EditProjectModal — Archive / Unarchive (Wave 21.5)', () => {
   });
 });
 
-describe('EditProjectModal — shiftedCount toast feedback', () => {
-  it('surfaces the shiftedCount message when tasks are rescheduled', async () => {
-    mockUpdateMutateAsync.mockResolvedValueOnce({ shiftedCount: 2 });
-
-    const template = makeTask({
-      id: 'tmpl-1',
-      title: 'A Template',
-      origin: 'template',
-      start_date: '2026-01-01',
-      settings: null,
-    });
-
-    renderModal(template);
-
-    const saveButton = screen.getByRole('button', { name: /save changes/i });
-    await act(async () => {
-      fireEvent.click(saveButton);
-    });
-
-    await waitFor(() => {
-      expect(mockToastSuccess).toHaveBeenCalled();
-    });
-
-    const message = mockToastSuccess.mock.calls[0][0] as string;
-    expect(message).toContain('2 tasks rescheduled');
-  });
-});
+// Date cascade moved into the DB trigger trg_waterfall_recompute; the modal no
+// longer surfaces a "N tasks shifted" toast because the client doesn't know
+// the count anymore. A single "project saved" toast covers all success cases.
 
 describe('EditProjectModal — start/end date visibility (Wave 37)', () => {
   it('hides the date section for template projects', () => {

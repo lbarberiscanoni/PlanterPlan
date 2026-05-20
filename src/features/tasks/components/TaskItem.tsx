@@ -16,6 +16,7 @@ import {
  dueBadgeToneClass,
  formatTaskDueBadge,
 } from '@/shared/lib/date-engine/formatTaskDueBadge';
+import { formatDateLocalized } from '@/shared/i18n/formatters';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/ui/tooltip';
 import { useConfirm } from '@/shared/ui/confirm-dialog-context';
 import type { PresenceState } from '@/shared/types/presence';
@@ -33,8 +34,6 @@ interface TaskItemProps {
  onTaskClick?: (task: TaskItemData) => void;
  selectedTaskId?: string | null;
  onAddChildTask?: (task: TaskItemData) => void;
- onMoveTask?: (task: TaskItemData) => void;
- canMoveTask?: (task: TaskItemData) => boolean;
  onInviteMember?: (task: TaskItemData) => void;
  onStatusChange?: (id: string, status: string) => void;
  canUpdateStatus?: boolean;
@@ -74,8 +73,6 @@ const TaskItem = ({
  onTaskClick,
  selectedTaskId,
  onAddChildTask,
- onMoveTask,
- canMoveTask,
  onInviteMember,
  onStatusChange,
  canUpdateStatus,
@@ -191,9 +188,6 @@ const TaskItem = ({
  const handleAddChildAction = useCallback(() => {
  onAddChildTask?.(task);
  }, [onAddChildTask, task]);
- const handleMoveAction = useCallback(() => {
- onMoveTask?.(task);
- }, [onMoveTask, task]);
  const handleInviteAction = useCallback(() => {
  onInviteMember?.(task);
  }, [onInviteMember, task]);
@@ -378,16 +372,16 @@ const TaskItem = ({
  <div className="flex items-center gap-3 flex-shrink-0">
  {task.membership_role && <RoleIndicator role={task.membership_role} />}
 
- {task.origin !== 'template' && dueBadge && dueBadgeText && (
+ {task.origin !== 'template' && task.due_date && (
  <span
  className={cn(
  'text-sm font-medium whitespace-nowrap',
- dueBadgeToneClass(dueBadge.tone),
+ dueBadge ? dueBadgeToneClass(dueBadge.tone) : 'text-slate-500',
  )}
  data-testid={`task-row-due-badge-${task.id}`}
- data-tone={dueBadge.tone}
+ data-tone={dueBadge?.tone ?? 'none'}
  >
- {dueBadgeText}
+ {dueBadgeText || formatDateLocalized(task.due_date, 'short')}
  </span>
  )}
 
@@ -405,7 +399,6 @@ const TaskItem = ({
  task={task}
  onEdit={onEdit ? handleEditAction : undefined}
  onAddChild={onAddChildTask ? handleAddChildAction : undefined}
- onMove={onMoveTask && (!canMoveTask || canMoveTask(task)) ? handleMoveAction : undefined}
  onInvite={onInviteMember ? handleInviteAction : undefined}
  onDelete={onDeleteTask || undefined}
  canHaveChildren={canHaveChildren}
@@ -458,8 +451,6 @@ const TaskItem = ({
  onTaskClick={onTaskClick}
  selectedTaskId={selectedTaskId}
  onAddChildTask={onAddChildTask}
- onMoveTask={onMoveTask}
- canMoveTask={canMoveTask}
  onInviteMember={onInviteMember}
  onStatusChange={onStatusChange}
  canUpdateStatus={canUpdateStatus}

@@ -27,15 +27,19 @@ describe('task hierarchy guard helpers', () => {
         expect(isTaskDescendant('task-with-subtask', 'subtask-a', rows)).toBe(true);
     });
 
-    it('allows valid task and subtree moves that preserve max depth', () => {
+    it('allows valid task and subtree moves under the relaxed depth cap (10)', () => {
         expect(canReparentTask('task-a', 'task-b', rows)).toBe(true);
         expect(canReparentTask('task-with-subtask', 'milestone-b', rows)).toBe(true);
+        // Deeper nesting is now allowed up to depth 10. task-with-subtask has
+        // subtreeHeight=1; placing it under task-b puts the subtree at depth 5.
+        expect(canReparentTask('task-with-subtask', 'task-b', rows)).toBe(true);
+        // A leaf placed under a subtask lands at depth 5 — fine.
+        expect(canReparentTask('task-a', 'subtask-a', rows)).toBe(true);
     });
 
-    it('rejects subtask children, cycle moves, and moves that push descendants too deep', () => {
+    it('rejects self-parenting and cycle moves regardless of depth', () => {
         expect(canReparentTask('task-a', 'task-a', rows)).toBe(false);
-        expect(canReparentTask('task-a', 'subtask-a', rows)).toBe(false);
-        expect(canReparentTask('task-with-subtask', 'task-b', rows)).toBe(false);
+        // Cycle: task-with-subtask under its own descendant subtask-a.
         expect(canReparentTask('task-with-subtask', 'subtask-a', rows)).toBe(false);
     });
 
@@ -45,9 +49,14 @@ describe('task hierarchy guard helpers', () => {
         expect(canReparentTask('task-a', 'task-b', [])).toBe(false);
     });
 
-    it('hides child-creation affordances only at the final subtask level', () => {
+    it('allows child-creation affordances within the depth cap and rejects beyond', () => {
+        // Depth 3 (task) → can have children up to depth 10.
         expect(canTaskHaveChildren(rows[4], rows)).toBe(true);
-        expect(canTaskHaveChildren(rows[7], rows)).toBe(false);
+        // Depth 4 (subtask) → also within cap, still allowed.
+        expect(canTaskHaveChildren(rows[7], rows)).toBe(true);
+        // task_type='subtask' fallback (no hierarchy index) is conservative and
+        // still rejects. Tasks present in the rows array use the depth check
+        // and override this.
         expect(canTaskHaveChildren(makeTask({ id: 'typed-subtask', task_type: 'subtask' }), [])).toBe(false);
     });
 });

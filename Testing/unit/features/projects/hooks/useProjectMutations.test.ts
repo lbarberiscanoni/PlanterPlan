@@ -126,9 +126,13 @@ describe('useCreateProject', () => {
 
 // ---------------------------------------------------------------------------
 // useUpdateProject
+//
+// Date cascading moved to the DB (trg_waterfall_recompute). The client mutation
+// is now a thin wrapper around Project.update — these tests assert the payload
+// shape and the absence of client-side cascade work.
 // ---------------------------------------------------------------------------
 describe('useUpdateProject', () => {
-  it('updates project without date cascading', async () => {
+  it('updates project root with the provided payload', async () => {
     mockProjectUpdate.mockResolvedValueOnce(makeTask());
     const { Wrapper } = createWrapper();
 
@@ -141,18 +145,12 @@ describe('useUpdateProject', () => {
       });
     });
 
+    expect(mockProjectUpdate).toHaveBeenCalledTimes(1);
     expect(mockProjectUpdate).toHaveBeenCalledWith('proj-1', expect.objectContaining({ title: 'Updated Title' }));
-    expect(mockTaskFilter).not.toHaveBeenCalled();
   });
 
-  it('cascades dates when start_date changes', async () => {
-    const tasks = [
-      makeTask({ id: 'proj-1', parent_task_id: null, start_date: '2026-01-01', due_date: '2026-01-01', is_complete: false }),
-      makeTask({ id: 't1', parent_task_id: 'proj-1', start_date: '2026-01-10', due_date: '2026-01-20', is_complete: false }),
-    ];
-    mockTaskFilter.mockResolvedValueOnce(tasks);
-    mockProjectUpdate.mockResolvedValue(makeTask());
-    mockTaskUpsert.mockResolvedValue({ data: [], error: null });
+  it('does not fetch project tasks or fan out client-side cascade writes', async () => {
+    mockProjectUpdate.mockResolvedValueOnce(makeTask());
     const { Wrapper } = createWrapper();
 
     const { result } = renderHook(() => useUpdateProject(), { wrapper: Wrapper });
@@ -161,24 +159,33 @@ describe('useUpdateProject', () => {
       await result.current.mutateAsync({
         projectId: 'proj-1',
         updates: { start_date: '2026-01-06' },
-        oldStartDate: '2026-01-01',
       });
     });
 
-    expect(mockTaskFilter).toHaveBeenCalledWith({ root_id: 'proj-1' });
-    expect(mockProjectUpdate).toHaveBeenNthCalledWith(1, 'proj-1', expect.objectContaining({
-      due_date: '2026-01-23',
-    }));
-    expect(mockTaskUpsert).toHaveBeenCalledTimes(2);
-    const dueOnlyArg = mockTaskUpsert.mock.calls[0][0] as Array<{ id: string; due_date?: string; start_date?: string }>;
-    expect(dueOnlyArg).toEqual([expect.objectContaining({ id: 't1', due_date: '2026-01-23' })]);
-    expect(dueOnlyArg[0]).not.toHaveProperty('start_date');
-    const fullUpsertArg = mockTaskUpsert.mock.calls[1][0] as Array<{ id: string }>;
-    expect(fullUpsertArg.map((u) => u.id)).toEqual(['t1']);
-    expect(mockProjectUpdate).toHaveBeenLastCalledWith('proj-1', expect.objectContaining({
-      start_date: '2026-01-06',
-      due_date: '2026-01-23',
-    }));
+    // The waterfall trigger handles propagation in the DB. The hook must not
+    // re-introduce client-side cascade logic.
+    expect(mockTaskFilter).not.toHaveBeenCalled();
+    expect(mockTaskUpsert).not.toHaveBeenCalled();
+    expect(mockProjectUpdate).toHaveBeenCalledTimes(1);
+  });
+
+  it('passes start_date through to Project.update so the DB trigger cascades', async () => {
+    mockProjectUpdate.mockResolvedValueOnce(makeTask());
+    const { Wrapper } = createWrapper();
+
+    const { result } = renderHook(() => useUpdateProject(), { wrapper: Wrapper });
+
+    await act(async () => {
+      await result.current.mutateAsync({
+        projectId: 'proj-1',
+        updates: { start_date: '2026-01-06' },
+      });
+    });
+
+    expect(mockProjectUpdate).toHaveBeenCalledWith(
+      'proj-1',
+      expect.objectContaining({ start_date: '2026-01-06' }),
+    );
   });
 
   it('invalidates project-specific query keys on success', async () => {
@@ -194,113 +201,6 @@ describe('useUpdateProject', () => {
 
     expect(invalidateSpy).toHaveBeenCalledWith(expect.objectContaining({ queryKey: ['project', 'proj-1'] }));
     expect(invalidateSpy).toHaveBeenCalledWith(expect.objectContaining({ queryKey: ['projectHierarchy', 'proj-1'] }));
-  });
-
-  it('returns shiftedCount: 0 when start_date is unchanged', async () => {
-    mockProjectUpdate.mockResolvedValueOnce(makeTask());
-    const { Wrapper } = createWrapper();
-
-    const { result } = renderHook(() => useUpdateProject(), { wrapper: Wrapper });
-
-    let returned: { shiftedCount: number } | undefined;
-    await act(async () => {
-      returned = await result.current.mutateAsync({
-        projectId: 'proj-1',
-        updates: { title: 'Rename only' },
-      });
-    });
-
-    expect(returned).toEqual({ shiftedCount: 0 });
-    expect(mockTaskFilter).not.toHaveBeenCalled();
-    expect(mockTaskUpsert).not.toHaveBeenCalled();
-  });
-
-  it('persists user start_date on root when moves earlier (defends against trigger rollup)', async () => {
-    // Regression: line 211's child upsert fires calc_task_date_rollup which
-    // recomputes root.start_date = MIN(child.start_date). The final root write
-    // must restore the user's input.
-    const tasks = [
-      makeTask({ id: 'proj-1', parent_task_id: null, start_date: '2026-01-15', due_date: '2026-01-25', is_complete: false }),
-      makeTask({ id: 't1', parent_task_id: 'proj-1', start_date: '2026-01-15', due_date: '2026-01-20', is_complete: false }),
-    ];
-    mockTaskFilter.mockResolvedValueOnce(tasks);
-    mockProjectUpdate.mockResolvedValue(makeTask());
-    mockTaskUpsert.mockResolvedValue({ data: [], error: null });
-    const { Wrapper } = createWrapper();
-
-    const { result } = renderHook(() => useUpdateProject(), { wrapper: Wrapper });
-
-    await act(async () => {
-      await result.current.mutateAsync({
-        projectId: 'proj-1',
-        updates: { start_date: '2026-01-05' },
-        oldStartDate: '2026-01-15',
-      });
-    });
-
-    expect(mockProjectUpdate).toHaveBeenLastCalledWith(
-      'proj-1',
-      expect.objectContaining({ start_date: '2026-01-05' }),
-    );
-  });
-
-  it('persists start_date when no children to shift (fall-through write)', async () => {
-    // Checkpoint projects (recalculateProjectDates returns []) or projects
-    // with no shiftable tasks fall through to line 222. The dbUpdates payload
-    // must carry start_date so the column is actually written.
-    mockTaskFilter.mockResolvedValueOnce([
-      makeTask({ id: 'proj-1', parent_task_id: null, start_date: '2026-02-01', settings: { project_kind: 'checkpoint' } }),
-    ]);
-    mockProjectUpdate.mockResolvedValue(makeTask());
-    const { Wrapper } = createWrapper();
-
-    const { result } = renderHook(() => useUpdateProject(), { wrapper: Wrapper });
-
-    await act(async () => {
-      await result.current.mutateAsync({
-        projectId: 'proj-1',
-        updates: { start_date: '2026-02-15', settings: { project_kind: 'checkpoint' } },
-        oldStartDate: '2026-02-01',
-      });
-    });
-
-    expect(mockTaskUpsert).not.toHaveBeenCalled();
-    expect(mockProjectUpdate).toHaveBeenCalledTimes(1);
-    expect(mockProjectUpdate).toHaveBeenCalledWith(
-      'proj-1',
-      expect.objectContaining({ start_date: '2026-02-15' }),
-    );
-  });
-
-  it('returns shiftedCount matching incomplete tasks and skips completed ones', async () => {
-    const tasks = [
-      makeTask({ id: 'proj-1', parent_task_id: null, start_date: '2026-01-01', due_date: '2026-01-01', is_complete: false }),
-      makeTask({ id: 't1', parent_task_id: 'proj-1', start_date: '2026-01-10', due_date: '2026-01-20', is_complete: false }),
-      makeTask({ id: 't2', parent_task_id: 'proj-1', start_date: '2026-01-12', due_date: '2026-01-22', is_complete: false }),
-      makeTask({ id: 't3', parent_task_id: 'proj-1', start_date: '2026-01-14', due_date: '2026-01-24', is_complete: false }),
-      makeTask({ id: 't4', parent_task_id: 'proj-1', start_date: '2026-01-16', due_date: '2026-01-26', is_complete: true }),
-    ];
-    mockTaskFilter.mockResolvedValueOnce(tasks);
-    mockProjectUpdate.mockResolvedValue(makeTask());
-    mockTaskUpsert.mockResolvedValue({ data: [], error: null });
-    const { Wrapper } = createWrapper();
-
-    const { result } = renderHook(() => useUpdateProject(), { wrapper: Wrapper });
-
-    let returned: { shiftedCount: number } | undefined;
-    await act(async () => {
-      returned = await result.current.mutateAsync({
-        projectId: 'proj-1',
-        updates: { start_date: '2026-01-08' },
-        oldStartDate: '2026-01-01',
-      });
-    });
-
-    expect(returned).toEqual({ shiftedCount: 3 });
-    expect(mockTaskUpsert).toHaveBeenCalledTimes(2);
-    const upsertArg = mockTaskUpsert.mock.calls[1][0] as Array<{ id: string }>;
-    expect(upsertArg).toHaveLength(3);
-    expect(upsertArg.map(u => u.id).sort()).toEqual(['t1', 't2', 't3']);
   });
 });
 

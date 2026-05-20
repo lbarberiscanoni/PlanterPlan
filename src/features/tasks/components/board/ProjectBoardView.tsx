@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import BoardColumn from './BoardColumn';
 import { TASK_STATUS } from '@/shared/constants';
 import type { TaskRow } from '@/shared/db/app.types';
+import { compareByDueThenPosition } from '@/shared/lib/task-sort';
 
 const COLUMNS = [
  { id: TASK_STATUS.TODO, title: 'To Do' },
@@ -62,9 +63,9 @@ const ProjectBoardView = ({ project, childrenTasks, handleTaskClick }: ProjectBo
  }
  });
 
- // Sort by position
+ // Chronological by due_date, position as tiebreaker.
  Object.keys(cols).forEach(key => {
- cols[key].sort((a, b) => (a.position || 0) - (b.position || 0));
+ cols[key].sort(compareByDueThenPosition);
  });
 
  return cols;

@@ -145,8 +145,6 @@ export default function EditProjectModal({ project, isOpen, onClose }: EditProje
 
  const onSubmit = async (data: EditProjectFormData) => {
   try {
-   const oldStartDate = toIsoDate(project.start_date || project.created_at);
-   const oldDueDate = toIsoDate(project.due_date);
    const { due_soon_threshold, due_date, supervisor_email, ...rest } = data;
 
    const mergedSettings = {
@@ -165,17 +163,11 @@ export default function EditProjectModal({ project, isOpen, onClose }: EditProje
     settings: settingsWithKind as Json,
    };
 
-   const result = await updateProjectMutation.mutateAsync({
+   await updateProjectMutation.mutateAsync({
     projectId: project.id,
     updates: updateData,
-    oldStartDate,
-    oldDueDate,
    });
-   if (result.shiftedCount > 0) {
-    toast.success(t('projects.edit_modal.project_saved_with_shift', { count: result.shiftedCount }));
-   } else {
-    toast.success(t('projects.edit_modal.project_saved_toast'));
-   }
+   toast.success(t('projects.edit_modal.project_saved_toast'));
    onClose();
   } catch (error) {
    console.error('[EditProjectModal] Failed to update project:', error);
@@ -403,8 +395,14 @@ export default function EditProjectModal({ project, isOpen, onClose }: EditProje
           size="sm"
           className="h-8"
           onClick={async () => {
-           await deleteProjectMutation.mutateAsync(project.id);
-           navigate('/tasks', { replace: true });
+           try {
+            await deleteProjectMutation.mutateAsync(project.id);
+            navigate('/tasks', { replace: true });
+           } catch (err) {
+            toast.error(t('projects.edit_modal.delete_failed_toast'), {
+             description: err instanceof Error ? err.message : String(err),
+            });
+           }
           }}
          >
           {t('projects.edit_modal.delete_confirm_yes')}

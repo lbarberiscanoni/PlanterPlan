@@ -14,6 +14,12 @@ import InlineTaskInput from '@/features/tasks/components/InlineTaskInput';
 import { TaskRow, Task } from '@/shared/db/app.types';
 import type { TaskUpdate } from '@/shared/db/app.types';
 import type { PresenceState } from '@/shared/types/presence';
+import { formatDateLocalized } from '@/shared/i18n/formatters';
+import {
+    dueBadgeToneClass,
+    formatTaskDueBadge,
+} from '@/shared/lib/date-engine/formatTaskDueBadge';
+import { compareByDueThenPosition } from '@/shared/lib/task-sort';
 
 interface TaskWithState extends Task {
     isExpanded?: boolean;
@@ -26,8 +32,6 @@ export interface MilestoneSectionProps {
     tasks?: TaskWithState[];
     onTaskUpdate?: (id: string, data: Partial<TaskUpdate>) => void;
     onAddChildTask?: (parent: TaskRow) => void;
-    onMoveTask?: (task: TaskRow) => void;
-    canMoveTask?: (task: TaskRow) => boolean;
     onTaskClick: (task: TaskRow) => void;
     onToggleExpand?: (task: TaskRow, expanded: boolean) => void;
     onInlineCommit?: (parentId: string, title: string, templateData?: Partial<TaskRow>) => Promise<void>;
@@ -48,8 +52,6 @@ export default function MilestoneSection({
     tasks = [],
     onTaskUpdate,
     onAddChildTask,
-    onMoveTask,
-    canMoveTask,
     onTaskClick,
     onToggleExpand,
     onInlineCommit,
@@ -81,7 +83,7 @@ export default function MilestoneSection({
     const milestoneTasks = useMemo(
         () => tasks
             .filter((t) => t.parent_task_id === milestone.id)
-            .sort((a, b) => (a.position || 0) - (b.position || 0)),
+            .sort(compareByDueThenPosition),
         [tasks, milestone.id],
     );
     const completedTasks = useMemo(
@@ -126,6 +128,26 @@ export default function MilestoneSection({
                 </div>
 
                 <div className="flex items-center gap-4">
+                    {milestone.origin !== 'template' && milestone.due_date && (() => {
+                        const badge = formatTaskDueBadge({ dueDate: milestone.due_date });
+                        const label = badge?.kind === 'today'
+                            ? t('tasks.dueBadge.today')
+                            : badge?.kind === 'tomorrow'
+                                ? t('tasks.dueBadge.tomorrow')
+                                : badge?.label;
+                        return (
+                            <span
+                                className={cn(
+                                    'text-sm font-medium whitespace-nowrap',
+                                    badge ? dueBadgeToneClass(badge.tone) : 'text-slate-500',
+                                )}
+                                data-testid={`milestone-due-${milestone.id}`}
+                                data-tone={badge?.tone ?? 'none'}
+                            >
+                                {label || formatDateLocalized(milestone.due_date, 'short')}
+                            </span>
+                        );
+                    })()}
                     {milestone.origin !== 'template' && (
                         <div className="hidden sm:flex items-center gap-3">
                             <div className="w-32">
@@ -185,8 +207,6 @@ export default function MilestoneSection({
                                                     canUpdateStatus={canUpdateTaskStatus ? canUpdateTaskStatus(task) : Boolean(onTaskUpdate)}
                                                     canUpdateStatusForTask={canUpdateTaskStatus}
                                                     onAddChildTask={onAddChildTask}
-                                                    onMoveTask={onMoveTask}
-                                                    canMoveTask={canMoveTask}
                                                     onToggleExpand={onToggleExpand}
                                                     disableDrag={disableDrag}
                                                     isAddingInline={task.isAddingInline}

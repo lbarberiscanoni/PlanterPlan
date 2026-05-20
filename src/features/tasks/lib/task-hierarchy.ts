@@ -1,6 +1,8 @@
 import type { TaskRow } from '@/shared/db/app.types';
 
-export const MAX_TASK_HIERARCHY_DEPTH = 4;
+// Capped at 10 to match the rollup trigger's `pg_trigger_depth() > 10`
+// recursion guard. Deeper trees would silently stop propagating date rollups.
+export const MAX_TASK_HIERARCHY_DEPTH = 10;
 
 type HierarchyTask = Pick<TaskRow, 'id' | 'parent_task_id'>;
 

@@ -16,8 +16,6 @@ import { Loader2, Plus } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/shared/ui/button';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/shared/ui/dialog';
-import { Label } from '@/shared/ui/label';
 import { useCreateTask, useDeleteTask, useUpdateTask } from '@/features/tasks/hooks/useTaskMutations';
 import { toast } from 'sonner';
 import type { TaskRow, Project as ProjectType, TaskFormData } from '@/shared/db/app.types';
@@ -43,7 +41,6 @@ import {
     canUpdateTaskProgress,
 } from '@/features/tasks/lib/task-permissions';
 import { canManageProjectMembers } from '@/features/projects/lib/project-member-permissions';
-import { getTaskMoveParentOptions } from '@/features/tasks/lib/task-move-options';
 
 export default function Project() {
     // Canonical URL form is /Project/:projectId. The legacy /Project?id=X
@@ -93,8 +90,6 @@ export default function Project() {
 
     // Form states restored
     const [taskFormState, setTaskFormState] = useState<{ mode?: 'create' | 'edit'; origin?: 'instance' | 'template'; isPhase?: boolean } | null>(null);
-    const [moveDialogTask, setMoveDialogTask] = useState<TaskRow | null>(null);
-    const [moveTargetParentId, setMoveTargetParentId] = useState<string>('');
 
     const handleTaskSubmit = async (formData: TaskFormData) => {
         try {
@@ -194,41 +189,6 @@ export default function Project() {
     const handleInvalidHierarchyDrop = useCallback(() => {
         toast.error(t('projects.invalid_task_hierarchy_drop'));
     }, [t]);
-    const canMoveTaskWithoutDnd = useCallback(
-        (task: TaskRow) => getTaskMoveParentOptions(task, projectTaskRows).length > 0,
-        [projectTaskRows],
-    );
-    const openMoveTaskDialog = useCallback(
-        (task: TaskRow) => {
-            const options = getTaskMoveParentOptions(task, projectTaskRows);
-            setMoveDialogTask(task);
-            setMoveTargetParentId(options[0]?.id ?? '');
-        },
-        [projectTaskRows],
-    );
-    const moveParentOptions = useMemo(
-        () => moveDialogTask ? getTaskMoveParentOptions(moveDialogTask, projectTaskRows) : [],
-        [moveDialogTask, projectTaskRows],
-    );
-    const closeMoveTaskDialog = useCallback(() => {
-        setMoveDialogTask(null);
-        setMoveTargetParentId('');
-    }, []);
-    const handleMoveTask = useCallback(() => {
-        if (!moveDialogTask || !moveTargetParentId) return;
-        if (!moveParentOptions.some((option) => option.id === moveTargetParentId)) {
-            toast.error(t('projects.invalid_task_hierarchy_drop'));
-            return;
-        }
-
-        handlers.handleTaskUpdate(moveDialogTask.id, {
-            parent_task_id: moveTargetParentId,
-            root_id: projectId ?? moveDialogTask.root_id,
-        });
-        const targetParent = projectTaskRows.find((task) => task.id === moveTargetParentId);
-        if (targetParent) handlers.handleToggleExpand(targetParent, true);
-        closeMoveTaskDialog();
-    }, [closeMoveTaskDialog, handlers, moveDialogTask, moveParentOptions, moveTargetParentId, projectId, projectTaskRows, t]);
 
     const sortedPhases = [...(phases || [])].sort((a, b) => (a.position || 0) - (b.position || 0));
     const activePhase = state.selectedPhase || sortedPhases[0];
@@ -378,8 +338,6 @@ export default function Project() {
                                                         tasks={computed.getTasksWithStateForParent(milestone.id)}
                                                         onTaskUpdate={handlers.handleTaskUpdate as (id: string, updates: Partial<TaskRow>) => void}
                                                         onAddChildTask={canCreateTasks ? handlers.handleStartInlineAdd : undefined}
-                                                        onMoveTask={canReorderTasks ? openMoveTaskDialog : undefined}
-                                                        canMoveTask={canMoveTaskWithoutDnd}
                                                         onToggleExpand={handlers.handleToggleExpand}
                                                         onTaskClick={(task: TaskRow) => {
                                                             handlers.handleTaskClick(task);
@@ -485,58 +443,6 @@ export default function Project() {
                 />
             )}
 
-            <Dialog
-                open={moveDialogTask !== null}
-                onOpenChange={(open) => {
-                    if (!open) closeMoveTaskDialog();
-                }}
-            >
-                <DialogContent data-testid="move-task-dialog">
-                    <DialogHeader>
-                        <DialogTitle>
-                            {t('tasks.move_dialog.title', {
-                                title: moveDialogTask?.title ?? t('common.untitled_task'),
-                            })}
-                        </DialogTitle>
-                        <DialogDescription>{t('tasks.move_dialog.description')}</DialogDescription>
-                    </DialogHeader>
-
-                    {moveParentOptions.length > 0 ? (
-                        <div className="space-y-2">
-                            <Label htmlFor="move-task-target">{t('tasks.move_dialog.target_label')}</Label>
-                            <select
-                                id="move-task-target"
-                                value={moveTargetParentId}
-                                onChange={(event) => setMoveTargetParentId(event.target.value)}
-                                className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-                                data-testid="move-task-target"
-                            >
-                                {moveParentOptions.map((option) => (
-                                    <option key={option.id} value={option.id}>
-                                        {option.title ?? t('common.untitled_task')}
-                                    </option>
-                                ))}
-                            </select>
-                        </div>
-                    ) : (
-                        <p className="text-sm text-muted-foreground">{t('tasks.move_dialog.no_targets')}</p>
-                    )}
-
-                    <DialogFooter>
-                        <Button type="button" variant="outline" onClick={closeMoveTaskDialog}>
-                            {t('common.cancel')}
-                        </Button>
-                        <Button
-                            type="button"
-                            onClick={handleMoveTask}
-                            disabled={!moveTargetParentId}
-                            data-testid="move-task-submit"
-                        >
-                            {t('tasks.move_dialog.submit')}
-                        </Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
         </>
     );
 }

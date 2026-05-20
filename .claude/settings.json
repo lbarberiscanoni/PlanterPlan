@@ -47,7 +47,8 @@
       "mcp__ea1e04fc-d0c5-48d9-a262-852945d79585__get_deployment_build_logs",
       "mcp__ea1e04fc-d0c5-48d9-a262-852945d79585__get_runtime_logs",
       "mcp__ea1e04fc-d0c5-48d9-a262-852945d79585__search_vercel_documentation",
-      "mcp__ccd_session__mark_chapter"
+      "mcp__ccd_session__mark_chapter", 
+      "mcp__Claude_Preview__preview_eval"
     ]
   }
 }

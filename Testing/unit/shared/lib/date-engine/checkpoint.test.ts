@@ -2,8 +2,6 @@ import { describe, it, expect } from 'vitest';
 import {
     isCheckpointProject,
     deriveUrgencyForProject,
-    recalculateProjectDates,
-    type DateEngineTask,
 } from '@/shared/lib/date-engine';
 
 describe('isCheckpointProject (Wave 29)', () => {
@@ -30,26 +28,10 @@ describe('isCheckpointProject (Wave 29)', () => {
     });
 });
 
-describe('recalculateProjectDates — checkpoint carve-out (Wave 29)', () => {
-    it('returns [] when the project root is a checkpoint project', () => {
-        const tasks: DateEngineTask[] = [
-            { id: 'root', parent_task_id: null, start_date: '2026-01-01', settings: { project_kind: 'checkpoint' } } as DateEngineTask,
-            { id: 't1', parent_task_id: 'root', start_date: '2026-01-10', due_date: '2026-01-15' },
-        ];
-        const updates = recalculateProjectDates(tasks, '2026-02-01', '2026-01-01');
-        expect(updates).toEqual([]);
-    });
-
-    it('still shifts tasks for date-kind projects (regression guard)', () => {
-        const tasks: DateEngineTask[] = [
-            { id: 'root', parent_task_id: null, start_date: '2026-01-01' },
-            { id: 't1', parent_task_id: 'root', start_date: '2026-01-10', due_date: '2026-01-15' },
-        ];
-        const updates = recalculateProjectDates(tasks, '2026-02-01', '2026-01-01');
-        expect(updates.length).toBeGreaterThan(0);
-        expect(updates.map((u) => u.id)).toContain('t1');
-    });
-});
+// recalculateProjectDates checkpoint carve-out retired alongside the function
+// itself; the DB trigger trg_waterfall_recompute is now the canonical cascade.
+// Checkpoint projects still suppress the date cascade because their root never
+// gets a start_date set, so the trigger short-circuits with 'no start_date'.
 
 describe('deriveUrgencyForProject (Wave 29)', () => {
     const now = new Date('2026-04-19T12:00:00Z');
