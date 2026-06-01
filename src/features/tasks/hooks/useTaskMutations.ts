@@ -136,7 +136,11 @@ type DeleteTaskContext = { previousTasks?: TaskRow[]; rootId?: string | null; pa
 export function useDeleteTask() {
  const queryClient = useQueryClient()
  return useMutation<boolean, Error, { id: string, root_id?: string | null }, DeleteTaskContext>({
- mutationFn: (data) => planterClient.entities.Task.delete(data.id),
+ mutationFn: async (data) => {
+ const { error } = await planterClient.rpc('delete_task', { p_task_id: data.id });
+ if (error) throw error;
+ return true;
+ },
  onMutate: async (variables) => {
  const { id, root_id: rootId } = variables;
 

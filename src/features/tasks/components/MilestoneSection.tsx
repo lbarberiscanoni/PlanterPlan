@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Button } from '@/shared/ui/button';
 import { Badge } from '@/shared/ui/badge';
 import { Progress } from '@/shared/ui/progress';
-import { ChevronRight, Plus } from 'lucide-react';
+import { ChevronRight, Plus, Trash2 } from 'lucide-react';
 import { useDroppable } from '@dnd-kit/core';
 import { SortableContext } from '@dnd-kit/sortable';
 import { cn } from '@/shared/lib/utils';
@@ -32,6 +32,7 @@ export interface MilestoneSectionProps {
     tasks?: TaskWithState[];
     onTaskUpdate?: (id: string, data: Partial<TaskUpdate>) => void;
     onAddChildTask?: (parent: TaskRow) => void;
+    onDeleteMilestone?: (milestone: TaskRow) => void;
     onTaskClick: (task: TaskRow) => void;
     onToggleExpand?: (task: TaskRow, expanded: boolean) => void;
     onInlineCommit?: (parentId: string, title: string, templateData?: Partial<TaskRow>) => Promise<void>;
@@ -52,6 +53,7 @@ export default function MilestoneSection({
     tasks = [],
     onTaskUpdate,
     onAddChildTask,
+    onDeleteMilestone,
     onTaskClick,
     onToggleExpand,
     onInlineCommit,
@@ -110,9 +112,10 @@ export default function MilestoneSection({
                 isOver ? "border-brand-400 bg-brand-50/50 ring-2 ring-brand-200 " : "border-slate-200 bg-white shadow-sm hover:shadow-md"
             )}
         >
+            <div className="flex items-stretch">
             <button
                 onClick={() => setIsExpanded(!isExpanded)}
-                className="w-full px-5 py-4 flex items-center justify-between hover:bg-slate-50 transition-colors"
+                className="flex-1 min-w-0 px-5 py-4 flex items-center justify-between hover:bg-slate-50 transition-colors"
             >
                 <div className="flex items-center gap-4">
                     <div className={cn('transition-transform duration-200', isExpanded && 'rotate-90')}>
@@ -169,6 +172,18 @@ export default function MilestoneSection({
                     </Badge>
                 </div>
             </button>
+            {canEdit && onDeleteMilestone && (
+                <button
+                    type="button"
+                    onClick={() => onDeleteMilestone(milestone)}
+                    data-testid={`delete-milestone-${milestone.id}`}
+                    aria-label={t('tasks.delete_milestone_aria', { title: milestone.title ?? '' })}
+                    className="px-4 flex items-center text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors border-l border-slate-100"
+                >
+                    <Trash2 className="w-4 h-4" aria-hidden="true" />
+                </button>
+            )}
+            </div>
 
             {isExpanded && (
                 <div>

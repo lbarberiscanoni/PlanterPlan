@@ -962,9 +962,9 @@ DECLARE
     v_old_parent_id uuid;
     v_new_parent_id uuid;
 BEGIN
-    -- Recursion guard: rollup updates the parent row, which fires this trigger
-    -- again. Depth 10 covers any realistic project hierarchy.
-    IF pg_trigger_depth() > 10 THEN
+    -- PlanterPlan canonical hierarchy max depth = 4. Anything beyond that is
+    -- either a malformed write or a runaway trigger chain; bail out.
+    IF pg_trigger_depth() > 4 THEN
         RETURN NULL;
     END IF;
 
@@ -1645,9 +1645,10 @@ BEGIN
 
     v_new_depth := v_parent_depth + 1;
 
-    -- Cap aligned with calc_task_date_rollup's pg_trigger_depth > 10 guard.
-    IF v_new_depth + v_descendant_height > 10 THEN
-        RAISE EXCEPTION 'task hierarchy depth exceeded: max 10 levels (project root counts as level 0)'
+    -- PlanterPlan canonical hierarchy: max depth 4
+    -- (project → phase → milestone → task → subtask).
+    IF v_new_depth + v_descendant_height > 4 THEN
+        RAISE EXCEPTION 'task hierarchy depth exceeded: max 4 levels (project → phase → milestone → task → subtask)'
             USING ERRCODE = 'P0001';
     END IF;
 
@@ -1659,7 +1660,7 @@ $$;
 ALTER FUNCTION "public"."enforce_task_hierarchy_depth"() OWNER TO "postgres";
 
 
-COMMENT ON FUNCTION "public"."enforce_task_hierarchy_depth"() IS 'Prevents task parent changes that would exceed project -> phase -> milestone -> task -> subtask depth or create cycles.';
+COMMENT ON FUNCTION "public"."enforce_task_hierarchy_depth"() IS 'Prevents task parent changes that would exceed the canonical 4-level hierarchy (project → phase → milestone → task → subtask) or create cycles.';
 
 
 CREATE OR REPLACE FUNCTION "public"."list_task_comments_with_authors"("p_task_id" "uuid", "p_comment_id" "uuid" DEFAULT NULL::"uuid") RETURNS TABLE("id" "uuid", "task_id" "uuid", "root_id" "uuid", "parent_comment_id" "uuid", "author_id" "uuid", "body" "text", "mentions" "text"[], "created_at" timestamp with time zone, "updated_at" timestamp with time zone, "edited_at" timestamp with time zone, "deleted_at" timestamp with time zone, "author" "jsonb")
@@ -2489,6 +2490,52 @@ $$;
 
 
 ALTER FUNCTION "public"."log_task_change"() OWNER TO "postgres";
+
+
+-- Date-engine v2 waterfall recompute trigger function. The full waterfall
+-- system (recompute_project_dates_waterfall, recompute_subtree_waterfall) lives
+-- in the date-engine migrations; only this trigger entrypoint is mirrored here
+-- because migration 20260521000100_waterfall_skip_dateless_root.sql added the
+-- teardown/dateless guard that unblocks project + template deletes. Without the
+-- guard, the AFTER DELETE trigger recomputes against a project root that is gone
+-- (cascade teardown) or has no start_date (templates), raising bare
+-- 'Access denied' / 'Project has no start_date' and blocking every delete.
+CREATE OR REPLACE FUNCTION "public"."trigger_waterfall_recompute"() RETURNS "trigger"
+    LANGUAGE "plpgsql"
+    AS $$
+DECLARE
+    v_project_id uuid;
+    v_root_start timestamptz;
+BEGIN
+    -- Skip if we're inside an active waterfall recompute (its own writes).
+    IF current_setting('app.in_waterfall_recompute', true) = 'on' THEN
+        RETURN NULL;
+    END IF;
+
+    v_project_id := COALESCE(NEW.root_id, OLD.root_id);
+    IF v_project_id IS NULL THEN
+        RETURN NULL;
+    END IF;
+
+    -- Only recompute when the root still exists and is date-anchored. Covers
+    -- teardown deletes (root row gone) AND templates / dateless projects
+    -- (start_date NULL) — recompute_project_dates_waterfall RAISEs for all of
+    -- these, which previously blocked deletes and dateless-template edits.
+    SELECT start_date INTO v_root_start
+    FROM public.tasks
+    WHERE id = v_project_id AND parent_task_id IS NULL;
+
+    IF v_root_start IS NULL THEN
+        RETURN NULL;
+    END IF;
+
+    PERFORM public.recompute_project_dates_waterfall(v_project_id);
+    RETURN NULL;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."trigger_waterfall_recompute"() OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."rag_get_project_context"("p_project_id" "uuid", "p_limit" integer DEFAULT 200) RETURNS "jsonb"
@@ -3404,6 +3451,10 @@ CREATE OR REPLACE TRIGGER "trg_log_member_change" AFTER INSERT OR DELETE OR UPDA
 
 
 CREATE OR REPLACE TRIGGER "trg_log_task_change" AFTER INSERT OR DELETE OR UPDATE ON "public"."tasks" FOR EACH ROW EXECUTE FUNCTION "public"."log_task_change"();
+
+
+
+CREATE OR REPLACE TRIGGER "trg_waterfall_recompute" AFTER INSERT OR DELETE OR UPDATE OF "parent_task_id", "position", "days_from_start", "start_date" ON "public"."tasks" FOR EACH ROW EXECUTE FUNCTION "public"."trigger_waterfall_recompute"();
 
 
 

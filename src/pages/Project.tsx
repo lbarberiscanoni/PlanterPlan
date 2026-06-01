@@ -12,7 +12,7 @@ import { buildTemplateFlagSettingsPatch } from '@/features/tasks/lib/task-form-f
 import { planter } from '@/shared/api/planterClient';
 import { ProjectDndShell } from '@/pages/components/ProjectDndShell';
 
-import { Loader2, Plus } from 'lucide-react';
+import { Loader2, Plus, Trash2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/shared/ui/button';
@@ -310,6 +310,19 @@ export default function Project() {
                                                     <p className="text-slate-600 mt-1">{(activePhase as { description?: string }).description}</p>
                                                 )}
                                             </div>
+                                            {canDeleteTaskForRole(userRole, activePhase as TaskRow) && (
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    aria-label={t('projects.delete_phase_aria', { title: (activePhase as { title?: string }).title ?? '' })}
+                                                    data-testid={`delete-phase-${activePhase.id}`}
+                                                    className="text-slate-500 hover:text-rose-600 hover:bg-rose-50"
+                                                    onClick={async () => { await handlers.handleDeleteTask(activePhase as TaskRow); }}
+                                                >
+                                                    <Trash2 className="w-4 h-4 mr-2" aria-hidden="true" />
+                                                    {t('projects.delete_phase_button')}
+                                                </Button>
+                                            )}
                                         </div>
 
                                         <div className="space-y-4">
@@ -338,6 +351,11 @@ export default function Project() {
                                                         tasks={computed.getTasksWithStateForParent(milestone.id)}
                                                         onTaskUpdate={handlers.handleTaskUpdate as (id: string, updates: Partial<TaskRow>) => void}
                                                         onAddChildTask={canCreateTasks ? handlers.handleStartInlineAdd : undefined}
+                                                        onDeleteMilestone={
+                                                            canDeleteTaskForRole(userRole, milestone)
+                                                                ? (m) => { void handlers.handleDeleteTask(m); }
+                                                                : undefined
+                                                        }
                                                         onToggleExpand={handlers.handleToggleExpand}
                                                         onTaskClick={(task: TaskRow) => {
                                                             handlers.handleTaskClick(task);

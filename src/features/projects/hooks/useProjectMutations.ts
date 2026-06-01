@@ -102,7 +102,7 @@ export function useDeleteProject() {
     const queryClient = useQueryClient();
     return useMutation({
         mutationFn: async (projectId: string) => {
-            const { error } = await planter.rpc('delete_project', { p_project_id: projectId });
+            const { error } = await planter.rpc('delete_task', { p_task_id: projectId });
             if (error) throw error;
             return true;
         },

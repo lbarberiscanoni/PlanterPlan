@@ -78,11 +78,6 @@ const TaskDetailsView = ({
     const { data: siblings = [] } = useTaskSiblings(task?.id, task?.parent_task_id);
     const [emailOpen, setEmailOpen] = useState(false);
     const [strategyDialogOpen, setStrategyDialogOpen] = useState(false);
-    // PR 2: template-origin scaffold deletes are blocked at the DB layer.
-    const [deleteGuardOpen, setDeleteGuardOpen] = useState(false);
-    const isTemplateOrigin = Boolean(
-        (task as (TaskItemData & { cloned_from_task_id?: string | null }) | null)?.cloned_from_task_id,
-    );
 
     // Edge-trigger the Strategy Template follow-up dialog: fires exactly once
     // per transition into `completed`, regardless of how many re-renders happen
@@ -387,15 +382,7 @@ const TaskDetailsView = ({
                 {onDeleteTask && canEdit && (
                     <button
                         type="button"
-                        onClick={() => {
-                            // Mirror the DB trigger: cloned-from-template
-                            // scaffold rows are not deletable through app UI.
-                            if (isTemplateOrigin) {
-                                setDeleteGuardOpen(true);
-                                return;
-                            }
-                            onDeleteTask(task);
-                        }}
+                        onClick={() => onDeleteTask(task)}
                         data-testid="delete-task-btn"
                         className="flex-1 py-3 px-4 bg-card border border-rose-200 text-rose-600 rounded-lg shadow-sm hover:bg-rose-50 hover:shadow-md transition-all font-medium text-sm"
                     >
@@ -463,27 +450,6 @@ const TaskDetailsView = ({
                             </Button>
                         </DialogFooter>
                     </form>
-                </DialogContent>
-            </Dialog>
-
-            {/* Template-origin delete guard. */}
-            <Dialog open={deleteGuardOpen} onOpenChange={setDeleteGuardOpen}>
-                <DialogContent data-testid="template-origin-delete-guard">
-                    <DialogHeader>
-                        <DialogTitle>{t('tasks.detail.template_delete_blocked_title')}</DialogTitle>
-                        <DialogDescription>
-                            {t('tasks.detail.template_delete_blocked_description')}
-                        </DialogDescription>
-                    </DialogHeader>
-                    <DialogFooter>
-                        <Button
-                            type="button"
-                            variant="outline"
-                            onClick={() => setDeleteGuardOpen(false)}
-                        >
-                            {t('common.confirm')}
-                        </Button>
-                    </DialogFooter>
                 </DialogContent>
             </Dialog>
 
