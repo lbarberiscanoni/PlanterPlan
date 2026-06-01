@@ -13,9 +13,11 @@ export default function ProjectSidebarContainer({ onNavClick, selectedTaskId }: 
  const {
  tasks = [],
  joinedProjects,
+ joinedTemplates,
  projectsLoading,
  joinedLoading,
  templatesLoading,
+ joinedTemplatesLoading,
  error,
  joinedError,
  loadMoreProjects,
@@ -45,9 +47,11 @@ export default function ProjectSidebarContainer({ onNavClick, selectedTaskId }: 
  instanceTasks={instanceTasks}
  joinedProjects={joinedProjects}
  templateTasks={templateTasks}
+ sharedTemplates={joinedTemplates}
  projectsLoading={projectsLoading}
  joinedLoading={joinedLoading}
  templatesLoading={templatesLoading}
+ sharedTemplatesLoading={joinedTemplatesLoading}
  error={error}
  joinedError={joinedError}
  handleSelectProject={handleSelectProject}

@@ -53,6 +53,8 @@
     "team": "Equipo",
     "projects": "Proyectos",
     "library": "Biblioteca",
+    "shared_templates": "Plantillas compartidas",
+    "shared_templates_empty": "Aún no se han compartido plantillas contigo.",
     "settings": "Configuración",
     "logout": "Cerrar sesión",
     "help_support": "Ayuda y soporte",

@@ -65,6 +65,20 @@ export const useTaskQuery = () => {
         staleTime: STALE_TIMES.medium,
     });
 
+    // 4. Fetch Joined Templates (templates shared with the user via project_members)
+    const {
+        data: joinedTemplates,
+        isLoading: isLoadingJoinedTemplates,
+    } = useQuery({
+        queryKey: ['projects', 'joinedTemplates', currentUserId],
+        queryFn: async () => {
+            if (!currentUserId) return [];
+            return await planter.entities.Project.listJoinedTemplates(currentUserId);
+        },
+        enabled: !!currentUserId,
+        staleTime: STALE_TIMES.medium,
+    });
+
     // Combine instances and templates into tasks. Memoized so downstream
     // `useMemo` chains (e.g. `separateTasksByOrigin` in TaskList) don't
     // re-run every render — React Query returns the same `data` reference
@@ -96,6 +110,8 @@ export const useTaskQuery = () => {
     return {
         tasks,
         joinedProjects: joinedProjects || [],
+        joinedTemplates: joinedTemplates || [],
+        joinedTemplatesLoading: isLoadingJoinedTemplates,
         loading,
         projectsLoading: isLoadingProjects,
         joinedLoading: !joinedProjects && isLoadingJoined,

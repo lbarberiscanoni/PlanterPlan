@@ -9,6 +9,7 @@ import { makeTask } from '@test';
 const mockListByCreator = vi.fn();
 const mockTaskFilter = vi.fn();
 const mockListJoined = vi.fn();
+const mockListJoinedTemplates = vi.fn();
 let mockAuthUser: { id: string } | null = { id: 'user-1' };
 
 vi.mock('@/shared/api/planterClient', () => ({
@@ -17,6 +18,7 @@ vi.mock('@/shared/api/planterClient', () => ({
       Project: {
         listByCreator: (...args: unknown[]) => mockListByCreator(...args),
         listJoined: (...args: unknown[]) => mockListJoined(...args),
+        listJoinedTemplates: (...args: unknown[]) => mockListJoinedTemplates(...args),
       },
       Task: {
         filter: (...args: unknown[]) => mockTaskFilter(...args),
@@ -48,6 +50,7 @@ beforeEach(() => {
   mockListByCreator.mockResolvedValue([]);
   mockTaskFilter.mockResolvedValue([]);
   mockListJoined.mockResolvedValue([]);
+  mockListJoinedTemplates.mockResolvedValue([]);
 });
 
 describe('useTaskQuery', () => {

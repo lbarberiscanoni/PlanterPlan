@@ -47,6 +47,8 @@
     "team": "Team",
     "projects": "Projects",
     "library": "Library",
+    "shared_templates": "Shared Templates",
+    "shared_templates_empty": "No templates have been shared with you yet.",
     "settings": "Settings",
     "logout": "Log out",
     "help_support": "Help & Support",

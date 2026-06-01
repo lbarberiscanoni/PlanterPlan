@@ -366,6 +366,7 @@ interface ProjectEntityClient extends Omit<EntityClient<Project, TaskInsert, Tas
     create: (projectData: CreateProjectPayload & { creator?: string; _token?: string }) => Promise<Project>;
     listByCreator: (userId: string, page?: number, pageSize?: number, options?: { signal?: AbortSignal }) => Promise<Project[]>;
     listJoined: (userId: string) => Promise<Project[]>;
+    listJoinedTemplates: (userId: string) => Promise<Project[]>;
     getWithStats: (projectId: string) => Promise<{ data: Project & { children: Task[], stats: { totalTasks: number; completedTasks: number; progress: number } }, error: Error | null }>;
     addMember: (projectId: string, userId: string, role: string) => Promise<{ data: TeamMemberRow | undefined, error: Error | null }>;
     inviteMemberByEmail: (projectId: string, email: string, role: string) => Promise<ProjectInviteResult>;
@@ -829,6 +830,24 @@ export const planter: PlanterClient = {
                             .from('tasks')
                             .select('*, project_members!inner(*)')
                             .eq('origin', 'instance')
+                            .is('parent_task_id', null)
+                            .eq('project_members.user_id', userId)
+                            .neq('creator', userId);
+
+                        if (error) throw new PlanterError(error.message, error.code ?? '500');
+                        return (data as Project[]) || [];
+                    } catch {
+                        return [];
+                    }
+                });
+            },
+            listJoinedTemplates: async (userId: string): Promise<Project[]> => {
+                return retry(async () => {
+                    try {
+                        const { data, error } = await supabase
+                            .from('tasks')
+                            .select('*, project_members!inner(*)')
+                            .eq('origin', 'template')
                             .is('parent_task_id', null)
                             .eq('project_members.user_id', userId)
                             .neq('creator', userId);

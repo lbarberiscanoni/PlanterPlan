@@ -259,6 +259,19 @@ describe('Project entity', () => {
     expect(chain.neq).toHaveBeenCalledWith('creator', 'user-1');
   });
 
+  it('listJoinedTemplates() inner-joins project_members and filters to templates', async () => {
+    const chain = createChain({ data: [], error: null });
+    mockFrom.mockReturnValue(chain);
+
+    await planter.entities.Project.listJoinedTemplates('user-1');
+
+    expect(chain.select).toHaveBeenCalledWith('*, project_members!inner(*)');
+    expect(chain.eq).toHaveBeenCalledWith('origin', 'template');
+    expect(chain.is).toHaveBeenCalledWith('parent_task_id', null);
+    expect(chain.eq).toHaveBeenCalledWith('project_members.user_id', 'user-1');
+    expect(chain.neq).toHaveBeenCalledWith('creator', 'user-1');
+  });
+
   it('getWithStats() computes progress from children', async () => {
     const project = makeTask({ id: 'proj-1' });
     const children = [

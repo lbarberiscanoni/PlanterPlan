@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/shared/contexts/auth-context';
 import InstanceList from './InstanceList';
 import JoinedProjectsList from './JoinedProjectsList';
+import SharedTemplatesList from './SharedTemplatesList';
 import TemplateList from './TemplateList';
 import { BarChart, Settings, Calendar } from 'lucide-react';
 import GlobalNavItem from './GlobalNavItem';
@@ -18,6 +19,7 @@ interface ProjectSidebarProps {
  joinedProjects: Array<{ id: string; title?: string; membership_role?: string }>;
  instanceTasks: Array<{ id: string; title: string }>;
  templateTasks: Array<{ id: string; title?: string }>;
+ sharedTemplates: Array<{ id: string; title?: string; membership_role?: string }>;
  joinedError?: string | null;
  handleSelectProject: (task: { id: string }) => void;
  selectedTaskId?: string | null;
@@ -26,6 +28,7 @@ interface ProjectSidebarProps {
  projectsLoading?: boolean;
  joinedLoading?: boolean;
  templatesLoading?: boolean;
+ sharedTemplatesLoading?: boolean;
  error?: string | null;
  onNavClick?: () => void;
  hasMore?: boolean;
@@ -37,6 +40,7 @@ const ProjectSidebar = ({
  joinedProjects,
  instanceTasks,
  templateTasks,
+ sharedTemplates,
  joinedError,
  handleSelectProject,
  selectedTaskId,
@@ -45,6 +49,7 @@ const ProjectSidebar = ({
  projectsLoading = false,
  joinedLoading = false,
  templatesLoading = false,
+ sharedTemplatesLoading = false,
  error = null,
  onNavClick,
  hasMore,
@@ -162,6 +167,16 @@ const ProjectSidebar = ({
  tasks={templateTasks}
  selectedTaskId={selectedTaskId}
  handleTaskClick={handleTaskClickWrapped}
+ />
+ )}
+
+ <div className="h-px bg-border"></div>
+
+ {sharedTemplatesLoading ? <SectionSkeleton /> : (
+ <SharedTemplatesList
+ templates={sharedTemplates}
+ handleTaskClick={handleTaskClickWrapped}
+ selectedTaskId={selectedTaskId}
  />
  )}
  </div>
