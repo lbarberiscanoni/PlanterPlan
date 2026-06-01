@@ -17,6 +17,7 @@ const mockProjectDelete = vi.fn();
 const mockTaskClone = vi.fn();
 const mockTaskFilter = vi.fn();
 const mockTaskUpsert = vi.fn();
+const mockRpc = vi.fn();
 
 vi.mock('@/shared/api/planterClient', () => ({
   planter: {
@@ -35,6 +36,7 @@ vi.mock('@/shared/api/planterClient', () => ({
         upsert: (...args: unknown[]) => mockTaskUpsert(...args),
       },
     },
+    rpc: (...args: unknown[]) => mockRpc(...args),
   },
 }));
 
@@ -208,8 +210,8 @@ describe('useUpdateProject', () => {
 // useDeleteProject
 // ---------------------------------------------------------------------------
 describe('useDeleteProject', () => {
-  it('calls Project.delete', async () => {
-    mockProjectDelete.mockResolvedValueOnce(true);
+  it('calls the delete_task RPC with the project id', async () => {
+    mockRpc.mockResolvedValueOnce({ error: null });
     const { Wrapper } = createWrapper();
 
     const { result } = renderHook(() => useDeleteProject(), { wrapper: Wrapper });
@@ -218,11 +220,11 @@ describe('useDeleteProject', () => {
       await result.current.mutateAsync('proj-1');
     });
 
-    expect(mockProjectDelete).toHaveBeenCalledWith('proj-1');
+    expect(mockRpc).toHaveBeenCalledWith('delete_task', { p_task_id: 'proj-1' });
   });
 
   it('invalidates global project keys on success', async () => {
-    mockProjectDelete.mockResolvedValueOnce(true);
+    mockRpc.mockResolvedValueOnce({ error: null });
     const { Wrapper, queryClient } = createWrapper();
     const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries');
 

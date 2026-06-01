@@ -1648,7 +1648,7 @@ BEGIN
     -- PlanterPlan canonical hierarchy: max depth 4
     -- (project → phase → milestone → task → subtask).
     IF v_new_depth + v_descendant_height > 4 THEN
-        RAISE EXCEPTION 'task hierarchy depth exceeded: max 4 levels (project → phase → milestone → task → subtask)'
+        RAISE EXCEPTION 'task hierarchy depth exceeded: subtasks cannot have child tasks'
             USING ERRCODE = 'P0001';
     END IF;
 

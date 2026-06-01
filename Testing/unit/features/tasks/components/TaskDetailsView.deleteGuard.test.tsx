@@ -103,35 +103,37 @@ function makeTemplateOriginTask(overrides: TemplateTaskOverrides = {}): TaskItem
     } as Partial<TaskItemData>) as unknown as TaskItemData;
 }
 
-describe('TaskDetailsView — template-origin delete guard', () => {
-    it('opens the guard dialog for an editor trying to delete a template-origin task', async () => {
+describe('TaskDetailsView — delete action', () => {
+    // The former client-side "template-origin delete guard" dialog was removed:
+    // deletion is now authoritatively gated by the SECURITY DEFINER `delete_task`
+    // RPC, which cascades through scaffold rows safely. The delete button now
+    // calls onDeleteTask directly regardless of provenance.
+    it('calls onDeleteTask directly for a cloned-from-template task (no guard dialog)', async () => {
         const onDelete = vi.fn();
         const task = makeTemplateOriginTask({ cloned_from_task_id: 'tpl-source-1' });
-        renderView(task, { membershipRole: 'editor', onDeleteTask: onDelete });
-
-        const deleteBtn = screen.getByTestId('delete-task-btn');
-        await userEvent.setup().click(deleteBtn);
-
-        expect(screen.getByTestId('template-origin-delete-guard')).toBeInTheDocument();
-        expect(onDelete).not.toHaveBeenCalled();
-    });
-
-    it('opens the guard dialog for an owner trying to delete a template-origin task', async () => {
-        const onDelete = vi.fn();
-        const task = makeTemplateOriginTask({ cloned_from_task_id: 'tpl-source-1' });
-        renderView(task, { membershipRole: 'owner', onDeleteTask: onDelete });
+        renderView(task, { membershipRole: 'editor', canEdit: true, onDeleteTask: onDelete });
 
         await userEvent.setup().click(screen.getByTestId('delete-task-btn'));
 
-        expect(screen.getByTestId('template-origin-delete-guard')).toBeInTheDocument();
-        expect(screen.getByText(/cannot be deleted from project workspaces/i)).toBeInTheDocument();
-        expect(onDelete).not.toHaveBeenCalled();
+        expect(onDelete).toHaveBeenCalledTimes(1);
+        expect(screen.queryByTestId('template-origin-delete-guard')).not.toBeInTheDocument();
     });
 
-    it('does not show the guard for post-instantiation custom tasks (cloned_from_task_id is null)', async () => {
+    it('calls onDeleteTask directly for an owner deleting a cloned-from-template task', async () => {
+        const onDelete = vi.fn();
+        const task = makeTemplateOriginTask({ cloned_from_task_id: 'tpl-source-1' });
+        renderView(task, { membershipRole: 'owner', canEdit: true, onDeleteTask: onDelete });
+
+        await userEvent.setup().click(screen.getByTestId('delete-task-btn'));
+
+        expect(onDelete).toHaveBeenCalledTimes(1);
+        expect(screen.queryByTestId('template-origin-delete-guard')).not.toBeInTheDocument();
+    });
+
+    it('calls onDeleteTask for post-instantiation custom tasks (cloned_from_task_id is null)', async () => {
         const onDelete = vi.fn();
         const task = makeTemplateOriginTask({ cloned_from_task_id: null });
-        renderView(task, { membershipRole: 'editor', onDeleteTask: onDelete });
+        renderView(task, { membershipRole: 'editor', canEdit: true, onDeleteTask: onDelete });
 
         await userEvent.setup().click(screen.getByTestId('delete-task-btn'));
 

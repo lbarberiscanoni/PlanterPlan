@@ -10,6 +10,12 @@ import type { TaskRow, TaskInsert } from '@/shared/db/app.types';
 const mockCreate = vi.fn();
 const mockUpdate = vi.fn();
 const mockUpdateStatus = vi.fn();
+const mockUpdateParentDates = vi.fn().mockResolvedValue(undefined);
+const mockRpc = vi.fn();
+// Back-compat shim for older tests that still mock 'delete' on Task. The hook
+// no longer calls it directly — it goes through planter.rpc('delete_task', …)
+// instead — so this mock now just records call intent. Tests assert against
+// mockRpc for delete behavior.
 const mockDelete = vi.fn();
 
 vi.mock('@/shared/api/planterClient', () => ({
@@ -19,9 +25,11 @@ vi.mock('@/shared/api/planterClient', () => ({
         create: (...args: unknown[]) => mockCreate(...args),
         update: (...args: unknown[]) => mockUpdate(...args),
         updateStatus: (...args: unknown[]) => mockUpdateStatus(...args),
+        updateParentDates: (...args: unknown[]) => mockUpdateParentDates(...args),
         delete: (...args: unknown[]) => mockDelete(...args),
       },
     },
+    rpc: (...args: unknown[]) => mockRpc(...args),
   },
 }));
 
@@ -221,8 +229,8 @@ describe('useUpdateTask', () => {
 // useDeleteTask
 // ---------------------------------------------------------------------------
 describe('useDeleteTask', () => {
-  it('calls Task.delete with id', async () => {
-    mockDelete.mockResolvedValueOnce(true);
+  it('calls the delete_task RPC with the task id', async () => {
+    mockRpc.mockResolvedValueOnce({ error: null });
     const { Wrapper } = createWrapper();
 
     const { result } = renderHook(() => useDeleteTask(), { wrapper: Wrapper });
@@ -231,7 +239,7 @@ describe('useDeleteTask', () => {
       await result.current.mutateAsync({ id: 't1', root_id: 'proj-1' });
     });
 
-    expect(mockDelete).toHaveBeenCalledWith('t1');
+    expect(mockRpc).toHaveBeenCalledWith('delete_task', { p_task_id: 't1' });
   });
 
   it('optimistically removes task from cache', async () => {
@@ -239,7 +247,7 @@ describe('useDeleteTask', () => {
       makeTask({ id: 't1', root_id: 'proj-1' }),
       makeTask({ id: 't2', root_id: 'proj-1' }),
     ];
-    mockDelete.mockImplementation(() => new Promise(resolve => setTimeout(() => resolve(true), 50)));
+    mockRpc.mockImplementation(() => new Promise(resolve => setTimeout(() => resolve({ error: null }), 50)));
 
     const { Wrapper, queryClient } = createWrapper();
     queryClient.setQueryData(['projectHierarchy', 'proj-1'], existing);
@@ -259,7 +267,7 @@ describe('useDeleteTask', () => {
 
   it('rolls back on error', async () => {
     const existing = [makeTask({ id: 't1', root_id: 'proj-1' })];
-    mockDelete.mockRejectedValueOnce(new Error('fail'));
+    mockRpc.mockResolvedValueOnce({ error: new Error('fail') });
 
     const { Wrapper, queryClient } = createWrapper();
     queryClient.setQueryData(['projectHierarchy', 'proj-1'], existing);
@@ -282,7 +290,7 @@ describe('useDeleteTask', () => {
   });
 
   it('removes individual task query on settled', async () => {
-    mockDelete.mockResolvedValueOnce(true);
+    mockRpc.mockResolvedValueOnce({ error: null });
     const { Wrapper, queryClient } = createWrapper();
     const removeSpy = vi.spyOn(queryClient, 'removeQueries');
 
@@ -303,7 +311,7 @@ describe('useDeleteTask', () => {
     // skip the optimistic remove (the server-side delete still fires).
     // Any cache the caller seeds under the old dead key is left untouched.
     const existing = [makeTask({ id: 't1', root_id: null })];
-    mockDelete.mockResolvedValue(true);
+    mockRpc.mockResolvedValue({ error: null });
 
     const { Wrapper, queryClient } = createWrapper();
     queryClient.setQueryData(['tasks', 'root'], existing);
@@ -317,7 +325,7 @@ describe('useDeleteTask', () => {
     // Dead cache key is untouched by the hook — no optimistic remove.
     const cached = queryClient.getQueryData<TaskRow[]>(['tasks', 'root']);
     expect(cached).toEqual(existing);
-    // Server-side delete still invoked.
-    expect(mockDelete).toHaveBeenCalledWith('t1');
+    // Server-side delete still invoked via RPC.
+    expect(mockRpc).toHaveBeenCalledWith('delete_task', { p_task_id: 't1' });
   });
 });

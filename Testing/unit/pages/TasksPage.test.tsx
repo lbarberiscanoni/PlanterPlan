@@ -150,6 +150,8 @@ vi.mock('@/shared/api/planterClient', () => {
                     updateParentDates: vi.fn(),
                 },
             },
+            // Deletion now flows through the SECURITY DEFINER delete_task RPC.
+            rpc: vi.fn().mockResolvedValue({ error: null }),
         },
     };
 });
@@ -384,7 +386,7 @@ describe('TasksPage — global tasks view + details dialog', () => {
         });
     });
 
-    it('wires the details panel delete action through the task delete mutation', async () => {
+    it('wires the details panel delete action through the delete_task RPC', async () => {
         const user = userEvent.setup();
         renderTasksPage();
 
@@ -393,7 +395,7 @@ describe('TasksPage — global tasks view + details dialog', () => {
         await user.click(await screen.findByRole('button', { name: 'Delete' }));
 
         await waitFor(() => {
-            expect(planter.entities.Task.delete).toHaveBeenCalledWith('t-1');
+            expect(planter.rpc).toHaveBeenCalledWith('delete_task', { p_task_id: 't-1' });
         });
         await waitFor(() => {
             expect(screen.queryByTestId('tasks-page-details-panel')).not.toBeInTheDocument();

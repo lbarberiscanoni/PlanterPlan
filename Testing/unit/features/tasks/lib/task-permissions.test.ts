@@ -22,9 +22,20 @@ describe('task permission capabilities', () => {
         }
     });
 
-    it('preserves the cloned-from-template delete guard for every role', () => {
+    it('grants delete on cloned-from-template rows — provenance gating moved to the delete_task RPC', () => {
+        // The old `!task?.cloned_from_task_id` client clause hid the delete
+        // button on every scaffold row (the bulk of real projects). Deletion is
+        // now authoritatively gated by the SECURITY DEFINER `delete_task` RPC,
+        // so the client permission is role-only and ignores provenance.
         const cloned = makeTask({ cloned_from_task_id: 'template-task-id' });
         for (const role of ['planter', 'team', 'admin'] as const) {
+            expect(canDeleteTask(role, cloned)).toBe(true);
+        }
+    });
+
+    it('denies delete to non-members regardless of provenance', () => {
+        const cloned = makeTask({ cloned_from_task_id: 'template-task-id' });
+        for (const role of [null, undefined, 'owner', 'viewer'] as const) {
             expect(canDeleteTask(role, cloned)).toBe(false);
         }
     });

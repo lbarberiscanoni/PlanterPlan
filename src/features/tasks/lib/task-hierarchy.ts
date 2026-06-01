@@ -1,8 +1,9 @@
 import type { TaskRow } from '@/shared/db/app.types';
 
-// Capped at 10 to match the rollup trigger's `pg_trigger_depth() > 10`
-// recursion guard. Deeper trees would silently stop propagating date rollups.
-export const MAX_TASK_HIERARCHY_DEPTH = 10;
+// PlanterPlan's canonical hierarchy: Project (0) → Phase (1) → Milestone (2)
+// → Task (3) → Subtask (4). Subtasks are terminal. The DB-side
+// `enforce_task_hierarchy_depth` trigger enforces the same cap.
+export const MAX_TASK_HIERARCHY_DEPTH = 4;
 
 type HierarchyTask = Pick<TaskRow, 'id' | 'parent_task_id'>;
 
