@@ -75,7 +75,7 @@ export default function AppShellLayout({ sidebar, children }: { sidebar?: React.
  />
  )}
 
- <main id="main-content" className="lg:pl-64 pt-6 h-[calc(100vh-4rem)] w-full overflow-x-hidden">{children || <Outlet />}</main>
+ <main id="main-content" className="lg:pl-64 pt-6 h-[calc(100vh-4rem)] w-full overflow-x-hidden overflow-y-auto">{children || <Outlet />}</main>
  <CreationActionHost />
  <MobileFAB />
  </div>
