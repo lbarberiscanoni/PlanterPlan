@@ -361,6 +361,10 @@ export default function Project() {
                                                             handlers.handleTaskClick(task);
                                                             setTaskFormState(canEditTaskForRow(task) ? { mode: 'edit', origin: projectOrigin } : null);
                                                         }}
+                                                        onMilestoneClick={(m: TaskRow) => {
+                                                            handlers.handleTaskClick(m);
+                                                            setTaskFormState(canEditTaskForRow(m) ? { mode: 'edit', origin: projectOrigin } : null);
+                                                        }}
                                                         onInlineCommit={canCreateTasks ? handlers.handleInlineCommit : undefined}
                                                         onInlineCancel={() => actions.setInlineAddingParentId(null)}
                                                         canEdit={canEdit}

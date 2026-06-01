@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Button } from '@/shared/ui/button';
 import { Badge } from '@/shared/ui/badge';
 import { Progress } from '@/shared/ui/progress';
-import { ChevronRight, Plus, Trash2 } from 'lucide-react';
+import { ChevronRight, Info, Plus, Trash2 } from 'lucide-react';
 import { useDroppable } from '@dnd-kit/core';
 import { SortableContext } from '@dnd-kit/sortable';
 import { cn } from '@/shared/lib/utils';
@@ -34,6 +34,7 @@ export interface MilestoneSectionProps {
     onAddChildTask?: (parent: TaskRow) => void;
     onDeleteMilestone?: (milestone: TaskRow) => void;
     onTaskClick: (task: TaskRow) => void;
+    onMilestoneClick?: (milestone: TaskRow) => void;
     onToggleExpand?: (task: TaskRow, expanded: boolean) => void;
     onInlineCommit?: (parentId: string, title: string, templateData?: Partial<TaskRow>) => Promise<void>;
     onInlineCancel?: () => void;
@@ -55,6 +56,7 @@ export default function MilestoneSection({
     onAddChildTask,
     onDeleteMilestone,
     onTaskClick,
+    onMilestoneClick,
     onToggleExpand,
     onInlineCommit,
     onInlineCancel,
@@ -124,13 +126,32 @@ export default function MilestoneSection({
 
                     <div className="text-left">
                         <h4 className="font-semibold text-slate-900">{milestone.title}</h4>
-                        {milestone.description && (
-                            <p className="text-sm text-slate-500 mt-0.5">{milestone.description}</p>
+                        {milestone.purpose && (
+                            <p className="text-sm text-slate-500 mt-0.5 line-clamp-1">{milestone.purpose}</p>
                         )}
                     </div>
                 </div>
 
                 <div className="flex items-center gap-4">
+                    {onMilestoneClick && (
+                        <span
+                            role="button"
+                            tabIndex={0}
+                            onClick={(e) => { e.stopPropagation(); onMilestoneClick(milestone); }}
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter' || e.key === ' ') {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    onMilestoneClick(milestone);
+                                }
+                            }}
+                            data-testid={`view-milestone-${milestone.id}`}
+                            aria-label={t('tasks.view_milestone_details_aria', { title: milestone.title ?? '' })}
+                            className="p-1.5 -m-1.5 rounded-md text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
+                        >
+                            <Info className="w-4 h-4" aria-hidden="true" />
+                        </span>
+                    )}
                     {milestone.origin !== 'template' && milestone.due_date && (() => {
                         const badge = formatTaskDueBadge({ dueDate: milestone.due_date });
                         const label = badge?.kind === 'today'

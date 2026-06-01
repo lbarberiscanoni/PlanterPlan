@@ -11,7 +11,6 @@ import { useTaskActivity } from '@/shared/hooks/useActivityLog';
 import { ActivityRow } from '@/shared/ui/ActivityRow';
 import { formatDisplayDate } from '@/shared/lib/date-engine';
 import { useAuth } from '@/shared/contexts/auth-context';
-import { useTaskSiblings } from '@/features/tasks/hooks/useTaskSiblings';
 import {
     Dialog,
     DialogContent,
@@ -75,7 +74,6 @@ const TaskDetailsView = ({
 }: TaskDetailsViewProps) => {
     const { t } = useTranslation();
     const { user, savedEmailAddresses, rememberEmailAddress } = useAuth();
-    const { data: siblings = [] } = useTaskSiblings(task?.id, task?.parent_task_id);
     const [emailOpen, setEmailOpen] = useState(false);
     const [strategyDialogOpen, setStrategyDialogOpen] = useState(false);
 
@@ -293,33 +291,6 @@ const TaskDetailsView = ({
             <div className="h-px bg-slate-100 my-4"></div>
 
             <TaskDependencies task={task as TaskRow} allProjectTasks={allProjectTaskRows} />
-
-            {/* Related Tasks (Siblings) */}
-            {task.parent_task_id && (
-                <div className="detail-section mb-6" data-testid="related-tasks-section">
-                    <h3 className="text-sm font-bold text-slate-900 mb-3 uppercase tracking-wide">{t('tasks.detail.related_tasks')}</h3>
-                    {siblings.length > 0 ? (
-                        <div className="space-y-2">
-                            {siblings.map((sibling) => (
-                                <div
-                                    key={sibling.id}
-                                    data-testid={`related-task-${sibling.id}`}
-                                    className="p-3 bg-card border border-border rounded-lg shadow-sm flex items-center justify-between"
-                                >
-                                    <div className="flex items-center gap-3">
-                                        <div className={`w-2 h-2 rounded-full ${sibling.is_complete ? 'bg-emerald-500' : 'bg-amber-400'}`}></div>
-                                        <span className={`text-sm font-medium ${sibling.is_complete ? 'text-muted-foreground line-through' : 'text-card-foreground'}`}>
-                                            {sibling.title}
-                                        </span>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    ) : (
-                        <p className="text-sm text-muted-foreground">{t('tasks.detail.no_sibling_tasks')}</p>
-                    )}
-                </div>
-            )}
 
             {showComments && <TaskComments taskId={task.id} />}
 
