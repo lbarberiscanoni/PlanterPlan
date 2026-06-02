@@ -65,6 +65,14 @@ VALUES
      '22222222-2222-2222-2222-222222221001',
      '99999999-9999-9999-9999-999999990004', 'todo', 1000);
 
+-- Run the assertions as the project creator (a Planter, bootstrapped by
+-- trg_bootstrap_project_creator_membership). enforce_template_scaffold_immutability
+-- bypasses postgres/service_role, so the protected-field throws_like checks only
+-- fire under an app role.
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000001001', true);
+SELECT set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-000000001001"}', true);
+
 -- Reorder within the same parent: just bumping position should be allowed.
 SELECT lives_ok(
     $$ UPDATE public.tasks
@@ -106,6 +114,8 @@ SELECT throws_like(
     '%protected template scaffold fields cannot be changed%',
     'rewriting cloned_from_task_id on a scaffold row is still blocked'
 );
+
+RESET ROLE;
 
 SELECT * FROM finish();
 ROLLBACK;

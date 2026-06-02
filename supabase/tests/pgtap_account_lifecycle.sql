@@ -51,7 +51,8 @@ VALUES (
 
 INSERT INTO public.project_members (project_id, user_id, role) VALUES
     ('11111111-1111-1111-1111-111111111401', '00000000-0000-0000-0000-000000000401', 'planter'),
-    ('11111111-1111-1111-1111-111111111401', '00000000-0000-0000-0000-000000000402', 'team');
+    ('11111111-1111-1111-1111-111111111401', '00000000-0000-0000-0000-000000000402', 'team')
+ON CONFLICT (project_id, user_id) DO UPDATE SET role = EXCLUDED.role;
 
 INSERT INTO public.task_comments (id, task_id, author_id, body)
 VALUES (

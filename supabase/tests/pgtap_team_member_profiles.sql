@@ -61,7 +61,8 @@ VALUES (
 INSERT INTO public.project_members (project_id, user_id, role) VALUES
     ('11111111-1111-1111-1111-111111112101', '00000000-0000-0000-0000-000000002101', 'planter'),
     ('11111111-1111-1111-1111-111111112101', '00000000-0000-0000-0000-000000002102', 'team'),
-    ('11111111-1111-1111-1111-111111112101', '00000000-0000-0000-0000-000000002103', 'team');
+    ('11111111-1111-1111-1111-111111112101', '00000000-0000-0000-0000-000000002103', 'team')
+ON CONFLICT (project_id, user_id) DO UPDATE SET role = EXCLUDED.role;
 
 SELECT ok(
     has_function_privilege('authenticated', 'public.list_project_members_with_profiles(uuid)', 'EXECUTE'),

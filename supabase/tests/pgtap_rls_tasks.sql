@@ -20,7 +20,8 @@ INSERT INTO tasks (id, title, status, creator, root_id) VALUES
 -- Insert Members (taskowner is owner, team1 is editor. unauthorized has no record)
 INSERT INTO project_members (project_id, user_id, role) VALUES
     ('11111111-1111-1111-1111-111111111111', '00000000-0000-0000-0000-000000000001', 'planter'),
-    ('11111111-1111-1111-1111-111111111111', '00000000-0000-0000-0000-000000000002', 'team');
+    ('11111111-1111-1111-1111-111111111111', '00000000-0000-0000-0000-000000000002', 'team')
+ON CONFLICT (project_id, user_id) DO UPDATE SET role = EXCLUDED.role;
 
 -- Insert Task
 INSERT INTO tasks (id, root_id, parent_task_id, title) VALUES
@@ -115,7 +116,8 @@ INSERT INTO tasks (id, title, status, creator, root_id) VALUES
 
 INSERT INTO project_members (project_id, user_id, role) VALUES
     ('11111111-1111-1111-1111-111111111101', '00000000-0000-0000-0000-000000000101', 'planter'),
-    ('11111111-1111-1111-1111-111111111101', '00000000-0000-0000-0000-000000000102', 'team');
+    ('11111111-1111-1111-1111-111111111101', '00000000-0000-0000-0000-000000000102', 'team')
+ON CONFLICT (project_id, user_id) DO UPDATE SET role = EXCLUDED.role;
 
 -- Test 10: has_permission (Planter Requesting Planter Role)
 -- `has_permission` is an internal helper with direct EXECUTE revoked from
