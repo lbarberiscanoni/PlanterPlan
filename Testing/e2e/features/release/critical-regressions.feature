@@ -12,11 +12,8 @@ Feature: Release critical regression coverage
     When invalid release hierarchy and date-envelope writes are attempted through Supabase
     Then both invalid writes are rejected without changing persisted task state
 
-  Scenario: Role-denied and admin-denied paths remain enforced
+  Scenario: Admin-denied paths remain enforced
     Given a release regression project tree exists
-    And release regression coach and viewer members exist
-    When they attempt release regression role-forbidden task updates through Supabase
-    Then the coach and viewer writes are rejected while coaching progress remains allowed
     When the signed-in release user opens the admin route
     Then the admin route denies access and returns to the task dashboard
 

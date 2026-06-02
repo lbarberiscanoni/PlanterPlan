@@ -39,14 +39,6 @@ interface ReleaseProjectIds {
   subtaskId: string;
   parentTitle: string;
   subtaskTitle: string;
-  coachingTaskId?: string;
-}
-
-interface RoleAttemptResults {
-  coachAllowedStatus?: string | null;
-  coachForbiddenTitleDenied: boolean;
-  coachNonCoachingDenied: boolean;
-  viewerForbiddenDenied: boolean;
 }
 
 interface IcsState {
@@ -64,10 +56,7 @@ interface ReleaseState {
   hierarchyError?: string | null;
   dateEnvelopeError?: string | null;
   subtaskDueBeforeInvalidWrite?: string | null;
-  coach?: AuthClient;
-  viewer?: AuthClient;
   mentioned?: AuthClient;
-  roleAttempts?: RoleAttemptResults;
   commentId?: string;
   ics?: IcsState;
 }
@@ -158,7 +147,7 @@ async function addProjectMember(
   ownerClient: SupabaseClient,
   projectId: string,
   email: string,
-  role: 'coach' | 'viewer',
+  role: 'planter' | 'team',
 ) {
   const { error } = await ownerClient.rpc('invite_user_to_project', {
     p_project_id: projectId,
@@ -397,92 +386,6 @@ Then('both invalid writes are rejected without changing persisted task state', a
   expect(subtask.due_date).toBe(state.subtaskDueBeforeInvalidWrite);
 });
 
-Given('release regression coach and viewer members exist', async ({ page }) => {
-  const state = requireState(page);
-  const coach = await createSignedInUser('coach');
-  const viewer = await createSignedInUser('viewer');
-
-  await addProjectMember(state.owner.client, state.ids.projectId, coach.email, 'coach');
-  await addProjectMember(state.owner.client, state.ids.projectId, viewer.email, 'viewer');
-
-  const coachingTask = await insertTask(state.owner.client, {
-    id: crypto.randomUUID(),
-    root_id: state.ids.projectId,
-    parent_task_id: state.ids.milestoneId,
-    creator: state.owner.userId,
-    position: 2,
-    title: `Release Coaching Task ${crypto.randomUUID().slice(0, 8)}`,
-    origin: 'instance',
-    status: 'not_started',
-    settings: { is_coaching_task: true },
-  });
-
-  state.coach = coach;
-  state.viewer = viewer;
-  state.ids.coachingTaskId = coachingTask.id;
-});
-
-When('they attempt release regression role-forbidden task updates through Supabase', async ({ page }) => {
-  const state = requireState(page);
-  if (!state.coach || !state.viewer || !state.ids.coachingTaskId) {
-    throw new Error('Release regression role members were not initialized.');
-  }
-
-  const allowed = await state.coach.client
-    .from('tasks')
-    .update({ status: 'in_progress' })
-    .eq('id', state.ids.coachingTaskId)
-    .select('status')
-    .single();
-
-  const coachForbiddenTitle = await state.coach.client
-    .from('tasks')
-    .update({ title: 'Forbidden coach title edit' })
-    .eq('id', state.ids.coachingTaskId)
-    .select('title')
-    .maybeSingle();
-
-  const coachNonCoaching = await state.coach.client
-    .from('tasks')
-    .update({ status: 'blocked' })
-    .eq('id', state.ids.parentTaskId)
-    .select('status')
-    .maybeSingle();
-
-  const viewerForbidden = await state.viewer.client
-    .from('tasks')
-    .update({ status: 'completed' })
-    .eq('id', state.ids.parentTaskId)
-    .select('status')
-    .maybeSingle();
-
-  if (allowed.error) throw new Error(`Coach progress update should be allowed: ${allowed.error.message}`);
-
-  state.roleAttempts = {
-    coachAllowedStatus: allowed.data?.status as string | null,
-    coachForbiddenTitleDenied: Boolean(coachForbiddenTitle.error) || coachForbiddenTitle.data === null,
-    coachNonCoachingDenied: Boolean(coachNonCoaching.error) || coachNonCoaching.data === null,
-    viewerForbiddenDenied: Boolean(viewerForbidden.error) || viewerForbidden.data === null,
-  };
-});
-
-Then('the coach and viewer writes are rejected while coaching progress remains allowed', async ({ page }) => {
-  const state = requireState(page);
-  const attempts = state.roleAttempts;
-  if (!attempts || !state.ids.coachingTaskId) throw new Error('Release regression role attempts were not recorded.');
-
-  expect(attempts.coachAllowedStatus).toBe('in_progress');
-  expect(attempts.coachForbiddenTitleDenied).toBe(true);
-  expect(attempts.coachNonCoachingDenied).toBe(true);
-  expect(attempts.viewerForbiddenDenied).toBe(true);
-
-  const parent = await fetchTask(state.owner.client, state.ids.parentTaskId);
-  const coachingTask = await fetchTask(state.owner.client, state.ids.coachingTaskId);
-  expect(parent.status).toBe('not_started');
-  expect(coachingTask.status).toBe('in_progress');
-  expect(coachingTask.title).not.toBe('Forbidden coach title edit');
-});
-
 When('the signed-in release user opens the admin route', async ({ page }) => {
   await page.goto('/admin');
 });
@@ -498,7 +401,7 @@ Then('the admin route denies access and returns to the task dashboard', async ({
 Given('a release regression mentioned member exists', async ({ page }) => {
   const state = requireState(page);
   const mentioned = await createSignedInUser('mentioned');
-  await addProjectMember(state.owner.client, state.ids.projectId, mentioned.email, 'viewer');
+  await addProjectMember(state.owner.client, state.ids.projectId, mentioned.email, 'team');
   state.mentioned = mentioned;
 });
 
