@@ -100,26 +100,21 @@ const TaskFormFields = ({
  )}
  </div>
 
- {origin === 'instance' && (
+ {origin === 'instance' && isAdmin && (
  <div className="grid grid-cols-1 gap-4 md:grid-cols-2 mt-4">
  <div className="space-y-2">
- <Label htmlFor="days_from_start">Days from Start</Label>
- <div className="relative">
+ <Label htmlFor="days_from_start">Duration (working days)</Label>
  <Input
  type="number"
  id="days_from_start"
- className={`pl-10 ${errors.days_from_start ? 'border-red-500' : ''}`}
+ className={errors.days_from_start ? 'border-red-500' : ''}
  placeholder="0"
  min="0"
  {...register('days_from_start', { valueAsNumber: true })}
  />
- <div className="pointer-events-none absolute left-0 top-0 flex h-full w-10 items-center justify-center text-slate-400">
- <span className="text-sm font-medium">T+</span>
- </div>
- </div>
  {errors.days_from_start && <span className="text-sm text-red-500">{errors.days_from_start.message}</span>}
  <p className="text-xs text-slate-500">
- Auto-calculates dates based on project start
+ Number of working days this task takes. Milestone and phase durations update automatically.
  </p>
  </div>
  </div>
