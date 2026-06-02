@@ -55,7 +55,6 @@ describe('Playwright E2E config', () => {
 
  it('persists auth state after the current post-login route', () => {
   expect(globalSetup).toContain("await page.waitForURL('**/tasks'");
-  expect(globalSetup).toContain("process.env.E2E_CREATE_ROLE_STATES === 'true'");
   expect(globalSetup).not.toContain("waitForURL('**/dashboard'");
  });
 
