@@ -1,5 +1,5 @@
 import { chromium, type FullConfig } from '@playwright/test';
-import { TEST_USER, ROLE_USERS } from './fixtures/test-data';
+import { TEST_USER } from './fixtures/test-data';
 
 const AUTH_DIR = 'e2e/.auth';
 
@@ -15,13 +15,6 @@ async function globalSetup(_config: FullConfig) {
 
   // Create authenticated storage state for the primary test user
   await createAuthState(browser, TEST_USER.email, TEST_USER.password, `${AUTH_DIR}/user.json`);
-
-  if (process.env.E2E_CREATE_ROLE_STATES === 'true') {
-    // Create per-role storage states for RBAC tests when local role fixtures exist.
-    for (const [role, creds] of Object.entries(ROLE_USERS)) {
-      await createAuthState(browser, creds.email, creds.password, `${AUTH_DIR}/${role}.json`);
-    }
-  }
 
   await browser.close();
 }

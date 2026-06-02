@@ -3,16 +3,6 @@ Feature: Task CRUD
   Background:
     Given the user is logged in
 
-  Scenario: Add Task button visible for owners and editors
-    Given the user is a project owner
-    And the user is on a project page
-    Then the "Add Task" button is visible
-
-  Scenario: Add Task button hidden for viewers
-    Given the user is a project viewer
-    And the user is on a project page
-    Then the "Add Task" button is not visible
-
   Scenario: Create new task via form
     Given the user is on a project page
     When the user clicks "Add Task"

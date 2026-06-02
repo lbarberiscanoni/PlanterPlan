@@ -87,7 +87,7 @@ Then('member cards are visible', async ({ page }) => {
 Then('each card shows a name, role badge, and email', async ({ page }) => {
   const card = page.locator('[data-testid="team-member-card"]').first();
   await expect(card).toBeVisible();
-  await expect(card.getByText(/owner|editor|coach|viewer|limited/i)).toBeVisible();
+  await expect(card.getByText(/planter|team|admin/i)).toBeVisible();
   await expect(card.getByText(/@/)).toBeVisible();
 });
 

@@ -1,6 +1,6 @@
 import { createBdd } from 'playwright-bdd';
 import { expect } from '@playwright/test';
-import { AUTH_STATES, SELECTORS } from '../fixtures/test-data';
+import { SELECTORS } from '../fixtures/test-data';
 
 const { Given, When, Then } = createBdd();
 
@@ -12,30 +12,10 @@ Given('the user is logged in', async ({ page }) => {
   await page.waitForLoadState('networkidle');
 });
 
-Given('the user is logged in as project owner', async ({ browser }) => {
-  const context = await browser.newContext({ storageState: AUTH_STATES.owner });
-  const page = await context.newPage();
-  await page.goto('/dashboard');
-  await page.waitForLoadState('networkidle');
-});
-
-Given('the user is logged in as editor', async ({ browser }) => {
-  const context = await browser.newContext({ storageState: AUTH_STATES.editor });
-  const page = await context.newPage();
-  await page.goto('/dashboard');
-  await page.waitForLoadState('networkidle');
-});
-
-Given('the user is logged in as viewer', async ({ browser }) => {
-  const context = await browser.newContext({ storageState: AUTH_STATES.viewer });
-  const page = await context.newPage();
-  await page.goto('/dashboard');
-  await page.waitForLoadState('networkidle');
-});
-
-Given('the user is logged in as limited user', async ({ browser }) => {
-  const context = await browser.newContext({ storageState: AUTH_STATES.limited });
-  const page = await context.newPage();
+// The 5-role model collapsed to Admin > Planter > Team; there is no separate
+// 'owner' auth fixture. The default seeded user owns the projects it creates,
+// so this alias behaves like the standard logged-in user.
+Given('the user is logged in as project owner', async ({ page }) => {
   await page.goto('/dashboard');
   await page.waitForLoadState('networkidle');
 });

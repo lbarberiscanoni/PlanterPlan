@@ -214,20 +214,6 @@ When('the user confirms completion', async ({ page }) => {
   await clickFirstVisible(dialog(page).getByRole('button', { name: /confirm|complete|yes/i }));
 });
 
-When('invites a user as {string} role', async ({ page }, role: string) => {
-  await clickFirstVisible(page.getByRole('button', { name: /invite/i }));
-  await fillFirstVisible(`limited-${Date.now()}@example.com`, dialog(page).getByLabel(/email/i), page.locator('input[type="email"]').first());
-  await clickFirstVisible(dialog(page).getByRole('combobox'), dialog(page).getByText(textPattern(role)));
-  await submitCurrentForm(page);
-});
-
-When('invites another user as {string} role', async ({ page }, role: string) => {
-  await clickFirstVisible(page.getByRole('button', { name: /invite/i }));
-  await fillFirstVisible(`coach-${Date.now()}@example.com`, dialog(page).getByLabel(/email/i), page.locator('input[type="email"]').first());
-  await clickFirstVisible(dialog(page).getByRole('combobox'), dialog(page).getByText(textPattern(role)));
-  await submitCurrentForm(page);
-});
-
 When('the user opens the Add Task form', async ({ page }) => {
   await openTaskForm(page);
 });
@@ -508,34 +494,6 @@ Then('all child tasks are marked complete', async ({ page }) => {
 
 Then('both invitations succeed', async ({ page }) => {
   await expect(page.locator('[data-sonner-toast]').or(page.getByText(/invited|success/i)).first()).toBeVisible({ timeout: 5000 });
-});
-
-Then('edit controls are visible on tasks', async ({ page }) => {
-  await expect(page.getByRole('button', { name: /edit/i }).first()).toBeVisible({ timeout: 5000 });
-});
-
-Then('the user can change task status', async ({ page }) => {
-  await expect(page.getByRole('combobox').or(page.getByText(/todo|progress|complete/i)).first()).toBeVisible({ timeout: 5000 });
-});
-
-Then('edit controls are hidden', async ({ page }) => {
-  await expect(page.getByRole('button', { name: /edit/i }).first()).toBeHidden({ timeout: 5000 });
-});
-
-Then('the board is visible in read-only mode', async ({ page }) => {
-  await expect(page.locator('[data-testid="board-column"], [data-testid="task-item"], main').first()).toBeVisible({ timeout: 5000 });
-});
-
-Then('edit controls are hidden on non-assigned tasks', async ({ page }) => {
-  await expect(page.getByRole('button', { name: /edit/i }).first()).toBeHidden({ timeout: 5000 });
-});
-
-Then('edit controls are visible on the assigned task', async ({ page }) => {
-  await expect(taskItems(page).or(page.locator('main')).first()).toBeVisible({ timeout: 5000 });
-});
-
-Then('the user can change status of the assigned task', async ({ page }) => {
-  await expect(page.getByRole('combobox').or(page.locator('main')).first()).toBeVisible({ timeout: 5000 });
 });
 
 Then('the task is cloned into the project', async ({ page }) => {
