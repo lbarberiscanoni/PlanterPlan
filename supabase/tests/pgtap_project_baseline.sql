@@ -55,9 +55,9 @@ SELECT is(
 );
 
 SELECT is(
-    (SELECT count(*) FROM public.project_members WHERE project_id = '11111111-1111-1111-1111-111111111301' AND user_id = '00000000-0000-0000-0000-000000000301' AND role = 'owner'),
+    (SELECT count(*) FROM public.project_members WHERE project_id = '11111111-1111-1111-1111-111111111301' AND user_id = '00000000-0000-0000-0000-000000000301' AND role = 'planter'),
     1::bigint,
-    'initialize_default_project creates an owner membership for the creator'
+    'initialize_default_project creates a planter membership for the creator'
 );
 
 SELECT is(

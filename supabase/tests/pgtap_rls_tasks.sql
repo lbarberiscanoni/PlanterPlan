@@ -19,8 +19,8 @@ INSERT INTO tasks (id, title, status, creator, root_id) VALUES
 
 -- Insert Members (taskowner is owner, team1 is editor. unauthorized has no record)
 INSERT INTO project_members (project_id, user_id, role) VALUES
-    ('11111111-1111-1111-1111-111111111111', '00000000-0000-0000-0000-000000000001', 'owner'),
-    ('11111111-1111-1111-1111-111111111111', '00000000-0000-0000-0000-000000000002', 'editor');
+    ('11111111-1111-1111-1111-111111111111', '00000000-0000-0000-0000-000000000001', 'planter'),
+    ('11111111-1111-1111-1111-111111111111', '00000000-0000-0000-0000-000000000002', 'team');
 
 -- Insert Task
 INSERT INTO tasks (id, root_id, parent_task_id, title) VALUES
@@ -98,7 +98,7 @@ SELECT throws_ok(
 SELECT throws_ok(
     $$ INSERT INTO tasks (id, root_id, parent_task_id, title, origin) VALUES ('55555555-5555-5555-5555-555555555555', '11111111-1111-1111-1111-111111111111', '11111111-1111-1111-1111-111111111111', 'Unauthorized Template Child', 'template') $$,
     'new row violates row-level security policy for table "tasks"',
-    'Project editors cannot insert template-origin subtasks'
+    'Project team members cannot insert template-origin subtasks'
 );
 
 -- =========================================================
@@ -114,47 +114,47 @@ INSERT INTO tasks (id, title, status, creator, root_id) VALUES
     ('11111111-1111-1111-1111-111111111101', 'Permission Test Project', 'not_started', '00000000-0000-0000-0000-000000000101', '11111111-1111-1111-1111-111111111101');
 
 INSERT INTO project_members (project_id, user_id, role) VALUES
-    ('11111111-1111-1111-1111-111111111101', '00000000-0000-0000-0000-000000000101', 'owner'),
-    ('11111111-1111-1111-1111-111111111101', '00000000-0000-0000-0000-000000000102', 'editor');
+    ('11111111-1111-1111-1111-111111111101', '00000000-0000-0000-0000-000000000101', 'planter'),
+    ('11111111-1111-1111-1111-111111111101', '00000000-0000-0000-0000-000000000102', 'team');
 
--- Test 10: has_permission (Owner Requesting Owner Role)
+-- Test 10: has_permission (Planter Requesting Planter Role)
 -- `has_permission` is an internal helper with direct EXECUTE revoked from
 -- authenticated; test its claim-binding logic as the function owner.
 set local role postgres;
 set local request.jwt.claims to '{"sub": "00000000-0000-0000-0000-000000000101"}';
 SELECT is(
-    public.has_permission('11111111-1111-1111-1111-111111111101'::uuid, '00000000-0000-0000-0000-000000000101'::uuid, 'owner'::text),
+    public.has_permission('11111111-1111-1111-1111-111111111101'::uuid, '00000000-0000-0000-0000-000000000101'::uuid, 'planter'::text),
     true,
-    'Owner should have owner permission'
+    'Planter should have planter permission'
 );
 
--- Test 11: has_permission (Member Requesting Owner Role)
+-- Test 11: has_permission (Team Member Requesting Planter Role)
 set local request.jwt.claims to '{"sub": "00000000-0000-0000-0000-000000000102"}';
 SELECT is(
-    public.has_permission('11111111-1111-1111-1111-111111111101'::uuid, '00000000-0000-0000-0000-000000000102'::uuid, 'owner'::text),
+    public.has_permission('11111111-1111-1111-1111-111111111101'::uuid, '00000000-0000-0000-0000-000000000102'::uuid, 'planter'::text),
     false,
-    'Member should NOT have owner permission'
+    'Team member should NOT have planter permission'
 );
 
--- Test 12: has_permission (Member Requesting Editor Role)
+-- Test 12: has_permission (Team Member Requesting Team Role)
 SELECT is(
-    public.has_permission('11111111-1111-1111-1111-111111111101'::uuid, '00000000-0000-0000-0000-000000000102'::uuid, 'editor'::text),
+    public.has_permission('11111111-1111-1111-1111-111111111101'::uuid, '00000000-0000-0000-0000-000000000102'::uuid, 'team'::text),
     true,
-    'Editor should have editor permission'
+    'Team member should have team permission'
 );
 
 -- Test 13: has_permission (Unauthorized User)
 set local request.jwt.claims to '{"sub": "00000000-0000-0000-0000-000000000103"}';
 SELECT is(
-    public.has_permission('11111111-1111-1111-1111-111111111101'::uuid, '00000000-0000-0000-0000-000000000103'::uuid, 'editor'::text),
+    public.has_permission('11111111-1111-1111-1111-111111111101'::uuid, '00000000-0000-0000-0000-000000000103'::uuid, 'team'::text),
     false,
-    'Unauthorized user should NOT have editor permission'
+    'Unauthorized user should NOT have team permission'
 );
 
 -- Test 14: has_permission (Mismatched Claim vs Request)
 set local request.jwt.claims to '{"sub": "00000000-0000-0000-0000-000000000103"}';
 SELECT is(
-    public.has_permission('11111111-1111-1111-1111-111111111101'::uuid, '00000000-0000-0000-0000-000000000101'::uuid, 'owner'::text),
+    public.has_permission('11111111-1111-1111-1111-111111111101'::uuid, '00000000-0000-0000-0000-000000000101'::uuid, 'planter'::text),
     false,
     'Mismatched user token and passed user_id should fail immediately'
 );

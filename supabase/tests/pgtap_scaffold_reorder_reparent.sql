@@ -20,6 +20,27 @@ DELETE FROM auth.users WHERE email = 'scaffold-dnd-owner@example.com';
 INSERT INTO auth.users (id, email)
 VALUES ('00000000-0000-0000-0000-000000001001', 'scaffold-dnd-owner@example.com');
 
+-- Seed the source template subtree the cloned rows below point at via
+-- cloned_from_task_id (tasks_cloned_from_task_id_fkey requires these to exist).
+INSERT INTO public.tasks
+    (id, title, origin, creator, root_id, parent_task_id, status, position)
+VALUES
+    ('99999999-9999-9999-9999-999999990001', 'Template Root', 'template',
+     '00000000-0000-0000-0000-000000001001',
+     '99999999-9999-9999-9999-999999990001', NULL, 'todo', 1000),
+    ('99999999-9999-9999-9999-999999990002', 'Template Phase A', 'template',
+     '00000000-0000-0000-0000-000000001001',
+     '99999999-9999-9999-9999-999999990001',
+     '99999999-9999-9999-9999-999999990001', 'todo', 1000),
+    ('99999999-9999-9999-9999-999999990003', 'Template Phase B', 'template',
+     '00000000-0000-0000-0000-000000001001',
+     '99999999-9999-9999-9999-999999990001',
+     '99999999-9999-9999-9999-999999990001', 'todo', 2000),
+    ('99999999-9999-9999-9999-999999990004', 'Template Task', 'template',
+     '00000000-0000-0000-0000-000000001001',
+     '99999999-9999-9999-9999-999999990001',
+     '99999999-9999-9999-9999-999999990002', 'todo', 1000);
+
 -- Seed a scaffold-cloned project tree (origin='instance', cloned_from_task_id set).
 INSERT INTO public.tasks
     (id, title, origin, creator, root_id, parent_task_id, cloned_from_task_id, status, position)

@@ -59,9 +59,9 @@ VALUES (
 );
 
 INSERT INTO public.project_members (project_id, user_id, role) VALUES
-    ('11111111-1111-1111-1111-111111112101', '00000000-0000-0000-0000-000000002101', 'owner'),
-    ('11111111-1111-1111-1111-111111112101', '00000000-0000-0000-0000-000000002102', 'editor'),
-    ('11111111-1111-1111-1111-111111112101', '00000000-0000-0000-0000-000000002103', 'viewer');
+    ('11111111-1111-1111-1111-111111112101', '00000000-0000-0000-0000-000000002101', 'planter'),
+    ('11111111-1111-1111-1111-111111112101', '00000000-0000-0000-0000-000000002102', 'team'),
+    ('11111111-1111-1111-1111-111111112101', '00000000-0000-0000-0000-000000002103', 'team');
 
 SELECT ok(
     has_function_privilege('authenticated', 'public.list_project_members_with_profiles(uuid)', 'EXECUTE'),
@@ -75,7 +75,7 @@ SELECT set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000
 SELECT is(
     (SELECT count(*) FROM public.list_project_members_with_profiles('11111111-1111-1111-1111-111111112101')),
     3::bigint,
-    'project owners can read the hydrated team roster'
+    'project planters can read the hydrated team roster'
 );
 
 SELECT is(
@@ -163,7 +163,7 @@ SELECT lives_ok(
     $$ DELETE FROM public.project_members
        WHERE project_id = '11111111-1111-1111-1111-111111112101'
          AND user_id = '00000000-0000-0000-0000-000000002101' $$,
-    'editor remove attempts are filtered by RLS'
+    'team member remove attempts are filtered by RLS'
 );
 
 RESET ROLE;
@@ -175,7 +175,7 @@ SELECT is(
         WHERE user_id = '00000000-0000-0000-0000-000000002101'
     ),
     1::bigint,
-    'editor remove attempts do not remove owner memberships'
+    'team member remove attempts do not remove planter memberships'
 );
 
 SELECT * FROM finish();

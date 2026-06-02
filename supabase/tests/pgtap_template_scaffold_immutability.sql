@@ -1,6 +1,6 @@
 BEGIN;
 
-SELECT plan(17);
+SELECT plan(16);
 
 TRUNCATE TABLE
     public.activity_log,
@@ -86,9 +86,8 @@ INSERT INTO public.tasks (
 );
 
 INSERT INTO public.project_members (project_id, user_id, role) VALUES
-    ('33333333-3333-3333-3333-333333333501', '00000000-0000-0000-0000-000000000501', 'owner'),
-    ('33333333-3333-3333-3333-333333333501', '00000000-0000-0000-0000-000000000502', 'editor'),
-    ('33333333-3333-3333-3333-333333333501', '00000000-0000-0000-0000-000000000503', 'coach');
+    ('33333333-3333-3333-3333-333333333501', '00000000-0000-0000-0000-000000000501', 'planter'),
+    ('33333333-3333-3333-3333-333333333501', '00000000-0000-0000-0000-000000000502', 'team');
 
 SET LOCAL ROLE authenticated;
 SELECT set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000000502', true);
@@ -97,18 +96,18 @@ SELECT set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000
 SELECT throws_like(
     $$ UPDATE public.tasks SET title = 'Mutated title' WHERE id = '44444444-4444-4444-4444-444444444501' $$,
     '%protected template scaffold fields cannot be changed%',
-    'project editors cannot update scaffold content on cloned template-origin tasks'
+    'project team memberscannot update scaffold content on cloned template-origin tasks'
 );
 
 SELECT throws_like(
     $$ DELETE FROM public.tasks WHERE id = '44444444-4444-4444-4444-444444444501' $$,
     '%protected template scaffold tasks cannot be deleted%',
-    'project editors cannot delete cloned template-origin tasks'
+    'project team memberscannot delete cloned template-origin tasks'
 );
 
 SELECT lives_ok(
     $$ UPDATE public.tasks SET status = 'in_progress' WHERE id = '44444444-4444-4444-4444-444444444501' $$,
-    'project editors can update workflow status on protected scaffold tasks'
+    'project team memberscan update workflow status on protected scaffold tasks'
 );
 
 SELECT is(
@@ -123,14 +122,14 @@ SELECT lives_ok(
            notes = 'Runtime note',
            settings = settings || '{"due_soon_threshold": 14}'::jsonb
        WHERE id = '44444444-4444-4444-4444-444444444501' $$,
-    'project editors can update dates, notes, and non-protected runtime settings'
+    'project team memberscan update dates, notes, and non-protected runtime settings'
 );
 
 SELECT lives_ok(
     $$ UPDATE public.tasks
        SET supervisor_email = 'supervisor@example.com'
        WHERE id = '33333333-3333-3333-3333-333333333501' $$,
-    'project editors can update supervisor report delivery on protected cloned project roots'
+    'project team memberscan update supervisor report delivery on protected cloned project roots'
 );
 
 SELECT lives_ok(
@@ -143,7 +142,7 @@ SELECT throws_like(
        SET settings = jsonb_set(settings, '{is_coaching_task}', 'false'::jsonb, true)
        WHERE id = '44444444-4444-4444-4444-444444444501' $$,
     '%protected template scaffold settings cannot be changed: is_coaching_task%',
-    'project editors cannot mutate protected inherited behavior flags'
+    'project team memberscannot mutate protected inherited behavior flags'
 );
 
 SELECT throws_like(
@@ -151,26 +150,17 @@ SELECT throws_like(
        SET cloned_from_task_id = NULL
        WHERE id = '44444444-4444-4444-4444-444444444501' $$,
     '%protected template scaffold fields cannot be changed%',
-    'project editors cannot erase template provenance'
+    'project team memberscannot erase template provenance'
 );
 
 SELECT lives_ok(
     $$ UPDATE public.tasks SET title = 'Custom task renamed' WHERE id = '55555555-5555-5555-5555-555555555501' $$,
-    'project editors can still update post-instantiation custom tasks'
+    'project team memberscan still update post-instantiation custom tasks'
 );
 
 SELECT lives_ok(
     $$ DELETE FROM public.tasks WHERE id = '55555555-5555-5555-5555-555555555501' $$,
-    'project editors can still delete post-instantiation custom tasks'
-);
-
-SELECT set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000000503', true);
-SELECT set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-000000000503"}', true);
-
-SELECT throws_like(
-    $$ UPDATE public.tasks SET title = 'Coach content edit' WHERE id = '44444444-4444-4444-4444-444444444501' $$,
-    '%coach role may update only task progress fields%',
-    'coach field-scope enforcement blocks protected scaffold content edits before scaffold immutability runs'
+    'project team memberscan still delete post-instantiation custom tasks'
 );
 
 SELECT set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000000501', true);
@@ -179,13 +169,13 @@ SELECT set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000
 SELECT throws_like(
     $$ UPDATE public.tasks SET title = 'Owner content edit' WHERE id = '44444444-4444-4444-4444-444444444501' $$,
     '%protected template scaffold fields cannot be changed%',
-    'project owners cannot update scaffold content on cloned template-origin tasks'
+    'project planterscannot update scaffold content on cloned template-origin tasks'
 );
 
 SELECT throws_like(
     $$ DELETE FROM public.tasks WHERE id = '44444444-4444-4444-4444-444444444501' $$,
     '%protected template scaffold tasks cannot be deleted%',
-    'project owners cannot delete cloned template-origin tasks'
+    'project planterscannot delete cloned template-origin tasks'
 );
 
 SET LOCAL ROLE service_role;

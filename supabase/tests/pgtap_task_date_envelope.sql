@@ -95,7 +95,7 @@ SELECT pg_temp.set_task_dates(
 );
 
 INSERT INTO public.project_members (project_id, user_id, role)
-VALUES ('11111111-1111-1111-1111-111111111801', '00000000-0000-0000-0000-000000000801', 'owner');
+VALUES ('11111111-1111-1111-1111-111111111801', '00000000-0000-0000-0000-000000000801', 'planter');
 
 SET LOCAL ROLE authenticated;
 SELECT set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000000801', true);
