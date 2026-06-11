@@ -200,12 +200,12 @@ describe('priority task milestone grouping', () => {
     ]);
   });
 
-  it('keeps qualifying orphan tasks in a clearly labeled project group', () => {
+  it('groups a loose task (directly under a phase, no milestone) under its phase', () => {
     const groups = buildPriorityTaskGroups({ tasks: buildGroupingFixture(), now: NOW });
-    const orphanGroup = groups.find((group) => group.id === 'orphan-project');
-    expect(orphanGroup?.title).toBe('No milestone');
-    expect(orphanGroup?.projectTitle).toBe('Alpha Project');
-    expect(orphanGroup?.tasks.map((entry) => entry.task.id)).toEqual(['task-orphan']);
+    const phaseGroup = groups.find((group) => group.id === 'phase-phase');
+    expect(phaseGroup?.title).toBe('Launch Phase');
+    expect(phaseGroup?.projectTitle).toBe('Alpha Project');
+    expect(phaseGroup?.tasks.map((entry) => entry.task.id)).toEqual(['task-orphan']);
   });
 
   it('assigns display-only Dewey-style task numbers from group and task order', () => {

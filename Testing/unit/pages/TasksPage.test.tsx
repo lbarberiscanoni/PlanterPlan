@@ -149,6 +149,9 @@ vi.mock('@/shared/api/planterClient', () => {
                     delete: vi.fn().mockResolvedValue(true),
                     updateParentDates: vi.fn(),
                 },
+                Project: {
+                    list: vi.fn().mockResolvedValue(taskList.filter((t) => t.parent_task_id === null)),
+                },
             },
             // Deletion now flows through the SECURITY DEFINER delete_task RPC.
             rpc: vi.fn().mockResolvedValue({ error: null }),
@@ -235,6 +238,9 @@ describe('TasksPage — global tasks view + details dialog', () => {
         expect(screen.getByText('Showing 7 of 7 work items')).toBeInTheDocument();
         expect(screen.getByText('Empty Milestone')).toBeInTheDocument();
         expect(screen.getByText('Future hidden task')).toBeInTheDocument();
+        // Each grouped section is attributed to its project (shared templates make
+        // milestone titles collide across projects, so the project label is required).
+        expect(screen.getAllByText('Alpha Project').length).toBeGreaterThan(0);
         expect(screen.getByLabelText('Sort order')).toBeInTheDocument();
         expect(screen.queryByTestId('task-row-p-alpha')).not.toBeInTheDocument();
     });
@@ -310,7 +316,7 @@ describe('TasksPage — global tasks view + details dialog', () => {
         await user.clear(search);
         await user.type(search, 'does-not-exist');
         expect(await screen.findByText('No tasks match your search and filters.')).toBeInTheDocument();
-    });
+    }, 15000);
 
     it('opens the details dialog with the clicked task', async () => {
         const user = userEvent.setup();

@@ -199,9 +199,21 @@ export default function TasksPage() {
               ? canDeleteTaskForRole(selectedMembershipRole, selectedTaskForPanel)
               : false;
 
-       // Wave 33: map of root-task-id → project title, used to reveal each task's
-       // parent-project name in a hover tooltip on the row. Projects live in the
-       // same `tasks` list (roots have `parent_task_id === null`).
+       // Complete list of the caller's project roots (id + title). The main
+       // `['tasks']` list (Task.list) is row-capped, so for accounts with many
+       // tasks some project roots fall outside it — leaving the grouped view's
+       // milestone/phase headers without a project label. This small, uncapped
+       // roots query (shared cache with the sidebar) makes project attribution
+       // reliable regardless of total task count.
+       const { data: projectRoots = [] } = useQuery({
+              queryKey: ['projects'],
+              queryFn: () => planter.entities.Project.list(),
+              staleTime: STALE_TIMES.medium,
+       });
+
+       // Map of root-task-id → project title. Built from the authoritative roots
+       // query first, with the `tasks` list as a fallback. Used both for the
+       // per-row hover tooltip and to label each grouped section by its project.
        const projectTitleByRootId = useMemo(() => {
               const map = new Map<string, string>();
               for (const t of tasks) {
@@ -209,8 +221,13 @@ export default function TasksPage() {
                             map.set(t.id, t.title);
                      }
               }
+              for (const root of projectRoots) {
+                     if (typeof root.title === 'string') {
+                            map.set(root.id, root.title);
+                     }
+              }
               return map;
-       }, [tasks]);
+       }, [tasks, projectRoots]);
        const actionableTaskCount = useMemo(
               () => tasks.filter((task) => task.origin === 'instance' && task.parent_task_id !== null).length,
               [tasks],
@@ -273,11 +290,19 @@ export default function TasksPage() {
        const groupedSections = useMemo(
               () => {
                      if (groupMode !== 'grouped') return [];
-                     return filter === 'priority'
+                     const groups = filter === 'priority'
                             ? buildPriorityTaskGroups({ tasks, candidateTasks: visibleTaskRows })
                             : buildMilestoneTaskGroups({ tasks, candidateTasks: visibleTaskRows });
+                     // Backfill the project label from the authoritative roots map so
+                     // every section is attributed even when its root is outside the
+                     // row-capped task list. All tasks in a group share one project.
+                     return groups.map((group) => {
+                            const rootId = group.tasks[0]?.task.root_id;
+                            const projectTitle = (rootId && projectTitleByRootId.get(rootId)) || group.projectTitle;
+                            return projectTitle === group.projectTitle ? group : { ...group, projectTitle };
+                     });
               },
-              [groupMode, filter, tasks, visibleTaskRows],
+              [groupMode, filter, tasks, visibleTaskRows, projectTitleByRootId],
        );
 
        const sensors = useSensors(
@@ -484,15 +509,15 @@ export default function TasksPage() {
                                                                                            data-testid={`task-group-${group.id}`}
                                                                                     >
                                                                                            <div className="mb-3 border-b border-border pb-3">
+                                                                                                  {group.projectTitle && (
+                                                                                                         <p className="text-xs font-semibold uppercase tracking-wide text-brand-600">{group.projectTitle}</p>
+                                                                                                  )}
                                                                                                   <h2
                                                                                                          id={`priority-group-heading-${group.id}`}
                                                                                                          className="text-base font-semibold text-card-foreground"
                                                                                                   >
                                                                                                          {group.title}
                                                                                                   </h2>
-                                                                                                  {group.projectTitle && (
-                                                                                                         <p className="text-sm text-muted-foreground">{group.projectTitle}</p>
-                                                                                                  )}
                                                                                            </div>
                                                                                            <div
                                                                                                   role="tree"

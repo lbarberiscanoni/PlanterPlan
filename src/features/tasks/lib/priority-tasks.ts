@@ -117,6 +117,28 @@ const findNearestMilestone = (task: TaskRow, taskById: Map<string, TaskRow>): Ta
   return null;
 };
 
+/**
+ * Nearest ancestor that is a grouping container: a `milestone` (preferred —
+ * always closer) or, when there is no milestone above the task, the `phase`.
+ * Lets the grouped view fall back to the phase for work-items placed directly
+ * under a phase (depth-2), instead of dumping them in a "No milestone" bucket.
+ */
+const findNearestContainer = (task: TaskRow, taskById: Map<string, TaskRow>): TaskRow | null => {
+  let parentId = task.parent_task_id;
+  const seen = new Set<string>();
+
+  while (parentId && !seen.has(parentId)) {
+    seen.add(parentId);
+    const parent = taskById.get(parentId);
+    if (!parent) return null;
+    const type = parent.task_type?.toLowerCase();
+    if (type === 'milestone' || type === 'phase') return parent;
+    parentId = parent.parent_task_id;
+  }
+
+  return null;
+};
+
 const getProject = (task: TaskRow, taskById: Map<string, TaskRow>): TaskRow | null => {
   if (task.root_id) return taskById.get(task.root_id) ?? null;
   return null;
@@ -134,9 +156,11 @@ export const getTaskMilestoneContext = (task: TaskRow, tasks: TaskRow[]): TaskMi
 
 /**
  * Core grouping: bucket a set of already-selected tasks by their nearest
- * milestone ancestor (project title as subtitle), sort groups + tasks, and
- * stamp `groupIndex.taskIndex` display numbers. Shared by the priority view
- * and the general "group by milestone" layout.
+ * grouping container — a milestone, or the phase when no milestone sits above
+ * the task (project title kept for attribution). Sorts groups + tasks and
+ * stamps `groupIndex.taskIndex` display numbers. Shared by the priority view
+ * and the general "group by milestone" layout. `container` holds the milestone
+ * or phase row (the `milestone` field name is retained for compatibility).
  */
 const groupCandidatesByMilestone = (
   candidates: TaskRow[],
@@ -145,16 +169,19 @@ const groupCandidatesByMilestone = (
   const groups = new Map<string, Omit<PriorityTaskGroup, 'tasks'> & { tasks: TaskRow[] }>();
 
   for (const task of candidates) {
-    const milestone = findNearestMilestone(task, taskById);
+    const container = findNearestContainer(task, taskById);
     const project = getProject(task, taskById);
-    const groupId = milestone ? `milestone-${milestone.id}` : `orphan-${task.root_id ?? 'unknown'}`;
+    const containerType = container?.task_type?.toLowerCase();
+    const groupId = container
+      ? `${containerType === 'phase' ? 'phase' : 'milestone'}-${container.id}`
+      : `orphan-${task.root_id ?? 'unknown'}`;
 
     if (!groups.has(groupId)) {
       groups.set(groupId, {
         id: groupId,
-        title: milestone?.title ?? 'No milestone',
+        title: container?.title ?? 'Other',
         projectTitle: project?.title ?? null,
-        milestone,
+        milestone: container,
         tasks: [],
       });
     }
@@ -162,13 +189,22 @@ const groupCandidatesByMilestone = (
     groups.get(groupId)?.tasks.push(task);
   }
 
+  // Order within a project: real milestones first, then phase fallback groups
+  // (loose tasks under a phase), then any true orphans with no container.
+  const containerRank = (group: { milestone: TaskRow | null }): number => {
+    const type = group.milestone?.task_type?.toLowerCase();
+    if (type === 'milestone') return 0;
+    if (type === 'phase') return 1;
+    return 2;
+  };
+
   return Array.from(groups.values())
     .sort((a, b) => {
       const projectTitleCompare = compareTitle(a.projectTitle, b.projectTitle);
       if (projectTitleCompare !== 0) return projectTitleCompare;
 
-      const orphanCompare = (a.milestone ? 0 : 1) - (b.milestone ? 0 : 1);
-      if (orphanCompare !== 0) return orphanCompare;
+      const rankCompare = containerRank(a) - containerRank(b);
+      if (rankCompare !== 0) return rankCompare;
 
       const positionCompare = compareNullablePosition(a.milestone?.position, b.milestone?.position);
       if (positionCompare !== 0) return positionCompare;
@@ -214,17 +250,34 @@ export interface BuildMilestoneTaskGroupsArgs {
 }
 
 /**
- * Group an arbitrary (already-filtered) task set by nearest milestone — the
- * default layout for every /tasks filter. Unlike the priority builder this
- * applies no priority/urgency qualification: it groups exactly the rows it is
- * given, so a "grouped" view always covers the same tasks as the flat list.
+ * Group an arbitrary (already-filtered) task set by nearest container
+ * (milestone, falling back to phase) — the default layout for every /tasks
+ * filter. Only LEAF rows are shown: a candidate that is the parent of another
+ * visible candidate is a structural container (a phase, or a milestone with
+ * tasks) and becomes a group header rather than a loose row. This keeps loose
+ * depth-2 work-items (no children) visible — grouped under their phase — while
+ * removing the "everything in No Milestone" dump of phase/milestone rows.
  */
 export const buildMilestoneTaskGroups = ({
   tasks,
   candidateTasks,
 }: BuildMilestoneTaskGroupsArgs): PriorityTaskGroup[] => {
   const taskById = new Map(tasks.map((task) => [task.id, task]));
-  return groupCandidatesByMilestone(candidateTasks ?? tasks, taskById);
+  const candidates = candidateTasks ?? tasks;
+  const parentIds = new Set(
+    candidates.map((task) => task.parent_task_id).filter((id): id is string => id !== null),
+  );
+  // Drop only STRUCTURAL rows (project/phase/milestone) that actually contain
+  // other visible rows — those are group headers, not work-items. Tasks/subtasks
+  // are always kept (a task with subtasks still shows), and a structural row with
+  // no children (e.g. a loose depth-2 work-item the depth-based type calls a
+  // "milestone") is kept as a leaf and grouped under its phase.
+  const leaves = candidates.filter((task) => {
+    const type = task.task_type?.toLowerCase();
+    const isStructural = type === 'project' || type === 'phase' || type === 'milestone';
+    return !(isStructural && parentIds.has(task.id));
+  });
+  return groupCandidatesByMilestone(leaves, taskById);
 };
 
 export const filterPriorityTasks = (tasks: TaskRow[], now: Date = getNow()): TaskRow[] =>
