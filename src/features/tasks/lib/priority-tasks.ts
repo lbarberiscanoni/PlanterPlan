@@ -132,15 +132,16 @@ export const getTaskMilestoneContext = (task: TaskRow, tasks: TaskRow[]): TaskMi
   };
 };
 
-export const buildPriorityTaskGroups = ({
-  tasks,
-  now = getNow(),
-  candidateTasks,
-}: BuildPriorityTaskGroupsArgs): PriorityTaskGroup[] => {
-  const taskById = new Map(tasks.map((task) => [task.id, task]));
-  const candidates = (candidateTasks ?? tasks).filter(
-    (task) => isPriorityTaskCandidate(task) && isPriorityQualifyingTask(task, now),
-  );
+/**
+ * Core grouping: bucket a set of already-selected tasks by their nearest
+ * milestone ancestor (project title as subtitle), sort groups + tasks, and
+ * stamp `groupIndex.taskIndex` display numbers. Shared by the priority view
+ * and the general "group by milestone" layout.
+ */
+const groupCandidatesByMilestone = (
+  candidates: TaskRow[],
+  taskById: Map<string, TaskRow>,
+): PriorityTaskGroup[] => {
   const groups = new Map<string, Omit<PriorityTaskGroup, 'tasks'> & { tasks: TaskRow[] }>();
 
   for (const task of candidates) {
@@ -193,6 +194,37 @@ export const buildPriorityTaskGroups = ({
         })),
       };
     });
+};
+
+export const buildPriorityTaskGroups = ({
+  tasks,
+  now = getNow(),
+  candidateTasks,
+}: BuildPriorityTaskGroupsArgs): PriorityTaskGroup[] => {
+  const taskById = new Map(tasks.map((task) => [task.id, task]));
+  const candidates = (candidateTasks ?? tasks).filter(
+    (task) => isPriorityTaskCandidate(task) && isPriorityQualifyingTask(task, now),
+  );
+  return groupCandidatesByMilestone(candidates, taskById);
+};
+
+export interface BuildMilestoneTaskGroupsArgs {
+  tasks: TaskRow[];
+  candidateTasks?: TaskRow[];
+}
+
+/**
+ * Group an arbitrary (already-filtered) task set by nearest milestone — the
+ * default layout for every /tasks filter. Unlike the priority builder this
+ * applies no priority/urgency qualification: it groups exactly the rows it is
+ * given, so a "grouped" view always covers the same tasks as the flat list.
+ */
+export const buildMilestoneTaskGroups = ({
+  tasks,
+  candidateTasks,
+}: BuildMilestoneTaskGroupsArgs): PriorityTaskGroup[] => {
+  const taskById = new Map(tasks.map((task) => [task.id, task]));
+  return groupCandidatesByMilestone(candidateTasks ?? tasks, taskById);
 };
 
 export const filterPriorityTasks = (tasks: TaskRow[], now: Date = getNow()): TaskRow[] =>

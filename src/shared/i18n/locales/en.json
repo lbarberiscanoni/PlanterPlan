@@ -173,6 +173,9 @@
     "sort_aria": "Sort order",
     "sort_chronological": "Chronological",
     "sort_alphabetical": "Alphabetical",
+    "layout_label": "Layout",
+    "layout_grouped": "Group by milestone",
+    "layout_flat": "Flat list",
     "no_tasks": "No tasks yet",
     "first_run": {
       "title": "Start your first project",

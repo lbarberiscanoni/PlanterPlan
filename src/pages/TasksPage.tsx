@@ -10,7 +10,7 @@ import { planter } from '@/shared/api/planterClient';
 import { STALE_TIMES } from '@/shared/lib/react-query-config';
 import TaskItem from '@/features/tasks/components/TaskItem';
 import TaskDetailsPanel from '@/features/tasks/components/TaskDetailsPanel';
-import { FileText, Loader2, Plus, Search, X } from 'lucide-react';
+import { FileText, LayoutList, List, Loader2, Plus, Search, X } from 'lucide-react';
 import { Button } from '@/shared/ui/button';
 import { Input } from '@/shared/ui/input';
 import { useAuth } from '@/shared/contexts/auth-context';
@@ -24,7 +24,7 @@ import {
        type TaskFilterKey,
        type TaskSortKey,
 } from '@/features/tasks/hooks/useTaskFilters';
-import { buildPriorityTaskGroups } from '@/features/tasks/lib/priority-tasks';
+import { buildMilestoneTaskGroups, buildPriorityTaskGroups } from '@/features/tasks/lib/priority-tasks';
 import {
        Select,
        SelectContent,
@@ -63,6 +63,7 @@ export default function TasksPage() {
        const invalidateTasks = useCallback(() => queryClient.invalidateQueries({ queryKey: ['tasks'] }), [queryClient]);
 
        const [filter, setFilter] = useState<TaskFilterKey>('all_tasks');
+       const [groupMode, setGroupMode] = useState<'grouped' | 'flat'>('grouped');
        const [sort, setSort] = useState<TaskSortKey>('chronological');
        const [selectedTask, setSelectedTask] = useState<TaskRow | null>(null);
        const [searchQuery, setSearchQuery] = useState<string>('');
@@ -265,11 +266,18 @@ export default function TasksPage() {
               () => visibleTasks.map((task) => withImmediateChildrenForStatus(task)),
               [visibleTasks, withImmediateChildrenForStatus],
        );
-       const priorityGroups = useMemo(
-              () => filter === 'priority'
-                     ? buildPriorityTaskGroups({ tasks, candidateTasks: visibleTaskRows })
-                     : [],
-              [filter, tasks, visibleTaskRows],
+       // Milestone-grouped layout (default). The priority filter keeps its own
+       // urgency-aware builder; every other filter groups its visible rows by
+       // nearest milestone. Either way the grouped set covers the same tasks as
+       // the flat list, so toggling Grouped/Flat never changes which tasks show.
+       const groupedSections = useMemo(
+              () => {
+                     if (groupMode !== 'grouped') return [];
+                     return filter === 'priority'
+                            ? buildPriorityTaskGroups({ tasks, candidateTasks: visibleTaskRows })
+                            : buildMilestoneTaskGroups({ tasks, candidateTasks: visibleTaskRows });
+              },
+              [groupMode, filter, tasks, visibleTaskRows],
        );
 
        const sensors = useSensors(
@@ -399,6 +407,36 @@ export default function TasksPage() {
                                                                       </Select>
                                                                </div>
                                                         )}
+
+                                                        <div className="flex flex-col gap-1 self-end">
+                                                               <span className="text-xs font-medium text-muted-foreground">{t('tasks.layout_label')}</span>
+                                                               <div className="bg-muted p-1 rounded-lg flex items-center space-x-1">
+                                                                      <button
+                                                                             type="button"
+                                                                             onClick={() => setGroupMode('grouped')}
+                                                                             className={`p-2 rounded-md transition-all ${groupMode === 'grouped'
+                                                                                    ? 'bg-card shadow text-card-foreground'
+                                                                                    : 'text-muted-foreground hover:text-card-foreground'
+                                                                                    }`}
+                                                                             aria-label={t('tasks.layout_grouped')}
+                                                                             aria-pressed={groupMode === 'grouped'}
+                                                                      >
+                                                                             <LayoutList className="w-4 h-4" />
+                                                                      </button>
+                                                                      <button
+                                                                             type="button"
+                                                                             onClick={() => setGroupMode('flat')}
+                                                                             className={`p-2 rounded-md transition-all ${groupMode === 'flat'
+                                                                                    ? 'bg-card shadow text-card-foreground'
+                                                                                    : 'text-muted-foreground hover:text-card-foreground'
+                                                                                    }`}
+                                                                             aria-label={t('tasks.layout_flat')}
+                                                                             aria-pressed={groupMode === 'flat'}
+                                                                      >
+                                                                             <List className="w-4 h-4" />
+                                                                      </button>
+                                                               </div>
+                                                        </div>
                                                  </div>
                                           </div>
                                    </div>
@@ -438,12 +476,12 @@ export default function TasksPage() {
                                                         </div>
                                                  ) : (
                                                         <div className="space-y-6 overflow-y-auto h-full pb-20">
-                                                                      {filter === 'priority' ? (
-                                                                             priorityGroups.map((group) => (
+                                                                      {groupMode === 'grouped' ? (
+                                                                             groupedSections.map((group) => (
                                                                                     <section
                                                                                            key={group.id}
                                                                                            className="rounded-xl border border-border bg-card p-4 shadow-sm"
-                                                                                           data-testid={`priority-task-group-${group.id}`}
+                                                                                           data-testid={`task-group-${group.id}`}
                                                                                     >
                                                                                            <div className="mb-3 border-b border-border pb-3">
                                                                                                   <h2

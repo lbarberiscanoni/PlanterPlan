@@ -284,7 +284,7 @@ describe('TasksPage — global tasks view + details dialog', () => {
         await user.click(await screen.findByRole('option', { name: 'Priority' }));
 
         expect(await screen.findByRole('heading', { name: 'Priority' })).toBeInTheDocument();
-        expect(screen.getByTestId('priority-task-group-milestone-m-launch')).toBeInTheDocument();
+        expect(screen.getByTestId('task-group-milestone-m-launch')).toBeInTheDocument();
         expect(screen.getByText('Launch Milestone')).toBeInTheDocument();
         expect(screen.queryByText('Empty Milestone')).not.toBeInTheDocument();
         expect(screen.queryByText('Future hidden task')).not.toBeInTheDocument();

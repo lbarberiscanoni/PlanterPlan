@@ -179,6 +179,9 @@
     "sort_aria": "Orden de clasificación",
     "sort_chronological": "Cronológica",
     "sort_alphabetical": "Alfabética",
+    "layout_label": "Diseño",
+    "layout_grouped": "Agrupar por hito",
+    "layout_flat": "Lista simple",
     "no_tasks": "Aún no hay tareas",
     "first_run": {
       "title": "Inicia tu primer proyecto",
