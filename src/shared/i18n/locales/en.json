@@ -168,8 +168,6 @@
     "search_empty": "No tasks match your search and filters.",
     "clear_search": "Clear task search",
     "result_count": "Showing {{shown}} of {{total}} work items",
-    "view_list": "List View",
-    "view_board": "Board View",
     "view_aria": "Task view",
     "sort_label": "Sort",
     "sort_aria": "Sort order",

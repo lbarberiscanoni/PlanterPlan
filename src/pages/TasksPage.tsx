@@ -5,15 +5,14 @@ import { useTranslation } from 'react-i18next';
 import { DndContext, closestCorners, useSensor, useSensors, PointerSensor, KeyboardSensor } from '@dnd-kit/core';
 import { sortableKeyboardCoordinates } from '@dnd-kit/sortable';
 import type { DragEndEvent } from '@dnd-kit/core';
-import type { TaskRow, TaskUpdate, Project } from '@/shared/db/app.types';
+import type { TaskRow, TaskUpdate } from '@/shared/db/app.types';
 import { planter } from '@/shared/api/planterClient';
 import { STALE_TIMES } from '@/shared/lib/react-query-config';
 import TaskItem from '@/features/tasks/components/TaskItem';
 import TaskDetailsPanel from '@/features/tasks/components/TaskDetailsPanel';
-import { FileText, Loader2, List, LayoutGrid, Plus, Search, X } from 'lucide-react';
+import { FileText, Loader2, Plus, Search, X } from 'lucide-react';
 import { Button } from '@/shared/ui/button';
 import { Input } from '@/shared/ui/input';
-import ProjectBoardView from '@/features/tasks/components/board/ProjectBoardView';
 import { useAuth } from '@/shared/contexts/auth-context';
 import { useTeam } from '@/features/people/hooks/useTeam';
 import { ROLES } from '@/shared/constants';
@@ -64,7 +63,6 @@ export default function TasksPage() {
        const findTask = useCallback((id: string) => tasks.find((t: TaskRow) => t.id === id), [tasks]);
        const invalidateTasks = useCallback(() => queryClient.invalidateQueries({ queryKey: ['tasks'] }), [queryClient]);
 
-       const [viewMode, setViewMode] = useState('list');
        const [filter, setFilter] = useState<TaskFilterKey>('all_tasks');
        const [sort, setSort] = useState<TaskSortKey>('chronological');
        const [selectedTask, setSelectedTask] = useState<TaskRow | null>(null);
@@ -281,10 +279,10 @@ export default function TasksPage() {
               [visibleTasks, withImmediateChildrenForStatus],
        );
        const priorityGroups = useMemo(
-              () => filter === 'priority' && viewMode === 'list'
+              () => filter === 'priority'
                      ? buildPriorityTaskGroups({ tasks, candidateTasks: visibleTaskRows })
                      : [],
-              [filter, tasks, viewMode, visibleTaskRows],
+              [filter, tasks, visibleTaskRows],
        );
 
        const sensors = useSensors(
@@ -450,29 +448,6 @@ export default function TasksPage() {
                                                                       )}
                                                                </div>
                                                         </div>
-
-                                                        <div className="bg-muted p-1 rounded-lg flex items-center space-x-1 self-end">
-                                                               <button
-                                                                      onClick={() => setViewMode('list')}
-                                                                      className={`p-2 rounded-md transition-all ${viewMode === 'list'
-                                                                             ? 'bg-card shadow text-card-foreground'
-                                                                             : 'text-muted-foreground hover:text-card-foreground'
-                                                                             }`}
-                                                                      aria-label={t('tasks.view_list')}
-                                                               >
-                                                                      <List className="w-4 h-4" />
-                                                               </button>
-                                                               <button
-                                                                      onClick={() => setViewMode('board')}
-                                                                      className={`p-2 rounded-md transition-all ${viewMode === 'board'
-                                                                             ? 'bg-card shadow text-card-foreground'
-                                                                             : 'text-muted-foreground hover:text-card-foreground'
-                                                                             }`}
-                                                                      aria-label={t('tasks.view_board')}
-                                                               >
-                                                                      <LayoutGrid className="w-4 h-4" />
-                                                               </button>
-                                                        </div>
                                                  </div>
                                           </div>
                                    </div>
@@ -511,8 +486,7 @@ export default function TasksPage() {
                                                                )}
                                                         </div>
                                                  ) : (
-                                                        viewMode === 'list' ? (
-                                                               <div className="space-y-6 overflow-y-auto h-full pb-20">
+                                                        <div className="space-y-6 overflow-y-auto h-full pb-20">
                                                                       {filter === 'priority' ? (
                                                                              priorityGroups.map((group) => (
                                                                                     <section
@@ -583,16 +557,7 @@ export default function TasksPage() {
                                                                                     })}
                                                                              </div>
                                                                       )}
-                                                               </div>
-                                                        ) : (
-                                                               <div className="h-full">
-                                                                      <ProjectBoardView
-                                                                             project={{ id: 'my-tasks-root' } as Project}
-                                                                             childrenTasks={visibleTasks}
-                                                                             handleTaskClick={handleTaskClick}
-                                                                      />
-                                                               </div>
-                                                        )
+                                                        </div>
                                                  )}
                                           </div>
                                    </div>

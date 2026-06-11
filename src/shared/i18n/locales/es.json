@@ -174,8 +174,6 @@
     "search_empty": "Ninguna tarea coincide con tu búsqueda y filtros.",
     "clear_search": "Borrar búsqueda de tareas",
     "result_count": "Mostrando {{shown}} de {{total}} elementos de trabajo",
-    "view_list": "Vista de lista",
-    "view_board": "Vista de tablero",
     "view_aria": "Vista de tareas",
     "sort_label": "Ordenar",
     "sort_aria": "Orden de clasificación",
