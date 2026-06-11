@@ -58,6 +58,7 @@ export function useCreateProject() {
             queryClient.invalidateQueries({ queryKey: ['projects'] });
             queryClient.invalidateQueries({ queryKey: ['userProjects'] });
             queryClient.invalidateQueries({ queryKey: ['allTasks'] });
+            queryClient.invalidateQueries({ queryKey: ['tasks'] });
         }
     });
 }
@@ -94,6 +95,7 @@ export function useUpdateProject() {
             queryClient.invalidateQueries({ queryKey: ['project', variables.projectId], refetchType: 'active' });
             queryClient.invalidateQueries({ queryKey: ['projectHierarchy', variables.projectId], refetchType: 'active' });
             queryClient.invalidateQueries({ queryKey: ['allTasks'], refetchType: 'active' });
+            queryClient.invalidateQueries({ queryKey: ['tasks'], refetchType: 'active' });
         }
     });
 }
@@ -110,6 +112,7 @@ export function useDeleteProject() {
             queryClient.invalidateQueries({ queryKey: ['projects'] });
             queryClient.invalidateQueries({ queryKey: ['userProjects'] });
             queryClient.invalidateQueries({ queryKey: ['allTasks'] });
+            queryClient.invalidateQueries({ queryKey: ['tasks'] });
         }
     });
 }
@@ -126,6 +129,8 @@ export function useSetProjectArchived() {
             queryClient.invalidateQueries({ queryKey: ['projects'] });
             queryClient.invalidateQueries({ queryKey: ['userProjects'] });
             queryClient.invalidateQueries({ queryKey: ['project', variables.projectId] });
+            queryClient.invalidateQueries({ queryKey: ['allTasks'] });
+            queryClient.invalidateQueries({ queryKey: ['tasks'] });
         }
     });
 }

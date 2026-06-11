@@ -171,6 +171,7 @@ export default function EditProjectModal({ project, isOpen, onClose }: EditProje
    onClose();
   } catch (error) {
    console.error('[EditProjectModal] Failed to update project:', error);
+   toast.error(t('projects.edit_modal.project_save_failed_toast'));
   }
  };
 

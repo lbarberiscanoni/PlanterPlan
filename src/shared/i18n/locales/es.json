@@ -547,6 +547,7 @@
       "project_unarchived_toast": "Proyecto desarchivado.",
       "archive_toggle_failed": "No se pudo actualizar el estado de archivado.",
       "project_saved_toast": "Configuración del proyecto guardada.",
+      "project_save_failed_toast": "No se pudo guardar la configuración del proyecto. Inténtalo de nuevo.",
       "danger_zone": "Zona peligrosa",
       "delete_heading": "Eliminar proyecto",
       "delete_description": "Elimina permanentemente este proyecto y todas sus tareas.",

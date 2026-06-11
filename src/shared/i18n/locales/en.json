@@ -541,6 +541,7 @@
       "project_unarchived_toast": "Project unarchived.",
       "archive_toggle_failed": "Failed to update archive status.",
       "project_saved_toast": "Project settings saved.",
+      "project_save_failed_toast": "Couldn't save project settings. Please try again.",
       "danger_zone": "Danger Zone",
       "delete_heading": "Delete Project",
       "delete_description": "Permanently remove this project and all its tasks.",
