@@ -177,7 +177,7 @@ export default function EditProjectModal({ project, isOpen, onClose }: EditProje
  return (
   <>
   <Dialog open={isOpen} onOpenChange={(o) => { if (!o) void guardedClose(); }}>
-   <DialogContent data-testid="edit-project-modal" className="sm:max-w-[500px]">
+   <DialogContent data-testid="edit-project-modal" className="sm:max-w-[500px] max-h-[85vh] overflow-y-auto">
     <DialogHeader>
      <DialogTitle>{t('projects.edit_modal.title')}</DialogTitle>
      <DialogDescription>{t('projects.edit_modal.description')}</DialogDescription>
