@@ -1,6 +1,6 @@
 BEGIN;
 
-SELECT plan(16);
+SELECT plan(19);
 
 TRUNCATE TABLE
     public.activity_log,
@@ -131,6 +131,26 @@ SELECT lives_ok(
        SET supervisor_email = 'supervisor@example.com'
        WHERE id = '33333333-3333-3333-3333-333333333501' $$,
     'project team memberscan update supervisor report delivery on protected cloned project roots'
+);
+
+SELECT lives_ok(
+    $$ UPDATE public.tasks
+       SET title = 'Renamed Project', description = 'New project blurb'
+       WHERE id = '33333333-3333-3333-3333-333333333501' $$,
+    'project team members can rename and re-describe the cloned project root'
+);
+
+SELECT is(
+    (SELECT title FROM public.tasks WHERE id = '33333333-3333-3333-3333-333333333501'),
+    'Renamed Project',
+    'cloned project root rename persists'
+);
+
+SELECT throws_like(
+    $$ UPDATE public.tasks SET cloned_from_task_id = NULL
+       WHERE id = '33333333-3333-3333-3333-333333333501' $$,
+    '%protected template scaffold fields cannot be changed%',
+    'cloned project root provenance stays locked even though title is editable'
 );
 
 SELECT lives_ok(
