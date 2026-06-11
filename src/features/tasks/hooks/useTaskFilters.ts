@@ -4,7 +4,6 @@ import {
  deriveUrgencyForProject,
  compareDateAsc,
  getNow,
- toIsoDate,
  type CheckpointRootLike,
 } from '@/shared/lib/date-engine/index';
 import { filterPriorityTasks } from '@/features/tasks/lib/priority-tasks';
@@ -21,11 +20,6 @@ export type TaskFilterKey =
  | 'milestones';
 
 export type TaskSortKey = 'chronological' | 'alphabetical';
-
-export interface DueDateRange {
- start: string | null;
- end: string | null;
-}
 
 const DEFAULT_DUE_SOON_THRESHOLD = 3;
 
@@ -67,23 +61,7 @@ export interface UseTaskFiltersArgs {
  sort: TaskSortKey;
  currentUserId?: string | null;
  now?: Date;
- /** Wave 33: due-date range picker; open-ended when a bound is null. ANDed with the filter predicate. */
- dueDateRange?: DueDateRange;
 }
-
-const withinDueDateRange = (
- task: TaskRow,
- range: DueDateRange | undefined,
-): boolean => {
- if (!range) return true;
- const { start, end } = range;
- if (start === null && end === null) return true;
- const taskDue = toIsoDate(task.due_date);
- if (!taskDue) return false;
- if (start !== null && taskDue < start) return false;
- if (end !== null && taskDue > end) return false;
- return true;
-};
 
 export const filterAndSortTasks = ({
  tasks,
@@ -91,7 +69,6 @@ export const filterAndSortTasks = ({
  sort,
  currentUserId = null,
  now = getNow(),
- dueDateRange,
 }: UseTaskFiltersArgs): TaskRow[] => {
  const thresholds = buildThresholdMap(tasks);
  const rootById = new Map<string, CheckpointRootLike>();
@@ -148,10 +125,6 @@ export const filterAndSortTasks = ({
    filtered = instanceChildren;
  }
 
- if (dueDateRange && (dueDateRange.start !== null || dueDateRange.end !== null)) {
-  filtered = filtered.filter((t) => withinDueDateRange(t, dueDateRange));
- }
-
  const sorted = [...filtered];
  if (sort === 'alphabetical') {
   sorted.sort((a, b) => (a.title ?? '').localeCompare(b.title ?? ''));
@@ -163,10 +136,10 @@ export const filterAndSortTasks = ({
 };
 
 export const useTaskFilters = (args: UseTaskFiltersArgs): TaskRow[] => {
- const { tasks, filter, sort, currentUserId, now, dueDateRange } = args;
+ const { tasks, filter, sort, currentUserId, now } = args;
  return useMemo(
-  () => filterAndSortTasks({ tasks, filter, sort, currentUserId, now, dueDateRange }),
-  [tasks, filter, sort, currentUserId, now, dueDateRange],
+  () => filterAndSortTasks({ tasks, filter, sort, currentUserId, now }),
+  [tasks, filter, sort, currentUserId, now],
  );
 };
 

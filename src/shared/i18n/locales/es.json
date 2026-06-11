@@ -223,12 +223,6 @@
         "completed": "Aún no hay tareas completadas.",
         "all_tasks": "No hay tareas en ninguno de tus proyectos.",
         "milestones": "No se han encontrado hitos."
-      },
-      "dateRange": {
-        "label": "Vencimiento entre",
-        "start_aria": "Inicio del rango de fechas de vencimiento",
-        "end_aria": "Fin del rango de fechas de vencimiento",
-        "clear": "Borrar"
       }
     },
     "dueBadge": {

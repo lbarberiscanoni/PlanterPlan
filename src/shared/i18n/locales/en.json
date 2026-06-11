@@ -217,12 +217,6 @@
         "completed": "No completed tasks yet.",
         "all_tasks": "No tasks in any of your projects.",
         "milestones": "No milestones found."
-      },
-      "dateRange": {
-        "label": "Due between",
-        "start_aria": "Due-date range start",
-        "end_aria": "Due-date range end",
-        "clear": "Clear"
       }
     },
     "dueBadge": {

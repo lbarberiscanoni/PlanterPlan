@@ -10,11 +10,6 @@ Feature: Mobile Tasks
     Then the mobile task list is visible
     And today's tasks are listed
 
-  Scenario: Empty state when no tasks for today
-    Given the user has no tasks due today
-    When the user navigates to the tasks page
-    Then an empty state message is displayed
-
   Scenario: Completing a task from the agenda
     When the user navigates to the tasks page
     And the user marks a task as complete

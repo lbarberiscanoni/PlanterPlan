@@ -21,7 +21,6 @@ import { useConfirm } from '@/shared/ui/confirm-dialog-context';
 import { toast } from 'sonner';
 import {
        useTaskFilters,
-       type DueDateRange,
        type TaskFilterKey,
        type TaskSortKey,
 } from '@/features/tasks/hooks/useTaskFilters';
@@ -66,19 +65,8 @@ export default function TasksPage() {
        const [filter, setFilter] = useState<TaskFilterKey>('all_tasks');
        const [sort, setSort] = useState<TaskSortKey>('chronological');
        const [selectedTask, setSelectedTask] = useState<TaskRow | null>(null);
-       const [dueStart, setDueStart] = useState<string>('');
-       const [dueEnd, setDueEnd] = useState<string>('');
        const [searchQuery, setSearchQuery] = useState<string>('');
-       const dueDateRange = useMemo<DueDateRange>(
-              () => ({ start: dueStart || null, end: dueEnd || null }),
-              [dueStart, dueEnd],
-       );
-       const hasDueRange = dueDateRange.start !== null || dueDateRange.end !== null;
        const effectiveSort: TaskSortKey = filter === 'priority' ? 'chronological' : sort;
-       const clearDueRange = useCallback(() => {
-              setDueStart('');
-              setDueEnd('');
-       }, []);
 
        const updateTask = useCallback(
               async (taskId: string, updates: Record<string, unknown>) => {
@@ -230,7 +218,7 @@ export default function TasksPage() {
               () => tasks.filter((task) => task.origin === 'instance' && task.parent_task_id === null).length,
               [tasks],
        );
-       const filteredTasks = useTaskFilters({ tasks, filter, sort: effectiveSort, dueDateRange, currentUserId });
+       const filteredTasks = useTaskFilters({ tasks, filter, sort: effectiveSort, currentUserId });
        const normalizedSearchQuery = searchQuery.trim().toLowerCase();
        const visibleTasks = useMemo(() => {
               if (!normalizedSearchQuery) return filteredTasks;
@@ -252,8 +240,7 @@ export default function TasksPage() {
               && actionableTaskCount === 0
               && visibleTasks.length === 0
               && filter === 'all_tasks'
-              && !normalizedSearchQuery
-              && !hasDueRange;
+              && !normalizedSearchQuery;
        const childrenByParentForStatus = useMemo(() => {
               const map = new Map<string, TaskRow[]>();
               for (const task of tasks) {
@@ -412,42 +399,6 @@ export default function TasksPage() {
                                                                       </Select>
                                                                </div>
                                                         )}
-
-                                                        <div className="flex flex-col gap-1">
-                                                               <span className="text-xs font-medium text-muted-foreground">
-                                                                      {t('tasks.filters.dateRange.label')}
-                                                               </span>
-                                                               <div className="flex items-center gap-2">
-                                                                      <input
-                                                                             type="date"
-                                                                             value={dueStart}
-                                                                             onChange={(e) => setDueStart(e.target.value)}
-                                                                             aria-label={t('tasks.filters.dateRange.start_aria')}
-                                                                             className="h-10 rounded-md border border-input bg-card px-2 text-sm"
-                                                                             data-testid="tasks-due-range-start"
-                                                                      />
-                                                                      <span className="text-muted-foreground text-sm">–</span>
-                                                                      <input
-                                                                             type="date"
-                                                                             value={dueEnd}
-                                                                             onChange={(e) => setDueEnd(e.target.value)}
-                                                                             aria-label={t('tasks.filters.dateRange.end_aria')}
-                                                                             className="h-10 rounded-md border border-input bg-card px-2 text-sm"
-                                                                             data-testid="tasks-due-range-end"
-                                                                      />
-                                                                      {hasDueRange && (
-                                                                             <button
-                                                                                    type="button"
-                                                                                    onClick={clearDueRange}
-                                                                                    className="h-10 w-10 flex items-center justify-center rounded-md border border-input bg-card text-muted-foreground hover:text-card-foreground"
-                                                                                    aria-label={t('tasks.filters.dateRange.clear')}
-                                                                                    data-testid="tasks-due-range-clear"
-                                                                             >
-                                                                                    <X className="w-4 h-4" />
-                                                                             </button>
-                                                                      )}
-                                                               </div>
-                                                        </div>
                                                  </div>
                                           </div>
                                    </div>

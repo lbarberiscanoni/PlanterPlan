@@ -2,7 +2,6 @@ import { createBdd } from 'playwright-bdd';
 import { expect, type Page } from '@playwright/test';
 
 const { Given, When, Then } = createBdd();
-let filterTasksToToday = false;
 
 function taskRows(page: Page) {
   return page.locator('[data-testid="task-item"]').or(page.getByRole('treeitem'));
@@ -248,19 +247,9 @@ Then('a loading indicator with appropriate ARIA attributes is present', async ({
 
 // ── Mobile ────────────────────────────────────────────────────────────────
 
-Given('the user has no tasks due today', async () => {
-  filterTasksToToday = true;
-});
-
 When('the user navigates to the tasks page', async ({ page }) => {
   await page.goto('/tasks');
   await page.waitForLoadState('networkidle');
-  if (filterTasksToToday) {
-    const today = new Date().toISOString().slice(0, 10);
-    await page.locator('[data-testid="tasks-due-range-start"]').fill(today);
-    await page.locator('[data-testid="tasks-due-range-end"]').fill(today);
-    filterTasksToToday = false;
-  }
 });
 
 Then('the mobile task list is visible', async ({ page }) => {

@@ -413,30 +413,4 @@ describe('TasksPage — global tasks view + details dialog', () => {
             expect(screen.getAllByText('Alpha Project').length).toBeGreaterThan(0);
         });
     });
-
-    it('applies the due-date range filter via the inline date inputs', async () => {
-        renderTasksPage();
-
-        await screen.findByText('Buy a domain');
-        await screen.findByText('Write welcome letter');
-
-        const start = screen.getByTestId('tasks-due-range-start') as HTMLInputElement;
-        const end = screen.getByTestId('tasks-due-range-end') as HTMLInputElement;
-
-        fireEvent.change(start, { target: { value: '2026-04-01' } });
-        fireEvent.change(end, { target: { value: '2026-04-30' } });
-
-        await waitFor(() => {
-            expect(screen.queryByText('Write welcome letter')).not.toBeInTheDocument();
-        });
-        expect(screen.getByText('Buy a domain')).toBeInTheDocument();
-
-        // Clearing restores the original list.
-        const clear = screen.getByTestId('tasks-due-range-clear');
-        fireEvent.click(clear);
-
-        await waitFor(() => {
-            expect(screen.getByText('Write welcome letter')).toBeInTheDocument();
-        });
-    });
 });
