@@ -62,6 +62,20 @@ function getTemplateSeedKey(settings: TaskRow['settings']) {
     return typeof settings.seed_key === 'string' ? settings.seed_key : null;
 }
 
+/**
+ * Only published templates can be cloned into a new project — clone_project_template
+ * rejects unpublished `template`-origin tasks for non-admins with "Access denied: You
+ * do not have permission to access this template." Templates are publicly *readable*,
+ * so an unpublished draft would otherwise show up here and fail on submit. Hide them.
+ */
+function isTemplatePublished(settings: TaskRow['settings']) {
+    if (!settings || typeof settings !== 'object' || Array.isArray(settings)) {
+        return false;
+    }
+
+    return settings.published === true || settings.published === 'true';
+}
+
 function resolveInitialTemplateId(
     initialValues: ProjectCreationInitialValues | undefined,
     templates: readonly ProjectTemplateOption[],
@@ -109,9 +123,10 @@ export default function CreateProjectModal({
         buildInitialFormData(defaultStartDate, initialValues, templates)
     ));
 
-    // Filter templates that are root-level (no parent) for project creation
+    // Root-level (no parent) templates that are also published — only published
+    // templates are clonable into a new project (see clone_project_template).
     const rootTemplates = useMemo(() => {
-        return templates.filter((t) => !t.parent_task_id);
+        return templates.filter((t) => !t.parent_task_id && isTemplatePublished(t.settings));
     }, [templates]);
 
     useEffect(() => {
