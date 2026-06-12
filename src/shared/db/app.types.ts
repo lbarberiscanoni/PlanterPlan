@@ -185,8 +185,6 @@ export interface TaskSettings {
     /** Wave 21: idempotency marker stamped by nightly-sync's recurrence pass. */
     spawnedOn?: string;
     due_soon_threshold?: number;
-    /** Wave 22 + PR 3: when true, users with the `coach` project role may update status/progress only. */
-    is_coaching_task?: boolean;
     /** Wave 24: when true, completing this instance task opens a dialog offering Master Library follow-ups (cloned as siblings). */
     is_strategy_template?: boolean;
     /** Wave 29: on root tasks only — selects the project type ('date' = date-driven scheduling, default; 'checkpoint' = sequential phase-unlock). */
