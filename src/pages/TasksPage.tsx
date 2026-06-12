@@ -48,6 +48,10 @@ const FILTER_KEYS: TaskFilterKey[] = [
        'my_tasks', 'priority', 'overdue', 'due_soon', 'current', 'not_yet_due', 'completed', 'all_tasks', 'milestones',
 ];
 
+// Sentinel for the "all projects" option in the project-scope selector — Radix
+// Select items can't carry an empty-string value, so map it to/from null.
+const ALL_PROJECTS = '__all__';
+
 export default function TasksPage() {
        const { t } = useTranslation();
        const queryClient = useQueryClient();
@@ -67,6 +71,7 @@ export default function TasksPage() {
        const [sort, setSort] = useState<TaskSortKey>('chronological');
        const [selectedTask, setSelectedTask] = useState<TaskRow | null>(null);
        const [searchQuery, setSearchQuery] = useState<string>('');
+       const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
        const effectiveSort: TaskSortKey = filter === 'priority' ? 'chronological' : sort;
 
        const updateTask = useCallback(
@@ -228,6 +233,14 @@ export default function TasksPage() {
               }
               return map;
        }, [tasks, projectRoots]);
+       // Project options for the scope selector, sorted by title. Built from the
+       // same root-id → title map so it stays consistent with group labels.
+       const projectOptions = useMemo(
+              () => Array.from(projectTitleByRootId.entries())
+                     .map(([id, title]) => ({ id, title }))
+                     .sort((a, b) => a.title.localeCompare(b.title)),
+              [projectTitleByRootId],
+       );
        const actionableTaskCount = useMemo(
               () => tasks.filter((task) => task.origin === 'instance' && task.parent_task_id !== null).length,
               [tasks],
@@ -236,7 +249,13 @@ export default function TasksPage() {
               () => tasks.filter((task) => task.origin === 'instance' && task.parent_task_id === null).length,
               [tasks],
        );
-       const filteredTasks = useTaskFilters({ tasks, filter, sort: effectiveSort, currentUserId });
+       const filteredTasks = useTaskFilters({
+              tasks,
+              filter,
+              sort: effectiveSort,
+              currentUserId,
+              projectScopeId: filter === 'my_tasks' ? null : selectedProjectId,
+       });
        const normalizedSearchQuery = searchQuery.trim().toLowerCase();
        const visibleTasks = useMemo(() => {
               if (!normalizedSearchQuery) return filteredTasks;
@@ -417,6 +436,26 @@ export default function TasksPage() {
                                                                       </SelectContent>
                                                                </Select>
                                                         </div>
+
+                                                        {filter !== 'my_tasks' && (
+                                                               <div className="flex flex-col gap-1">
+                                                                      <label htmlFor="task-project-scope" className="text-xs font-medium text-muted-foreground">{t('tasks.project_scope_label')}</label>
+                                                                      <Select
+                                                                             value={selectedProjectId ?? ALL_PROJECTS}
+                                                                             onValueChange={(v) => setSelectedProjectId(v === ALL_PROJECTS ? null : v)}
+                                                                      >
+                                                                             <SelectTrigger id="task-project-scope" className="w-[200px] bg-card" aria-label={t('tasks.project_scope_aria')}>
+                                                                                    <SelectValue />
+                                                                             </SelectTrigger>
+                                                                             <SelectContent>
+                                                                                    <SelectItem value={ALL_PROJECTS}>{t('tasks.project_scope_all')}</SelectItem>
+                                                                                    {projectOptions.map((p) => (
+                                                                                           <SelectItem key={p.id} value={p.id}>{p.title}</SelectItem>
+                                                                                    ))}
+                                                                             </SelectContent>
+                                                                      </Select>
+                                                               </div>
+                                                        )}
 
                                                         {filter !== 'priority' && (
                                                                <div className="flex flex-col gap-1">

@@ -5,6 +5,8 @@ import {
   getNow,
   toIsoDate,
 } from '@/shared/lib/date-engine';
+import { compareNullablePosition, findNearestContainer } from '@/features/tasks/lib/task-tree';
+import { computeProjectTaskNumbers } from '@/features/tasks/lib/task-numbering';
 
 export const PRIORITY_DUE_SOON_DAYS = 7;
 
@@ -51,12 +53,6 @@ export interface BuildPriorityTaskGroupsArgs {
 }
 
 const utcIsoDate = (date: Date): string => toIsoDate(date) ?? '';
-
-const compareNullablePosition = (a: number | null | undefined, b: number | null | undefined): number => {
-  const left = a ?? Number.MAX_SAFE_INTEGER;
-  const right = b ?? Number.MAX_SAFE_INTEGER;
-  return left - right;
-};
 
 const compareTitle = (a: string | null | undefined, b: string | null | undefined): number =>
   (a ?? '').localeCompare(b ?? '');
@@ -118,28 +114,6 @@ const findNearestMilestone = (task: TaskRow, taskById: Map<string, TaskRow>): Ta
   return null;
 };
 
-/**
- * Nearest ancestor that is a grouping container: a `milestone` (preferred —
- * always closer) or, when there is no milestone above the task, the `phase`.
- * Lets the grouped view fall back to the phase for work-items placed directly
- * under a phase (depth-2), instead of dumping them in a "No milestone" bucket.
- */
-const findNearestContainer = (task: TaskRow, taskById: Map<string, TaskRow>): TaskRow | null => {
-  let parentId = task.parent_task_id;
-  const seen = new Set<string>();
-
-  while (parentId && !seen.has(parentId)) {
-    seen.add(parentId);
-    const parent = taskById.get(parentId);
-    if (!parent) return null;
-    const type = parent.task_type?.toLowerCase();
-    if (type === 'milestone' || type === 'phase') return parent;
-    parentId = parent.parent_task_id;
-  }
-
-  return null;
-};
-
 const getProject = (task: TaskRow, taskById: Map<string, TaskRow>): TaskRow | null => {
   if (task.root_id) return taskById.get(task.root_id) ?? null;
   return null;
@@ -166,6 +140,7 @@ export const getTaskMilestoneContext = (task: TaskRow, tasks: TaskRow[]): TaskMi
 const groupCandidatesByMilestone = (
   candidates: TaskRow[],
   taskById: Map<string, TaskRow>,
+  numberByTaskId: Map<string, string>,
 ): PriorityTaskGroup[] => {
   const groups = new Map<string, Omit<PriorityTaskGroup, 'tasks'> & { tasks: TaskRow[] }>();
 
@@ -212,7 +187,7 @@ const groupCandidatesByMilestone = (
 
       return compareTitle(a.title, b.title);
     })
-    .map((group, groupIndex) => {
+    .map((group) => {
       const sortedTasks = [...group.tasks].sort((a, b) => {
         const dateCompare = compareDateAsc(a.due_date, b.due_date);
         if (dateCompare !== 0) return dateCompare;
@@ -225,9 +200,10 @@ const groupCandidatesByMilestone = (
 
       return {
         ...group,
-        tasks: sortedTasks.map((task, taskIndex) => ({
+        tasks: sortedTasks.map((task) => ({
           task,
-          displayNumber: `${groupIndex + 1}.${taskIndex + 1}`,
+          // Stable, view-independent number from the full-project-tree numbering.
+          displayNumber: numberByTaskId.get(task.id) ?? '',
         })),
       };
     });
@@ -242,7 +218,7 @@ export const buildPriorityTaskGroups = ({
   const candidates = (candidateTasks ?? tasks).filter(
     (task) => isPriorityTaskCandidate(task) && isPriorityQualifyingTask(task, now),
   );
-  return groupCandidatesByMilestone(candidates, taskById);
+  return groupCandidatesByMilestone(candidates, taskById, computeProjectTaskNumbers(tasks));
 };
 
 export interface BuildMilestoneTaskGroupsArgs {
@@ -278,7 +254,7 @@ export const buildMilestoneTaskGroups = ({
     const isStructural = type === 'project' || type === 'phase' || type === 'milestone';
     return !(isStructural && parentIds.has(task.id));
   });
-  return groupCandidatesByMilestone(leaves, taskById);
+  return groupCandidatesByMilestone(leaves, taskById, computeProjectTaskNumbers(tasks));
 };
 
 export const filterPriorityTasks = (tasks: TaskRow[], now: Date = getNow()): TaskRow[] =>

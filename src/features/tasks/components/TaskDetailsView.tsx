@@ -64,6 +64,7 @@ interface TaskDetailsViewProps {
 const TaskDetailsView = ({
     task,
     onAddChildTask,
+    onEditTask,
     onDeleteTask,
     onTaskUpdated,
     canEdit = true,
@@ -322,6 +323,17 @@ const TaskDetailsView = ({
 
             {/* Action Buttons */}
             <div className="flex gap-4 mb-6">
+                {onEditTask && canEdit && (
+                    <button
+                        type="button"
+                        onClick={() => onEditTask(task)}
+                        data-testid="edit-task-btn"
+                        className="flex-1 py-3 px-4 bg-brand-600 text-white rounded-lg shadow-sm hover:bg-brand-700 hover:shadow-md transition-all font-medium text-sm"
+                    >
+                        {t('tasks.edit_task')}
+                    </button>
+                )}
+
                 <button
                     type="button"
                     onClick={openEmailDialog}

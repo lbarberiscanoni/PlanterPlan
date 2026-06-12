@@ -61,6 +61,12 @@ export interface UseTaskFiltersArgs {
  sort: TaskSortKey;
  currentUserId?: string | null;
  now?: Date;
+ /**
+  * When set, scopes every view EXCEPT `my_tasks` to a single project root.
+  * `my_tasks` intentionally stays cross-project (a planter/PM tracking their
+  * own work across all projects). Null/undefined = all projects.
+  */
+ projectScopeId?: string | null;
 }
 
 export const filterAndSortTasks = ({
@@ -69,6 +75,7 @@ export const filterAndSortTasks = ({
  sort,
  currentUserId = null,
  now = getNow(),
+ projectScopeId = null,
 }: UseTaskFiltersArgs): TaskRow[] => {
  const thresholds = buildThresholdMap(tasks);
  const rootById = new Map<string, CheckpointRootLike>();
@@ -129,6 +136,13 @@ export const filterAndSortTasks = ({
    filtered = instanceChildren;
  }
 
+ // Per-project scope: applied after the switch so it composes with every view
+ // (including the `priority` builder). `my_tasks` is exempt — it stays
+ // cross-project by design.
+ if (projectScopeId && filter !== 'my_tasks') {
+  filtered = filtered.filter((t) => t.root_id === projectScopeId);
+ }
+
  const sorted = [...filtered];
  if (sort === 'alphabetical') {
   sorted.sort((a, b) => (a.title ?? '').localeCompare(b.title ?? ''));
@@ -140,10 +154,10 @@ export const filterAndSortTasks = ({
 };
 
 export const useTaskFilters = (args: UseTaskFiltersArgs): TaskRow[] => {
- const { tasks, filter, sort, currentUserId, now } = args;
+ const { tasks, filter, sort, currentUserId, now, projectScopeId } = args;
  return useMemo(
-  () => filterAndSortTasks({ tasks, filter, sort, currentUserId, now }),
-  [tasks, filter, sort, currentUserId, now],
+  () => filterAndSortTasks({ tasks, filter, sort, currentUserId, now, projectScopeId }),
+  [tasks, filter, sort, currentUserId, now, projectScopeId],
  );
 };
 

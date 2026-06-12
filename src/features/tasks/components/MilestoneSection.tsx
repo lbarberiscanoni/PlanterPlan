@@ -47,6 +47,8 @@ export interface MilestoneSectionProps {
     presentUsers?: PresenceState[];
     /** Wave 27: current viewer's id so TaskItem hides its own focus chip. */
     currentUserId?: string | null;
+    /** Stable per-project work-item numbers (task id → "C"/"C.k") from `task-numbering`. */
+    numberByTaskId?: Map<string, string>;
 }
 
 export default function MilestoneSection({
@@ -67,6 +69,7 @@ export default function MilestoneSection({
     dropIndicator,
     presentUsers = [],
     currentUserId = null,
+    numberByTaskId,
 }: MilestoneSectionProps) {
     const { t } = useTranslation();
     const [isExpanded, setIsExpanded] = useState(true);
@@ -125,7 +128,14 @@ export default function MilestoneSection({
                     </div>
 
                     <div className="text-left">
-                        <h4 className="font-semibold text-slate-900">{milestone.title}</h4>
+                        <h4 className="font-semibold text-slate-900">
+                            {numberByTaskId?.get(milestone.id) && (
+                                <span className="mr-2 font-mono text-xs font-semibold text-muted-foreground">
+                                    {numberByTaskId.get(milestone.id)}
+                                </span>
+                            )}
+                            {milestone.title}
+                        </h4>
                         {milestone.purpose && (
                             <p className="text-sm text-slate-500 mt-0.5 line-clamp-1">{milestone.purpose}</p>
                         )}
@@ -179,14 +189,6 @@ export default function MilestoneSection({
                             </div>
                             <span className="text-sm font-medium text-slate-600 w-12 text-right">{progress}%</span>
                         </div>
-                    )}
-                    {milestone.is_locked && (
-                        <Badge
-                            variant="outline"
-                            className="text-xs px-1.5 h-5 bg-slate-50 text-slate-500 border-slate-200"
-                        >
-                            {t('projects.locked_label')}
-                        </Badge>
                     )}
                     <Badge variant="secondary" className="bg-slate-100 text-slate-600">
                         {completedTasks}/{totalTasks}
@@ -251,6 +253,7 @@ export default function MilestoneSection({
                                                     dropIndicator={dropIndicator}
                                                     presentUsers={presentUsers}
                                                     currentUserId={currentUserId}
+                                                    displayNumber={numberByTaskId?.get(task.id) ?? null}
                                                 />
                                             </div>
                                         ))}

@@ -439,3 +439,54 @@ describe('filterAndSortTasks — per-project threshold', () => {
   expect(notYetDue.map((t) => t.id)).toEqual(['checkpoint-task']);
  });
 });
+
+describe('filterAndSortTasks — projectScopeId', () => {
+ // Two instance projects, each with one overdue task and one of the current
+ // user's assigned tasks.
+ function buildTwoProjects() {
+  const projectA = makeProject({ id: 'proj-a', origin: 'instance', settings: { due_soon_threshold: 3 } });
+  const projectB = makeProject({ id: 'proj-b', origin: 'instance', settings: { due_soon_threshold: 3 } });
+  const aOverdue = makeTask({
+   id: 'a-overdue', parent_task_id: 'proj-a', root_id: 'proj-a', origin: 'instance',
+   task_type: 'task', due_date: '2026-04-10',
+  });
+  const bOverdue = makeTask({
+   id: 'b-overdue', parent_task_id: 'proj-b', root_id: 'proj-b', origin: 'instance',
+   task_type: 'task', due_date: '2026-04-10',
+  });
+  const aMine = makeTask({
+   id: 'a-mine', parent_task_id: 'proj-a', root_id: 'proj-a', origin: 'instance',
+   task_type: 'task', assignee_id: USER_ID, due_date: '2026-05-01',
+  });
+  const bMine = makeTask({
+   id: 'b-mine', parent_task_id: 'proj-b', root_id: 'proj-b', origin: 'instance',
+   task_type: 'task', assignee_id: USER_ID, due_date: '2026-05-01',
+  });
+  return [projectA, projectB, aOverdue, bOverdue, aMine, bMine];
+ }
+
+ it('scopes a non-my_tasks view to the selected project root', () => {
+  const tasks = buildTwoProjects();
+  const result = filterAndSortTasks({
+   tasks, filter: 'overdue', sort: 'chronological', now: NOW, projectScopeId: 'proj-a',
+  });
+  expect(result.map((t) => t.id)).toEqual(['a-overdue']);
+ });
+
+ it('returns all projects when projectScopeId is null', () => {
+  const tasks = buildTwoProjects();
+  const result = filterAndSortTasks({
+   tasks, filter: 'overdue', sort: 'chronological', now: NOW, projectScopeId: null,
+  });
+  expect(result.map((t) => t.id).sort()).toEqual(['a-overdue', 'b-overdue'].sort());
+ });
+
+ it('ignores the scope for my_tasks — it stays cross-project', () => {
+  const tasks = buildTwoProjects();
+  const result = filterAndSortTasks({
+   tasks, filter: 'my_tasks', sort: 'chronological', now: NOW,
+   currentUserId: USER_ID, projectScopeId: 'proj-a',
+  });
+  expect(result.map((t) => t.id).sort()).toEqual(['a-mine', 'b-mine'].sort());
+ });
+});

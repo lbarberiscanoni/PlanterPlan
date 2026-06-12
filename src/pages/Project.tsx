@@ -9,6 +9,7 @@ import { compareDateAsc, toIsoDate } from '@/shared/lib/date-engine';
 import { collectSpawnedTemplateIds } from '@/shared/lib/tree-helpers';
 import { constructCreatePayload, constructUpdatePayload } from '@/shared/lib/date-engine/payloadHelpers';
 import { buildTemplateFlagSettingsPatch } from '@/features/tasks/lib/task-form-flags';
+import { computeProjectTaskNumbers } from '@/features/tasks/lib/task-numbering';
 import { planter } from '@/shared/api/planterClient';
 import { ProjectDndShell } from '@/pages/components/ProjectDndShell';
 
@@ -16,6 +17,13 @@ import { Loader2, Plus, Trash2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/shared/ui/button';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogHeader,
+    DialogTitle,
+} from '@/shared/ui/dialog';
 import { useCreateTask, useDeleteTask, useUpdateTask } from '@/features/tasks/hooks/useTaskMutations';
 import { toast } from 'sonner';
 import type { TaskRow, Project as ProjectType, TaskFormData } from '@/shared/db/app.types';
@@ -166,6 +174,9 @@ export default function Project() {
     const currentMember = teamMembers?.find((m: { user_id?: string }) => m.user_id === user?.id);
     const userRole = isGlobalAdmin ? ROLES.ADMIN : currentMember?.role || (isOwnerByProject ? ROLES.PLANTER : ROLES.TEAM);
     const projectTaskRows = useMemo(() => (projectHierarchy as TaskRow[]) || [], [projectHierarchy]);
+    // Stable per-project work-item numbers, shared with the /tasks surface so a
+    // task carries the same number everywhere.
+    const numberByTaskId = useMemo(() => computeProjectTaskNumbers(projectTaskRows), [projectTaskRows]);
 
     const canEdit = canEditTaskContent(userRole);
     const canCreateTasks = canCreateChildTask(userRole);
@@ -358,12 +369,14 @@ export default function Project() {
                                                         }
                                                         onToggleExpand={handlers.handleToggleExpand}
                                                         onTaskClick={(task: TaskRow) => {
+                                                            // View-first: open the read-only details; the Edit
+                                                            // button in TaskDetailsView transitions to the form.
                                                             handlers.handleTaskClick(task);
-                                                            setTaskFormState(canEditTaskForRow(task) ? { mode: 'edit', origin: projectOrigin } : null);
+                                                            setTaskFormState(null);
                                                         }}
                                                         onMilestoneClick={(m: TaskRow) => {
                                                             handlers.handleTaskClick(m);
-                                                            setTaskFormState(canEditTaskForRow(m) ? { mode: 'edit', origin: projectOrigin } : null);
+                                                            setTaskFormState(null);
                                                         }}
                                                         onInlineCommit={canCreateTasks ? handlers.handleInlineCommit : undefined}
                                                         onInlineCancel={() => actions.setInlineAddingParentId(null)}
@@ -374,6 +387,7 @@ export default function Project() {
                                                         dropIndicator={dropIndicator}
                                                         presentUsers={presentUsers}
                                                         currentUserId={user?.id ?? null}
+                                                        numberByTaskId={numberByTaskId}
                                                     />
                                                 ))
                                             )}
@@ -414,47 +428,68 @@ export default function Project() {
             )}
             </ProjectDndShell>
 
-                {(state.selectedTask || taskFormState) && (
-                    <TaskDetailsPanel
-                        showForm={Boolean(taskFormState)}
-                        taskFormState={taskFormState}
-                        selectedTask={state.selectedTask || undefined}
-                        taskBeingEdited={taskFormState?.mode === 'edit' ? state.selectedTask || undefined : undefined}
-                        parentTaskForForm={state.inlineAddingParentId ? (tasks?.find(t => t.id === state.inlineAddingParentId) as TaskRow) : undefined}
-                        membershipRole={userRole}
-                        allProjectTasks={projectTaskRows}
-                        teamMembers={teamMembers}
-                        showComments={false}
-                        onClose={() => {
+                <Dialog
+                    open={Boolean(state.selectedTask || taskFormState)}
+                    onOpenChange={(open) => {
+                        if (!open) {
                             actions.setSelectedTask(null);
                             setTaskFormState(null);
                             actions.setInlineAddingParentId(null);
-                        }}
-                        setTaskFormState={setTaskFormState}
-                        handleTaskSubmit={handleTaskSubmit}
-                        renderLibrarySearch={(onSelect) => (
-                            <MasterLibrarySearch
-                                mode="copy"
-                                onSelect={onSelect}
-                                label={t('projects.form.search_library_label')}
-                                placeholder={taskFormState?.isPhase ? t('projects.search_template_phase_placeholder') : t('projects.search_template_task_placeholder')}
-                                phasesOnly={!!taskFormState?.isPhase}
-                                excludeTemplateIds={excludedTemplateIds}
+                        }
+                    }}
+                >
+                    <DialogContent
+                        hideClose
+                        className="h-full max-h-screen max-w-3xl overflow-hidden p-0 sm:h-5/6"
+                    >
+                        <DialogHeader className="sr-only">
+                            <DialogTitle>{state.selectedTask?.title ?? t('tasks.panel.details')}</DialogTitle>
+                            <DialogDescription>{t('tasks.panel.description')}</DialogDescription>
+                        </DialogHeader>
+                        {(state.selectedTask || taskFormState) && (
+                            <TaskDetailsPanel
+                                showForm={Boolean(taskFormState)}
+                                taskFormState={taskFormState}
+                                selectedTask={state.selectedTask || undefined}
+                                taskBeingEdited={taskFormState?.mode === 'edit' ? state.selectedTask || undefined : undefined}
+                                parentTaskForForm={state.inlineAddingParentId ? (tasks?.find(t => t.id === state.inlineAddingParentId) as TaskRow) : undefined}
+                                membershipRole={userRole}
+                                allProjectTasks={projectTaskRows}
+                                teamMembers={teamMembers}
+                                showComments={false}
+                                onClose={() => {
+                                    actions.setSelectedTask(null);
+                                    setTaskFormState(null);
+                                    actions.setInlineAddingParentId(null);
+                                }}
+                                setTaskFormState={setTaskFormState}
+                                handleTaskSubmit={handleTaskSubmit}
+                                renderLibrarySearch={(onSelect) => (
+                                    <MasterLibrarySearch
+                                        mode="copy"
+                                        onSelect={onSelect}
+                                        label={t('projects.form.search_library_label')}
+                                        placeholder={taskFormState?.isPhase ? t('projects.search_template_phase_placeholder') : t('projects.search_template_task_placeholder')}
+                                        phasesOnly={!!taskFormState?.isPhase}
+                                        excludeTemplateIds={excludedTemplateIds}
+                                    />
+                                )}
+                                canEdit={state.selectedTask ? canEditTaskForRow(state.selectedTask) : canEdit}
+                                onDeleteTaskWrapper={
+                                    state.selectedTask && canDeleteTaskForRole(userRole, state.selectedTask)
+                                        ? async () => { if (state.selectedTask) await handlers.handleDeleteTask(state.selectedTask); }
+                                        : undefined
+                                }
+                                handleAddChildTask={canCreateTasks ? handlers.handleStartInlineAdd : undefined}
+                                handleEditTask={(task) => {
+                                    actions.setSelectedTask(task as TaskRow);
+                                    setTaskFormState({ mode: 'edit', origin: projectOrigin });
+                                }}
+                                className="w-full border-l-0 shadow-none sm:w-full sm:min-w-0 sm:max-w-none"
                             />
                         )}
-                        canEdit={state.selectedTask ? canEditTaskForRow(state.selectedTask) : canEdit}
-                        onDeleteTaskWrapper={
-                            state.selectedTask && canDeleteTaskForRole(userRole, state.selectedTask)
-                                ? async () => { if (state.selectedTask) await handlers.handleDeleteTask(state.selectedTask); }
-                                : undefined
-                        }
-                        handleAddChildTask={canCreateTasks ? handlers.handleStartInlineAdd : undefined}
-                        handleEditTask={(task) => {
-                            actions.setSelectedTask(task as TaskRow);
-                            setTaskFormState({ mode: 'edit', origin: projectOrigin });
-                        }}
-                    />
-                )}
+                    </DialogContent>
+                </Dialog>
             </div>
 
             {state.showInviteModal && (

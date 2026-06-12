@@ -7,7 +7,7 @@ import { cn } from '@/shared/lib/utils';
 import { TASK_STATUS_BORDER } from '@/shared/constants/colors';
 import { ErrorBoundary } from 'react-error-boundary';
 import ErrorFallback from '@/shared/ui/ErrorFallback';
-import { Lock, Link as LinkIcon, GripVertical } from 'lucide-react';
+import { Link as LinkIcon, GripVertical } from 'lucide-react';
 import TaskStatusSelect from './TaskStatusSelect';
 import TaskControlButtons from './TaskControlButtons';
 import InlineTaskInput from './InlineTaskInput';
@@ -58,6 +58,12 @@ interface TaskItemProps {
   * disambiguate tasks from different projects.
   */
  parentProjectTitle?: string | null;
+ /**
+  * Stable, per-project work-item number (e.g. "3.2") from `task-numbering`.
+  * When present, rendered as a fixed prefix before the title so the same
+  * number follows a task across the project view and the /tasks surface.
+  */
+ displayNumber?: string | null;
 }
 
 const MAX_FOCUS_CHIPS = 3;
@@ -90,6 +96,7 @@ const TaskItem = ({
  presentUsers = [],
  currentUserId = null,
  parentProjectTitle = null,
+ displayNumber = null,
 }: TaskItemProps) => {
  const { t } = useTranslation();
  const confirm = useConfirm();
@@ -180,7 +187,6 @@ const TaskItem = ({
  onStatusChange?.(id, status);
  };
 
- const isLocked = !!task.is_locked;
  const canUpdateThisStatus = canUpdateStatusForTask ? canUpdateStatusForTask(task) : canUpdateStatus !== false;
  const statusDisabled = !onStatusChange || !canUpdateThisStatus;
  const handleEditAction = useCallback(() => {
@@ -218,7 +224,7 @@ const TaskItem = ({
  aria-expanded={canHaveChildren ? isExpanded : undefined}
  aria-selected={isSelected}
  aria-label={onTaskClick ? t('tasks.open_task_details_aria', { title: task.title ?? '' }) : undefined}
- tabIndex={!isLocked && onTaskClick ? 0 : undefined}
+ tabIndex={onTaskClick ? 0 : undefined}
  className={cn(
  'relative flex flex-col min-w-0 py-4 px-5 mb-3 rounded-xl border transition-all duration-200 shadow-sm',
  'bg-card text-card-foreground',
@@ -227,12 +233,11 @@ const TaskItem = ({
  isSelected && !isOver
  ? 'bg-brand-50 border-brand-500 ring-2 ring-brand-100'
  : !isOver && 'border-border hover:border-brand-300',
- isLocked && 'opacity-70 bg-muted/30',
  level === 0 && `border-l-4 ${(task.status && TASK_STATUS_BORDER[task.status]) || 'border-l-slate-300'}`
  )}
  style={{ marginLeft: `${indentWidth}px` }}
- onClick={!isLocked ? handleCardClick : undefined}
- onKeyDown={!isLocked ? handleCardKeyDown : undefined}
+ onClick={handleCardClick}
+ onKeyDown={handleCardKeyDown}
  data-testid={`task-row-${task.id}`}
  >
  {focusPeers.length > 0 && (
@@ -267,21 +272,14 @@ const TaskItem = ({
  <button
  className={cn(
  'mr-2 p-1 rounded transition-colors flex-shrink-0 cursor-grab active:cursor-grabbing',
- isLocked
- ? 'cursor-not-allowed opacity-30 text-slate-400'
- : 'text-slate-400 hover:bg-slate-100 hover:text-slate-600'
+ 'text-slate-400 hover:bg-slate-100 hover:text-slate-600'
  )}
  type="button"
  aria-label="Reorder task"
- ref={!isLocked && dragHandleProps.ref ? (dragHandleProps.ref as React.LegacyRef<HTMLButtonElement>) : undefined}
- {...(!isLocked ? (dragHandleProps as React.ButtonHTMLAttributes<HTMLButtonElement>) : {})}
- disabled={isLocked}
+ ref={dragHandleProps.ref ? (dragHandleProps.ref as React.LegacyRef<HTMLButtonElement>) : undefined}
+ {...(dragHandleProps as React.ButtonHTMLAttributes<HTMLButtonElement>)}
  >
- {isLocked ? (
- <Lock className="w-3 h-3" />
- ) : (
  <GripVertical className="w-4 h-4" />
- )}
  </button>
  )}
 
@@ -313,6 +311,14 @@ const TaskItem = ({
  )}
 
  <div className="flex items-center gap-3 min-w-0 overflow-hidden">
+ {displayNumber && (
+ <span
+ className="flex-shrink-0 font-mono text-xs font-semibold text-muted-foreground"
+ aria-hidden="true"
+ >
+ {displayNumber}
+ </span>
+ )}
  {parentProjectTitle ? (
  <Tooltip>
  {/* The tooltip reveals the parent-project title — used when a task

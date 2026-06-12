@@ -208,10 +208,18 @@ describe('priority task milestone grouping', () => {
     expect(phaseGroup?.tasks.map((entry) => entry.task.id)).toEqual(['task-orphan']);
   });
 
-  it('assigns display-only Dewey-style task numbers from group and task order', () => {
+  it('assigns stable per-project numbers by document order, independent of the due-date display order', () => {
     const groups = buildPriorityTaskGroups({ tasks: buildGroupingFixture(), now: NOW });
     const activeGroup = groups.find((group) => group.title === 'Active Milestone');
-    expect(activeGroup?.tasks.map((entry) => entry.displayNumber)).toEqual(['1.1', '1.2', '1.3']);
+    const byId = new Map(activeGroup?.tasks.map((entry) => [entry.task.id, entry.displayNumber]));
+    // Active Milestone is the 2nd container — the phase-fallback group (the
+    // empty milestone + the loose orphan, both under the phase) sorts 1st by
+    // document order. Leaf numbers follow each task's position, NOT the
+    // due-date order the rows are displayed in (later-due is position 100, so
+    // it's 2.1 even though earlier-due renders above it).
+    expect(byId.get('task-later-due')).toBe('2.1');
+    expect(byId.get('task-earlier-due')).toBe('2.2');
+    expect(byId.get('task-started-no-due')).toBe('2.3');
   });
 
   it('filters to only qualifying candidate tasks', () => {
