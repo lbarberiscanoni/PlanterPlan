@@ -93,3 +93,6 @@ skills-lock.json
 
 # Supabase Studio local scratch queries
 supabase/snippets/
+
+# Local MCP server config (machine-specific; not shared with the team)
+.mcp.json

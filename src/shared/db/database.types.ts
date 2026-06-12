@@ -777,7 +777,6 @@ export type Database = {
           due_date: string | null
           id: string
           is_complete: boolean | null
-          is_locked: boolean | null
           is_premium: boolean | null
           location: string | null
           notes: string | null
@@ -785,7 +784,6 @@ export type Database = {
           parent_project_id: string | null
           parent_task_id: string | null
           position: number | null
-          prerequisite_phase_id: string | null
           primary_resource_id: string | null
           priority: string | null
           project_type: string | null
@@ -811,7 +809,6 @@ export type Database = {
           due_date?: string | null
           id?: string
           is_complete?: boolean | null
-          is_locked?: boolean | null
           is_premium?: boolean | null
           location?: string | null
           notes?: string | null
@@ -819,7 +816,6 @@ export type Database = {
           parent_project_id?: string | null
           parent_task_id?: string | null
           position?: number | null
-          prerequisite_phase_id?: string | null
           primary_resource_id?: string | null
           priority?: string | null
           project_type?: string | null
@@ -845,7 +841,6 @@ export type Database = {
           due_date?: string | null
           id?: string
           is_complete?: boolean | null
-          is_locked?: boolean | null
           is_premium?: boolean | null
           location?: string | null
           notes?: string | null
@@ -853,7 +848,6 @@ export type Database = {
           parent_project_id?: string | null
           parent_task_id?: string | null
           position?: number | null
-          prerequisite_phase_id?: string | null
           primary_resource_id?: string | null
           priority?: string | null
           project_type?: string | null
@@ -947,27 +941,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "tasks_prerequisite_phase_id_fkey"
-            columns: ["prerequisite_phase_id"]
-            isOneToOne: false
-            referencedRelation: "tasks"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "tasks_prerequisite_phase_id_fkey"
-            columns: ["prerequisite_phase_id"]
-            isOneToOne: false
-            referencedRelation: "tasks_with_primary_resource"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "tasks_prerequisite_phase_id_fkey"
-            columns: ["prerequisite_phase_id"]
-            isOneToOne: false
-            referencedRelation: "view_master_library"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "tasks_primary_resource_id_fkey"
             columns: ["primary_resource_id"]
             isOneToOne: false
@@ -1018,7 +991,6 @@ export type Database = {
           due_date: string | null
           id: string | null
           is_complete: boolean | null
-          is_locked: boolean | null
           is_premium: boolean | null
           location: string | null
           notes: string | null
@@ -1026,7 +998,6 @@ export type Database = {
           parent_project_id: string | null
           parent_task_id: string | null
           position: number | null
-          prerequisite_phase_id: string | null
           primary_resource_id: string | null
           priority: string | null
           project_type: string | null
@@ -1121,27 +1092,6 @@ export type Database = {
           {
             foreignKeyName: "tasks_parent_task_id_fkey"
             columns: ["parent_task_id"]
-            isOneToOne: false
-            referencedRelation: "view_master_library"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "tasks_prerequisite_phase_id_fkey"
-            columns: ["prerequisite_phase_id"]
-            isOneToOne: false
-            referencedRelation: "tasks"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "tasks_prerequisite_phase_id_fkey"
-            columns: ["prerequisite_phase_id"]
-            isOneToOne: false
-            referencedRelation: "tasks_with_primary_resource"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "tasks_prerequisite_phase_id_fkey"
-            columns: ["prerequisite_phase_id"]
             isOneToOne: false
             referencedRelation: "view_master_library"
             referencedColumns: ["id"]

@@ -3,7 +3,7 @@ import { Progress } from '@/shared/ui/progress';
 import { ProgressRing } from '@/shared/ui/progress-ring';
 
 import { useTranslation } from 'react-i18next';
-import { ChevronRight, CheckCircle2, Lock } from 'lucide-react';
+import { ChevronRight, CheckCircle2 } from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
 import { TASK_STATUS } from '@/shared/constants';
 import { PHASE_STATUS_COLORS } from '@/shared/constants/colors';
@@ -40,7 +40,6 @@ interface PhaseCardProps {
 export default function PhaseCard({ phase, tasks = [], milestones = [], isActive, onClick, rootTask }: PhaseCardProps) {
  const { t } = useTranslation();
  const order = phase.position || 1;
- const isLocked = phase.is_locked;
 
  // Filter tasks that belong to this phase (via milestones)
  const phaseTasks = tasks.filter((t) =>
@@ -56,20 +55,15 @@ export default function PhaseCard({ phase, tasks = [], milestones = [], isActive
  const isCheckpoint = extractProjectKind(rootTask) === 'checkpoint';
 
  return (
- <div className={cn('h-full transition-transform duration-150', !isLocked && 'hover:scale-105 active:scale-95')}>
+ <div className="h-full transition-transform duration-150 hover:scale-105 active:scale-95">
  <Card
- onClick={isLocked ? undefined : onClick}
+ onClick={onClick}
  data-testid={`phase-card-${phase.id}`}
  className={cn(
- 'p-5 transition-all duration-300 border-2 h-full flex flex-col',
- isLocked
- ? 'opacity-75 cursor-not-allowed border-muted bg-muted/30 text-muted-foreground'
- : cn(
- 'cursor-pointer',
+ 'p-5 transition-all duration-300 border-2 h-full flex flex-col cursor-pointer',
  isActive
  ? `${colors.border} bg-white shadow-lg`
  : 'border-slate-200 bg-slate-50/50 text-muted-foreground hover:bg-white hover:border-slate-300 hover:shadow-md'
- )
  )}
  >
  <div className="flex items-start justify-between mb-4">
@@ -77,19 +71,17 @@ export default function PhaseCard({ phase, tasks = [], milestones = [], isActive
  <div
  className={cn(
  'w-10 h-10 rounded-xl flex items-center justify-center font-bold text-white shadow-sm',
- isLocked ? 'bg-muted' : colors.bg
+ colors.bg
  )}
  >
- {isLocked ? (
- <Lock className="w-5 h-5" />
- ) : isComplete ? (
+ {isComplete ? (
  <CheckCircle2 className="w-5 h-5" />
  ) : (
  order
  )}
  </div>
  <div>
- <h3 className={cn('font-semibold', isLocked ? 'text-muted-foreground' : 'text-card-foreground')}>
+ <h3 className="font-semibold text-card-foreground">
  {phase.title}
  </h3>
  <p className="text-sm text-muted-foreground">{t('projects.phase_milestone_count', { count: milestones.length })}</p>
@@ -98,7 +90,7 @@ export default function PhaseCard({ phase, tasks = [], milestones = [], isActive
  <ChevronRight
  className={cn(
  'w-5 h-5 transition-colors',
- isActive && !isLocked ? colors.text : 'text-muted-foreground/50'
+ isActive ? colors.text : 'text-muted-foreground/50'
  )}
  />
  </div>
@@ -118,27 +110,20 @@ export default function PhaseCard({ phase, tasks = [], milestones = [], isActive
  <div className="flex items-center justify-between gap-3" data-testid="phase-donut">
  <div className="relative h-16 w-16">
  <ProgressRing
- value={isLocked || totalTasks === 0 ? 0 : progress}
+ value={totalTasks === 0 ? 0 : progress}
  size={64}
  strokeWidth={10}
- color={isLocked ? 'rgb(226 232 240)' : 'var(--color-brand-600, rgb(234 88 12))'}
+ color="var(--color-brand-600, rgb(234 88 12))"
  trackColor="rgb(226 232 240)"
  decorative
  />
  <div className="pointer-events-none absolute inset-0 flex items-center justify-center text-xs font-medium text-slate-900">
- {isLocked ? t('projects.locked_label') : `${progress}%`}
+ {`${progress}%`}
  </div>
  </div>
  <p className="text-xs text-slate-600">
- {isLocked
-  ? t('projects.phase_unlock_hint', { position: order - 1 })
-  : t('projects.phase_task_progress', { completed: completedTasks, count: totalTasks })}
+ {t('projects.phase_task_progress', { completed: completedTasks, count: totalTasks })}
  </p>
- </div>
- ) : isLocked ? (
- <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted p-2 rounded justify-center">
- <Lock className="w-3 h-3" />
- <span>{t('projects.phase_unlock_hint', { position: order - 1 })}</span>
  </div>
  ) : (
  <>
