@@ -10,6 +10,11 @@ import { mergeSavedEmailAddress } from '@/shared/contexts/saved-email-addresses'
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  // False while the async admin-role check is in flight for the current user.
+  // Surfaces gated on the admin role (the `/admin` shell) wait on this so a
+  // page refresh doesn't act on the default `'team'` role before `is_admin`
+  // resolves. No user → nothing to resolve → true.
+  const [roleResolved, setRoleResolved] = useState(false);
   const userId = user?.id;
 
   // --- Session management (was SessionContext) ---
@@ -21,6 +26,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (!session?.user) {
         if (!alive) return;
         setUser(null);
+        setRoleResolved(true);
         setLoading(false);
         return;
       }
@@ -42,6 +48,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (event === 'SIGNED_OUT') {
         clearPasswordRecoverySession();
         setUser(null);
+        setRoleResolved(true);
         setLoading(false);
       } else {
         if (event === 'PASSWORD_RECOVERY') {
@@ -62,11 +69,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!userId) return;
     let alive = true;
+    setRoleResolved(false);
 
     const fetchRole = async () => {
       // Default to the least-privileged role until the async admin check
       // returns. Project-scoped role is hydrated per-project via
-      // `useTeam(projectId)`.
+      // `useTeam(projectId)`. `roleResolved` flips true once this settles so
+      // the `/admin` gate doesn't act on the interim `'team'` role.
       try {
         const isAdmin = await authApi.checkIsAdmin(userId);
         if (alive) {
@@ -74,6 +83,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
       } catch {
         if (alive) setUser(prev => prev ? { ...prev, role: 'team' } : null);
+      } finally {
+        if (alive) setRoleResolved(true);
       }
     };
 
@@ -147,13 +158,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const value = useMemo(() => ({
     user,
     loading,
+    roleResolved,
     signUp,
     signIn,
     signOut,
     updateMe,
     savedEmailAddresses,
     rememberEmailAddress,
-  }), [user, loading, signUp, signIn, signOut, updateMe, savedEmailAddresses, rememberEmailAddress]);
+  }), [user, loading, roleResolved, signUp, signIn, signOut, updateMe, savedEmailAddresses, rememberEmailAddress]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

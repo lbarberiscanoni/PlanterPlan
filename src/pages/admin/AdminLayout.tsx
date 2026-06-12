@@ -5,13 +5,16 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/shared/contexts/auth-context';
 import { useIsAdmin } from '@/features/admin/hooks/useIsAdmin';
 import { cn } from '@/shared/lib/utils';
-import { LayoutDashboard, Users, BarChart3, FileStack } from 'lucide-react';
+import { LayoutDashboard, Users, BarChart3, FileStack, Library, FolderKanban, ListChecks } from 'lucide-react';
 
 type AdminLabelKey =
     | 'admin.nav_home'
     | 'admin.nav_users'
     | 'admin.nav_analytics'
-    | 'admin.nav_templates';
+    | 'admin.nav_templates'
+    | 'admin.nav_library'
+    | 'admin.nav_projects'
+    | 'admin.nav_tasks';
 
 type NavItem = {
     to: string;
@@ -29,6 +32,9 @@ const NAV_ITEMS: NavItem[] = [
     { to: '/admin/users', labelKey: 'admin.nav_users', testIdKey: 'users', icon: Users },
     { to: '/admin/analytics', labelKey: 'admin.nav_analytics', testIdKey: 'analytics', icon: BarChart3 },
     { to: '/admin/templates', labelKey: 'admin.nav_templates', testIdKey: 'templates', icon: FileStack },
+    { to: '/admin/library', labelKey: 'admin.nav_library', testIdKey: 'library', icon: Library },
+    { to: '/admin/projects', labelKey: 'admin.nav_projects', testIdKey: 'projects', icon: FolderKanban },
+    { to: '/admin/tasks', labelKey: 'admin.nav_tasks', testIdKey: 'tasks', icon: ListChecks },
 ];
 
 /**
@@ -41,16 +47,20 @@ const NAV_ITEMS: NavItem[] = [
  */
 export default function AdminLayout() {
     const { t } = useTranslation();
-    const { loading } = useAuth();
+    const { loading, roleResolved } = useAuth();
     const isAdmin = useIsAdmin();
+    // Wait for the async admin-role check before deciding — otherwise a hard
+    // load / refresh of an `/admin/*` URL acts on the interim `'team'` role and
+    // bounces an actual admin to `/tasks`.
+    const resolving = loading || !roleResolved;
 
     useEffect(() => {
-        if (!loading && !isAdmin) {
+        if (!resolving && !isAdmin) {
             toast.error(t('admin.shell_access_required_toast'));
         }
-    }, [loading, isAdmin, t]);
+    }, [resolving, isAdmin, t]);
 
-    if (loading) {
+    if (resolving) {
         return (
             <div className="p-8 text-sm text-muted-foreground" data-testid="admin-loading">
                 {t('admin.shell_loading')}

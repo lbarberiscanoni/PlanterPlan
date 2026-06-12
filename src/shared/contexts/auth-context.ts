@@ -4,6 +4,13 @@ import type { User, UserMetadata } from '@/shared/db/app.types';
 export interface AuthContextType {
   user: User | null;
   loading: boolean;
+  /**
+   * True once the async admin-role check has completed for the current user
+   * (or there is no user). Gates surfaces that must not act on the default
+   * `'team'` role before `is_admin` resolves — e.g. the `/admin` shell, which
+   * would otherwise bounce a refreshing admin to `/tasks`.
+   */
+  roleResolved: boolean;
   signUp: (email: string, password: string, userData?: UserMetadata) => Promise<{ data: unknown; error: unknown }>;
   signIn: (email: string, password: string) => Promise<{ data: unknown; error: unknown }>;
   signOut: () => Promise<void>;

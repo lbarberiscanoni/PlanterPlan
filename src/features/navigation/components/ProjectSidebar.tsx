@@ -5,8 +5,9 @@ import InstanceList from './InstanceList';
 import JoinedProjectsList from './JoinedProjectsList';
 import SharedTemplatesList from './SharedTemplatesList';
 import TemplateList from './TemplateList';
-import { BarChart, Settings, Calendar } from 'lucide-react';
+import { BarChart, Settings, Calendar, ShieldAlert } from 'lucide-react';
 import GlobalNavItem from './GlobalNavItem';
+import { useIsAdmin } from '@/features/admin/hooks/useIsAdmin';
 
 const SectionSkeleton = () => (
  <div className="animate-pulse space-y-3 py-2">
@@ -58,6 +59,7 @@ const ProjectSidebar = ({
 }: ProjectSidebarProps) => {
  const { t } = useTranslation();
  const { user, signOut } = useAuth();
+ const isAdmin = useIsAdmin();
  const location = useLocation();
  const navigate = useNavigate();
  const handleTaskClickWrapped = (task: { id: string }) => {
@@ -103,6 +105,14 @@ const ProjectSidebar = ({
  onClick={() => handleGlobalNav('/settings')}
  icon={<Settings className="w-5 h-5" />}
  />
+ {isAdmin && (
+ <GlobalNavItem
+ label={t('nav.admin')}
+ isActive={location.pathname.startsWith('/admin')}
+ onClick={() => handleGlobalNav('/admin')}
+ icon={<ShieldAlert className="w-5 h-5" />}
+ />
+ )}
  </div>
 
  <div className="h-px bg-border mx-4"></div>

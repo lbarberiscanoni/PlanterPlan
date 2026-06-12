@@ -307,6 +307,75 @@ export interface AdminTemplateCloneRow {
     stale: boolean;
 }
 
+/** Library item hierarchy level (subset of `tasks.task_type`). */
+export type LibraryItemType = 'phase' | 'milestone' | 'task';
+
+/** Row returned by `public.admin_library_items`. */
+export interface AdminLibraryItemRow {
+    id: string;
+    title: string | null;
+    description: string | null;
+    task_type: string | null;
+    root_id: string | null;
+    template_title: string | null;
+    days_from_start: number | null;
+    is_loose: boolean;
+    template_version: number;
+    updated_at: string | null;
+}
+
+/** Filter shape for `admin_library_items`. `templateId` accepts `'__none__'` for loose items. */
+export interface AdminLibraryItemsFilter {
+    taskType?: 'all' | LibraryItemType | 'project';
+    templateId?: string;
+    search?: string;
+}
+
+/** Row returned by `public.admin_library_templates` (filter dropdown options). */
+export interface AdminLibraryTemplateOption {
+    id: string;
+    title: string | null;
+}
+
+/** Row returned by `public.admin_list_projects`. */
+export interface AdminListProjectRow {
+    id: string;
+    title: string | null;
+    owner_email: string | null;
+    member_count: number;
+    task_count: number;
+    status: string | null;
+    created_at: string | null;
+    updated_at: string | null;
+}
+
+/** Filter shape for `admin_list_projects`. */
+export interface AdminListProjectsFilter {
+    status?: string;
+    search?: string;
+}
+
+/** Row returned by `public.admin_list_tasks`. */
+export interface AdminListTaskRow {
+    id: string;
+    title: string | null;
+    task_type: string | null;
+    status: string | null;
+    project_id: string | null;
+    project_title: string | null;
+    assignee_email: string | null;
+    due_date: string | null;
+    updated_at: string | null;
+}
+
+/** Filter shape for `admin_list_tasks`. */
+export interface AdminListTasksFilter {
+    status?: string;
+    taskType?: string;
+    projectId?: string;
+    search?: string;
+}
+
 /** Shape returned by `public.admin_analytics_snapshot()` (Wave 34 Task 3). */
 export interface AdminAnalyticsSnapshot {
     totals: {
