@@ -3,6 +3,7 @@ import { toIsoDate, nowUtcIso, calculateMinMaxDates } from '@/shared/lib/date-en
 import { retry } from '../lib/retry';
 import { assertSafeUrl } from '@/shared/lib/safe-url';
 import { isResolvedStatus } from '@/shared/constants/domain';
+import { emitStrategyTaskCompleted } from '@/shared/lib/strategy-completion-bus';
 import type { Database } from '@/shared/db/database.types';
 import type {
     Project,
@@ -390,7 +391,7 @@ interface ProjectEntityClient extends Omit<EntityClient<Project, TaskInsert, Tas
 
 interface TaskEntityClient extends EntityClient<Task, TaskInsert, TaskUpdate> {
     fetchChildren: (taskId: string) => Promise<{ data: Task[] | null, error: Error | null }>;
-    updateStatus: (taskId: string, status: string) => Promise<{ data: Task | null, error: Error | null }>;
+    updateStatus: (taskId: string, status: string, opts?: { isCascade?: boolean }) => Promise<{ data: Task | null, error: Error | null }>;
     updateParentDates: (parentId: string | null) => Promise<void>;
     clone: (templateId: string, newParentId: string | null, newOrigin: string, userId: string, overrides?: Partial<Pick<TaskInsert, 'title' | 'description' | 'start_date' | 'due_date'>>) => Promise<{ data: Task | null, error: Error | null }>;
     addMember?: (taskId: string, userId: string, role: string) => Promise<{ data: TeamMemberRow | undefined, error: Error | null }>;
@@ -990,7 +991,12 @@ export const planter: PlanterClient = {
              *     is complete, or reverting to a derived non-completed status
              *     otherwise.
              */
-            updateStatus: async (taskId: string, status: string): Promise<{ data: Task | null, error: Error | null }> => {
+            updateStatus: async (taskId: string, status: string, opts?: { isCascade?: boolean }): Promise<{ data: Task | null, error: Error | null }> => {
+                // True when this call is a recursive cascade onto a descendant
+                // (a parent set to completed/na propagating down). We suppress the
+                // strategy-completion event for cascade writes so only the task the
+                // user explicitly completed triggers the celebratory follow-up.
+                const isCascade = opts?.isCascade === true;
                 // Inner helper: derive parent status from child statuses when parent is not fully complete.
                 const deriveParentStatus = (children: Task[]): string => {
                     if (children.some(child => child.status === 'blocked')) return 'blocked';
@@ -1029,6 +1035,19 @@ export const planter: PlanterClient = {
                         status,
                     } as TaskUpdate);
 
+                    // Strategy-template follow-up (Wave 24): when the user completes a
+                    // task flagged `settings.is_strategy_template`, emit so the app-level
+                    // listener can open the "add custom tasks" celebration. Skip cascade
+                    // writes — only the directly-completed task should prompt.
+                    if (!isCascade && status === 'completed' && data) {
+                        const s = data.settings;
+                        const isStrategyTask = !!s && typeof s === 'object' && !Array.isArray(s)
+                            && (s as Record<string, unknown>).is_strategy_template === true;
+                        if (isStrategyTask) {
+                            emitStrategyTaskCompleted(data);
+                        }
+                    }
+
                     if (isResolvedStatus(status)) {
                         // Cascade DOWN: a terminal/resolved status (completed or na)
                         // propagates to every descendant. Marking a milestone N/A
@@ -1039,7 +1058,7 @@ export const planter: PlanterClient = {
                             for (let i = 0; i < children.length; i += LIMIT) {
                                 const batch = children.slice(i, i + LIMIT);
                                 await Promise.all(
-                                    batch.map((child) => (planter.entities.Task as TaskEntityClient).updateStatus(child.id, status))
+                                    batch.map((child) => (planter.entities.Task as TaskEntityClient).updateStatus(child.id, status, { isCascade: true }))
                                 );
                             }
                         }

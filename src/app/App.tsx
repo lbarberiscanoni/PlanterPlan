@@ -13,6 +13,7 @@ import AppShellLayout from '@/layouts/AppShellLayout';
 import Project from '@/pages/Project';
 import Settings from '@/pages/Settings';
 import TasksPage from '@/pages/TasksPage';
+import StrategyCompletionListener from '@/features/tasks/components/StrategyCompletionListener';
 import LoginForm from '@/pages/components/LoginForm';
 import ResetPassword from '@/pages/ResetPassword';
 
@@ -122,6 +123,7 @@ export default function App() {
  </Route>
  </Routes>
  </Router>
+ <StrategyCompletionListener />
  <Toaster richColors position="top-right" />
  </ConfirmDialogProvider>
  </TooltipProvider>

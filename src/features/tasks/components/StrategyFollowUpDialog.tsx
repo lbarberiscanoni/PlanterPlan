@@ -1,8 +1,9 @@
 import { useState, useMemo, useId, useCallback } from 'react';
-import type { ChangeEvent, KeyboardEvent } from 'react';
+import type { ChangeEvent, KeyboardEvent, FormEvent } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
+import { Plus } from 'lucide-react';
 import {
     Dialog,
     DialogContent,
@@ -16,7 +17,7 @@ import useMasterLibrarySearch from '@/shared/hooks/useMasterLibrarySearch';
 import useRelatedTemplates from '@/shared/hooks/useRelatedTemplates';
 import { useAuth } from '@/shared/contexts/auth-context';
 import { planter } from '@/shared/api/planterClient';
-import type { TaskRow } from '@/shared/db/app.types';
+import type { TaskInsert, TaskRow } from '@/shared/db/app.types';
 
 interface TemplateSearchResult {
     id: string;
@@ -179,13 +180,16 @@ function StrategyTemplateSearch({
 /**
  * Wave 24 — Strategy Template follow-up prompt. When an instance task flagged
  * `settings.is_strategy_template = true` transitions into `status = 'completed'`,
- * the parent (`TaskDetailsPanel` / `Project.tsx`) opens this dialog to let the
- * user pick one or more Master Library templates that will be cloned as
- * **sibling** tasks (same `parent_task_id` as the completed strategy task).
+ * the app-level `StrategyCompletionListener` opens this celebratory dialog. It
+ * nudges the planter to dream up and add their own custom tasks (the 10-15+
+ * to-dos flowing out of the strategy worksheet they just completed) as
+ * **sibling** tasks (same `parent_task_id` as the completed strategy task), and
+ * also offers Master Library templates below as an optional shortcut.
  *
- * Reuses `planter.entities.Task.clone` (which stamps `settings.spawnedFromTemplate`
- * on the cloned root for Wave 22 dedupe). Picks are non-blocking: the user may
- * select several in a row or dismiss without picking any.
+ * Custom adds go through `planter.entities.Task.create`; library picks reuse
+ * `planter.entities.Task.clone` (which stamps `settings.spawnedFromTemplate`
+ * for Wave 22 dedupe). Both are non-blocking: the user may add several in a row
+ * or dismiss without adding any.
  */
 const StrategyFollowUpDialog = ({
     task,
@@ -193,17 +197,54 @@ const StrategyFollowUpDialog = ({
     onOpenChange,
     excludeTemplateIds,
 }: StrategyFollowUpDialogProps) => {
+    const { t } = useTranslation();
     const { user } = useAuth();
     const queryClient = useQueryClient();
     const [pendingTemplateId, setPendingTemplateId] = useState<string | null>(null);
-    const [clonedCount, setClonedCount] = useState(0);
+    const [addedCount, setAddedCount] = useState(0);
+    const [customTitle, setCustomTitle] = useState('');
+    const [addingCustom, setAddingCustom] = useState(false);
 
     const parentId = task.parent_task_id ?? null;
     const rootId = task.root_id ?? task.id;
 
+    const handleAddCustomTask = async (event: FormEvent) => {
+        event.preventDefault();
+        const trimmed = customTitle.trim();
+        if (!trimmed) {
+            toast.error(t('tasks.strategy_follow_up.add_empty_error'));
+            return;
+        }
+        if (!user?.id) {
+            toast.error(t('errors.not_signed_in'));
+            return;
+        }
+        setAddingCustom(true);
+        try {
+            await planter.entities.Task.create({
+                title: trimmed,
+                parent_task_id: parentId,
+                root_id: rootId,
+                origin: 'instance',
+                is_complete: false,
+                priority: 'medium',
+                creator: user.id,
+            } as TaskInsert);
+            queryClient.invalidateQueries({ queryKey: ['projectHierarchy', rootId] });
+            setAddedCount((n) => n + 1);
+            setCustomTitle('');
+            toast.success(t('tasks.strategy_follow_up.add_success', { title: trimmed }));
+        } catch (err) {
+            const message = err instanceof Error ? err.message : 'Unknown error';
+            toast.error(t('tasks.strategy_follow_up.add_error'), { description: message });
+        } finally {
+            setAddingCustom(false);
+        }
+    };
+
     const handleSelect = async (selected: TemplateSearchResult) => {
         if (!user?.id) {
-            toast.error('Not signed in');
+            toast.error(t('errors.not_signed_in'));
             return;
         }
         if (pendingTemplateId === selected.id) return;
@@ -217,11 +258,11 @@ const StrategyFollowUpDialog = ({
             );
             if (error) throw error;
             queryClient.invalidateQueries({ queryKey: ['projectHierarchy', rootId] });
-            setClonedCount((n) => n + 1);
-            toast.success(`Added "${selected.title ?? 'Template'}" as a sibling task`);
+            setAddedCount((n) => n + 1);
+            toast.success(t('tasks.strategy_follow_up.add_success', { title: selected.title ?? 'Template' }));
         } catch (err) {
             const message = err instanceof Error ? err.message : 'Unknown error';
-            toast.error('Failed to add template', { description: message });
+            toast.error(t('tasks.strategy_follow_up.add_error'), { description: message });
         } finally {
             setPendingTemplateId(null);
         }
@@ -246,19 +287,50 @@ const StrategyFollowUpDialog = ({
                 data-testid="strategy-followup-dialog"
             >
                 <DialogHeader>
-                    <DialogTitle>Add follow-up tasks</DialogTitle>
+                    <DialogTitle>{t('tasks.strategy_follow_up.title')}</DialogTitle>
                     <DialogDescription>
-                        You completed a strategy template. Pick one or more Master Library
-                        templates to add as sibling tasks under the same parent.
+                        {t('tasks.strategy_follow_up.description')}
                     </DialogDescription>
                 </DialogHeader>
+                <form
+                    onSubmit={handleAddCustomTask}
+                    className="py-2"
+                    data-testid="strategy-followup-add-custom"
+                >
+                    <label
+                        htmlFor="strategy-followup-custom-title"
+                        className="mb-2 block text-xs font-semibold uppercase tracking-wider text-slate-500"
+                    >
+                        {t('tasks.strategy_follow_up.add_label')}
+                    </label>
+                    <div className="flex items-center gap-2">
+                        <input
+                            id="strategy-followup-custom-title"
+                            type="text"
+                            value={customTitle}
+                            onChange={(e) => setCustomTitle(e.target.value)}
+                            placeholder={t('tasks.strategy_follow_up.add_placeholder')}
+                            data-testid="strategy-followup-custom-input"
+                            className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-base shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-brand-500 md:text-sm"
+                        />
+                        <Button
+                            type="submit"
+                            disabled={addingCustom || !customTitle.trim()}
+                            data-testid="strategy-followup-custom-add"
+                            className="shrink-0"
+                        >
+                            <Plus className="mr-1 h-4 w-4" />
+                            {t('tasks.strategy_follow_up.add_button')}
+                        </Button>
+                    </div>
+                </form>
                 {hasSeedText && (
                     <div
                         className="py-2"
                         data-testid="strategy-followup-related"
                     >
                         <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">
-                            Related templates
+                            {t('tasks.strategy_follow_up.library_label')}
                         </p>
                         {relatedResults.length > 0 ? (
                             <ul className="flex flex-col gap-1" role="list">
@@ -276,7 +348,7 @@ const StrategyFollowUpDialog = ({
                                             data-testid={`strategy-followup-related-row-${tmpl.id}`}
                                             className="flex w-full flex-col items-start rounded-md border border-slate-200 bg-white px-3 py-2 text-left text-sm text-slate-800 transition-colors hover:border-emerald-300 hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-60"
                                         >
-                                            <span className="font-medium">{tmpl.title ?? 'Untitled template'}</span>
+                                            <span className="font-medium">{tmpl.title ?? t('tasks.strategy_follow_up.untitled_template')}</span>
                                             {tmpl.description && (
                                                 <span className="line-clamp-2 text-xs text-slate-500">
                                                     {tmpl.description}
@@ -287,9 +359,9 @@ const StrategyFollowUpDialog = ({
                                 ))}
                             </ul>
                         ) : relatedLoading ? (
-                            <p className="text-xs text-slate-500">Finding related templates…</p>
+                            <p className="text-xs text-slate-500">{t('tasks.strategy_follow_up.finding_related')}</p>
                         ) : (
-                            <p className="text-xs text-slate-500">No related templates found.</p>
+                            <p className="text-xs text-slate-500">{t('tasks.strategy_follow_up.no_related')}</p>
                         )}
                     </div>
                 )}
@@ -306,7 +378,7 @@ const StrategyFollowUpDialog = ({
                         onClick={() => onOpenChange(false)}
                         data-testid="strategy-followup-done"
                     >
-                        {clonedCount > 0 ? 'Done' : 'Skip'}
+                        {addedCount > 0 ? t('tasks.strategy_follow_up.done') : t('tasks.strategy_follow_up.skip')}
                     </Button>
                 </DialogFooter>
             </DialogContent>

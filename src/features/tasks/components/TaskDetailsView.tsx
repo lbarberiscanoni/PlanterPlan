@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import { useForm } from 'react-hook-form';
@@ -27,8 +27,6 @@ import type { TaskItemData } from '@/features/tasks/components/TaskItem';
 import type { TaskRow } from '@/shared/db/app.types';
 import { extractStrategyTemplateFlag } from '@/features/tasks/lib/strategy-form';
 import { canTaskHaveChildren } from '@/features/tasks/lib/task-hierarchy';
-import StrategyFollowUpDialog from '@/features/tasks/components/StrategyFollowUpDialog';
-import { collectSpawnedTemplateIds } from '@/shared/lib/tree-helpers';
 
 const emailDetailsSchema = z.object({
     recipient: z.string().email(),
@@ -75,30 +73,13 @@ const TaskDetailsView = ({
     const { t } = useTranslation();
     const { user, savedEmailAddresses, rememberEmailAddress } = useAuth();
     const [emailOpen, setEmailOpen] = useState(false);
-    const [strategyDialogOpen, setStrategyDialogOpen] = useState(false);
 
-    // Edge-trigger the Strategy Template follow-up dialog: fires exactly once
-    // per transition into `completed`, regardless of how many re-renders happen
-    // with the already-completed row in cache.
-    const prevStatusRef = useRef<string | null | undefined>(task?.status);
+    // Strategy-template badge (read-only). The celebratory follow-up dialog is
+    // opened app-wide by `StrategyCompletionListener` off the data-layer event,
+    // so it fires no matter which surface completes the task — not just here.
     const isStrategyTask = extractStrategyTemplateFlag(task as TaskRow | undefined);
-    useEffect(() => {
-        const prev = prevStatusRef.current;
-        const curr = task?.status;
-        if (isStrategyTask && prev !== 'completed' && curr === 'completed') {
-            // Defer state update to next microtask to avoid react-hooks/set-state-in-effect
-            queueMicrotask(() => {
-                setStrategyDialogOpen(true);
-            });
-        }
-        prevStatusRef.current = curr;
-    }, [task?.status, isStrategyTask]);
 
     const allProjectTaskRows = allProjectTasks as TaskRow[];
-    const strategyExcludeIds = useMemo(
-        () => Array.from(collectSpawnedTemplateIds(allProjectTaskRows)),
-        [allProjectTaskRows],
-    );
     const {
         register,
         handleSubmit,
@@ -423,15 +404,6 @@ const TaskDetailsView = ({
                     </form>
                 </DialogContent>
             </Dialog>
-
-            {isStrategyTask && (
-                <StrategyFollowUpDialog
-                    task={task as TaskRow}
-                    open={strategyDialogOpen}
-                    onOpenChange={setStrategyDialogOpen}
-                    excludeTemplateIds={strategyExcludeIds}
-                />
-            )}
 
             {/* Metadata Footer */}
             <div className="pt-6 border-t border-slate-100 text-xs text-slate-400 flex flex-col gap-1">

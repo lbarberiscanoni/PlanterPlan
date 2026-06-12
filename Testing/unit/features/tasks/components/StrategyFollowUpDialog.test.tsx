@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import React from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { makeTask } from '@test';
@@ -8,11 +8,13 @@ import type { TaskRow } from '@/shared/db/app.types';
 // ---- Mocks (declared BEFORE component import) ----
 
 const mockClone = vi.fn();
+const mockCreate = vi.fn();
 vi.mock('@/shared/api/planterClient', () => ({
     planter: {
         entities: {
             Task: {
                 clone: (...args: unknown[]) => mockClone(...args),
+                create: (...args: unknown[]) => mockCreate(...args),
             },
         },
     },
@@ -102,7 +104,7 @@ describe('StrategyFollowUpDialog (Wave 24 Task 2)', () => {
                 status: 'completed',
             }) as TaskRow,
         );
-        expect(screen.getByText(/Add follow-up tasks/i)).toBeDefined();
+        expect(screen.getByText(/Well done/i)).toBeDefined();
         expect(screen.getByLabelText(/Search Master Library/i)).toBeDefined();
     });
 
@@ -116,10 +118,8 @@ describe('StrategyFollowUpDialog (Wave 24 Task 2)', () => {
         }) as TaskRow;
         const { invalidateSpy } = renderDialog(task);
 
-        await act(async () => {
-            fireEvent.focus(screen.getByLabelText(/Search Master Library/i));
-            fireEvent.click(screen.getByTestId('strategy-followup-search-row-tmpl-42'));
-        });
+        fireEvent.focus(screen.getByLabelText(/Search Master Library/i));
+        fireEvent.click(await screen.findByTestId('strategy-followup-search-row-tmpl-42'));
 
         await waitFor(() => expect(mockClone).toHaveBeenCalledTimes(1));
         expect(mockClone).toHaveBeenCalledWith('tmpl-42', 'parent-A', 'instance', 'user-1');
@@ -139,10 +139,8 @@ describe('StrategyFollowUpDialog (Wave 24 Task 2)', () => {
         }) as TaskRow;
         const { invalidateSpy } = renderDialog(task);
 
-        await act(async () => {
-            fireEvent.focus(screen.getByLabelText(/Search Master Library/i));
-            fireEvent.click(screen.getByTestId('strategy-followup-search-row-tmpl-42'));
-        });
+        fireEvent.focus(screen.getByLabelText(/Search Master Library/i));
+        fireEvent.click(await screen.findByTestId('strategy-followup-search-row-tmpl-42'));
 
         await waitFor(() => expect(mockClone).toHaveBeenCalled());
         expect(mockClone).toHaveBeenCalledWith('tmpl-42', null, 'instance', 'user-1');
@@ -161,13 +159,11 @@ describe('StrategyFollowUpDialog (Wave 24 Task 2)', () => {
         }) as TaskRow;
         renderDialog(task);
 
-        await act(async () => {
-            fireEvent.focus(screen.getByLabelText(/Search Master Library/i));
-            fireEvent.click(screen.getByTestId('strategy-followup-search-row-tmpl-42'));
-        });
+        fireEvent.focus(screen.getByLabelText(/Search Master Library/i));
+        fireEvent.click(await screen.findByTestId('strategy-followup-search-row-tmpl-42'));
 
+        await waitFor(() => expect(mockToastError).toHaveBeenCalledWith("You're not signed in"));
         expect(mockClone).not.toHaveBeenCalled();
-        expect(mockToastError).toHaveBeenCalledWith('Not signed in');
     });
 
     it('surfaces an error toast when Task.clone returns an error', async () => {
@@ -180,10 +176,8 @@ describe('StrategyFollowUpDialog (Wave 24 Task 2)', () => {
         }) as TaskRow;
         renderDialog(task);
 
-        await act(async () => {
-            fireEvent.focus(screen.getByLabelText(/Search Master Library/i));
-            fireEvent.click(screen.getByTestId('strategy-followup-search-row-tmpl-42'));
-        });
+        fireEvent.focus(screen.getByLabelText(/Search Master Library/i));
+        fireEvent.click(await screen.findByTestId('strategy-followup-search-row-tmpl-42'));
 
         await waitFor(() => expect(mockToastError).toHaveBeenCalled());
         expect(mockToastSuccess).not.toHaveBeenCalled();
@@ -205,6 +199,51 @@ describe('StrategyFollowUpDialog (Wave 24 Task 2)', () => {
         fireEvent.keyDown(input, { key: 'ArrowDown' });
 
         expect(input.getAttribute('aria-activedescendant')).toBeNull();
+    });
+
+    it('adds a custom task as a sibling (same parent), invalidates, and clears the input', async () => {
+        mockCreate.mockResolvedValueOnce({ id: 'custom-1' });
+        const task = makeTask({
+            id: 't-strat',
+            parent_task_id: 'parent-A',
+            root_id: 'proj-1',
+            status: 'completed',
+        }) as TaskRow;
+        const { invalidateSpy } = renderDialog(task);
+
+        const input = screen.getByTestId('strategy-followup-custom-input') as HTMLInputElement;
+        fireEvent.change(input, { target: { value: 'Draft donor list' } });
+        fireEvent.click(screen.getByTestId('strategy-followup-custom-add'));
+
+        await waitFor(() => expect(mockCreate).toHaveBeenCalledTimes(1));
+        expect(mockCreate).toHaveBeenCalledWith(expect.objectContaining({
+            title: 'Draft donor list',
+            parent_task_id: 'parent-A',
+            root_id: 'proj-1',
+            origin: 'instance',
+            is_complete: false,
+        }));
+        expect(invalidateSpy).toHaveBeenCalledWith(
+            expect.objectContaining({ queryKey: ['projectHierarchy', 'proj-1'] }),
+        );
+        expect(mockToastSuccess).toHaveBeenCalled();
+        await waitFor(() => expect(input.value).toBe(''));
+        expect(mockClone).not.toHaveBeenCalled();
+    });
+
+    it('does not create a task when the custom title is blank', () => {
+        const task = makeTask({
+            id: 't-strat',
+            parent_task_id: 'parent-A',
+            root_id: 'proj-1',
+            status: 'completed',
+        }) as TaskRow;
+        renderDialog(task);
+
+        // Button is disabled for empty/whitespace titles.
+        const addBtn = screen.getByTestId('strategy-followup-custom-add') as HTMLButtonElement;
+        expect(addBtn).toBeDisabled();
+        expect(mockCreate).not.toHaveBeenCalled();
     });
 
     it('closes via the footer button', () => {

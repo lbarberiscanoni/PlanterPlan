@@ -307,6 +307,20 @@
       "incomplete_subtasks_confirm_other": "Esta tarea tiene {{count}} subtareas incompletas. ¿Marcar todo como completado?"
     },
     "strategy_follow_up": {
+      "title": "¡Bien hecho! 🎉",
+      "description": "Ahora imagina y agrega tareas personalizadas a tu plan según tu estrategia.",
+      "add_label": "Agregar una tarea",
+      "add_placeholder": "p. ej. Redactar tu lista de donantes",
+      "add_button": "Agregar",
+      "add_success": "Se agregó \"{{title}}\"",
+      "add_error": "No se pudo agregar la tarea",
+      "add_empty_error": "Escribe un nombre de tarea",
+      "library_label": "O agrega desde la biblioteca maestra",
+      "untitled_template": "Plantilla sin título",
+      "finding_related": "Buscando plantillas relacionadas…",
+      "no_related": "No se encontraron plantillas relacionadas.",
+      "done": "Listo",
+      "skip": "Omitir",
       "search_label": "Buscar en la biblioteca maestra",
       "search_results_aria": "Resultados de búsqueda de la biblioteca maestra",
       "loading_templates": "Cargando plantillas…",
@@ -807,6 +821,7 @@
   },
   "errors": {
     "unknown": "Se produjo un error desconocido",
+    "not_signed_in": "No has iniciado sesión",
     "failed_load_projects": "No se pudieron cargar los proyectos",
     "failed_load_project": "No se pudo cargar el proyecto",
     "failed_load_tasks": "No se pudieron cargar las tareas",

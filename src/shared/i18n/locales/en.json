@@ -301,6 +301,20 @@
       "incomplete_subtasks_confirm_other": "This task has {{count}} incomplete subtasks. Mark all as complete?"
     },
     "strategy_follow_up": {
+      "title": "Well done! 🎉",
+      "description": "Now dream up and add custom tasks to your plan based on your strategy.",
+      "add_label": "Add a task",
+      "add_placeholder": "e.g. Draft your donor list",
+      "add_button": "Add",
+      "add_success": "Added \"{{title}}\"",
+      "add_error": "Couldn't add task",
+      "add_empty_error": "Enter a task name",
+      "library_label": "Or add from the Master Library",
+      "untitled_template": "Untitled template",
+      "finding_related": "Finding related templates…",
+      "no_related": "No related templates found.",
+      "done": "Done",
+      "skip": "Skip",
       "search_label": "Search Master Library",
       "search_results_aria": "Master Library search results",
       "loading_templates": "Loading templates…",
@@ -801,6 +815,7 @@
   },
   "errors": {
     "unknown": "Unknown error occurred",
+    "not_signed_in": "You're not signed in",
     "failed_load_projects": "Failed to load projects",
     "failed_load_project": "Failed to load project",
     "failed_load_tasks": "Failed to load tasks",
