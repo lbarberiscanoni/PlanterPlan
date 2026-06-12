@@ -18,11 +18,26 @@ export const TASK_STATUS = {
  IN_PROGRESS: 'in_progress',
  BLOCKED: 'blocked',
  COMPLETED: 'completed',
+ NOT_APPLICABLE: 'na',
  OVERDUE: 'overdue',
  DUE_SOON: 'due_soon',
 } as const;
 
 export type TaskStatus = (typeof TASK_STATUS)[keyof typeof TASK_STATUS];
+
+/**
+ * "Resolved" statuses require no further work: a task is either done
+ * (`completed`) or intentionally excluded (`na` — not applicable). Resolved
+ * tasks don't block a parent from rolling up to complete and are excluded from
+ * outstanding-work counts and active/overdue lists.
+ */
+export const RESOLVED_TASK_STATUSES: ReadonlySet<string> = new Set([
+ TASK_STATUS.COMPLETED,
+ TASK_STATUS.NOT_APPLICABLE,
+]);
+
+export const isResolvedStatus = (status?: string | null): boolean =>
+ status != null && RESOLVED_TASK_STATUSES.has(status);
 
 export const PROJECT_STATUS = {
  PLANNING: 'planning',

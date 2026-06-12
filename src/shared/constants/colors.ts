@@ -17,6 +17,7 @@ export const CHART_COLORS: Record<string, string> = {
  [TASK_STATUS.IN_PROGRESS]: 'var(--color-amber-500)',
  [TASK_STATUS.BLOCKED]: 'var(--color-rose-500)',
  [TASK_STATUS.COMPLETED]: 'var(--color-emerald-500)',
+ [TASK_STATUS.NOT_APPLICABLE]: 'var(--color-slate-300)',
 };
 
 export const PHASE_STATUS_COLORS: Record<string, { bg: string; light: string; text: string; border: string }> = {
@@ -32,6 +33,7 @@ export const TASK_STATUS_BORDER: Record<string, string> = {
   in_progress: 'border-l-amber-500',
   blocked: 'border-l-rose-500',
   completed: 'border-l-emerald-500',
+  na: 'border-l-slate-200',
   overdue: 'border-l-rose-500',
 };
 

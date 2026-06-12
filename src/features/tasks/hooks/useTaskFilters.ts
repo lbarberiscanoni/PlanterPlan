@@ -82,6 +82,10 @@ export const filterAndSortTasks = ({
   (t) => t.parent_task_id !== null && t.origin === 'instance',
  );
 
+ // `na` (not applicable) tasks are resolved — they never surface in the
+ // urgency-driven active views (overdue / due soon / current / upcoming).
+ const activeChildren = instanceChildren.filter((t) => t.status !== 'na');
+
  const urgencyOf = (t: TaskRow) => {
   const threshold = t.root_id ? thresholds.get(t.root_id) ?? DEFAULT_DUE_SOON_THRESHOLD : DEFAULT_DUE_SOON_THRESHOLD;
   const rootTask = t.root_id ? rootById.get(t.root_id) ?? null : null;
@@ -101,16 +105,16 @@ export const filterAndSortTasks = ({
    filtered = filterPriorityTasks(tasks, now);
    break;
   case 'overdue':
-   filtered = instanceChildren.filter((t) => urgencyOf(t) === 'overdue');
+   filtered = activeChildren.filter((t) => urgencyOf(t) === 'overdue');
    break;
   case 'due_soon':
-   filtered = instanceChildren.filter((t) => urgencyOf(t) === 'due_soon');
+   filtered = activeChildren.filter((t) => urgencyOf(t) === 'due_soon');
    break;
   case 'current':
-   filtered = instanceChildren.filter((t) => urgencyOf(t) === 'current');
+   filtered = activeChildren.filter((t) => urgencyOf(t) === 'current');
    break;
   case 'not_yet_due':
-   filtered = instanceChildren.filter((t) => urgencyOf(t) === 'not_yet_due');
+   filtered = activeChildren.filter((t) => urgencyOf(t) === 'not_yet_due');
    break;
   case 'completed':
    filtered = instanceChildren.filter(isCompleted);

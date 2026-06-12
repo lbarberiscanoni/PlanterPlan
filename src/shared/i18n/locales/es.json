@@ -237,7 +237,8 @@
       "todo": "Pendiente",
       "in_progress": "En curso",
       "blocked": "Bloqueada",
-      "completed": "Completada"
+      "completed": "Completada",
+      "na": "N/A"
     },
     "comments": {
       "deleted_author": "Usuario eliminado",
@@ -725,7 +726,7 @@
       "avatar_alt": "Perfil",
       "avatar_url_label": "URL del avatar",
       "avatar_url_placeholder": "https://example.com/avatar.jpg",
-      "role_label": "Rol",
+      "role_label": "Título",
       "role_placeholder": "p. ej. Plantador líder",
       "organization_label": "Organización/Iglesia",
       "organization_placeholder": "p. ej. Iglesia Hope City",

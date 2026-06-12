@@ -51,7 +51,9 @@ export function useProjectReports(
  },
  ];
 
- const totalTasks = tasks.length;
+ // Exclude `na` (not applicable) tasks from progress denominators — they are
+ // resolved work that neither counts toward nor against completion.
+ const totalTasks = tasks.filter((t) => t.status !== TASK_STATUS.NOT_APPLICABLE).length;
  const completedTasks = tasksByStatus.completed;
  const overallProgress = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
 
@@ -60,7 +62,7 @@ export function useProjectReports(
 
  const phaseData = sortedPhases.map((phase, idx) => {
  // Count milestones (direct children of the phase), not leaf tasks
- const phaseMilestones = tasks.filter((t) => t.parent_task_id === phase.id);
+ const phaseMilestones = tasks.filter((t) => t.parent_task_id === phase.id && t.status !== TASK_STATUS.NOT_APPLICABLE);
  const completed = phaseMilestones.filter((t) => t.status === TASK_STATUS.COMPLETED).length;
  const total = phaseMilestones.length;
  return {
@@ -78,7 +80,7 @@ export function useProjectReports(
  const milestones = tasks
  .filter((t) => t.parent_task_id && phaseIds.has(t.parent_task_id))
  .map((m) => {
-  const milestoneTasks = tasks.filter((t) => t.parent_task_id === m.id);
+  const milestoneTasks = tasks.filter((t) => t.parent_task_id === m.id && t.status !== TASK_STATUS.NOT_APPLICABLE);
   const completedCount = milestoneTasks.filter((t) => t.status === TASK_STATUS.COMPLETED).length;
   const totalCount = milestoneTasks.length;
   return {

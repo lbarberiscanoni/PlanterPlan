@@ -166,7 +166,8 @@ const TaskItem = ({
 
  const handleStatusChange = async (id: string, status: string) => {
  if (status === 'completed' && task.children?.length) {
- const incompleteChildren = task.children.filter((c) => c.status !== 'completed');
+ // `na` (not applicable) children are resolved — they don't count as incomplete.
+ const incompleteChildren = task.children.filter((c) => c.status !== 'completed' && c.status !== 'na');
  if (incompleteChildren.length > 0) {
  const confirmed = await confirm({
  title: t('tasks.complete_with_incomplete_subtasks_title'),

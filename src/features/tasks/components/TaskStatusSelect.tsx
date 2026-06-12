@@ -9,6 +9,8 @@ const getStatusStyle = (status?: string | null) => {
  return 'status-badge-progress';
  case TASK_STATUS.BLOCKED:
  return 'status-badge-blocked';
+ case TASK_STATUS.NOT_APPLICABLE:
+ return 'status-badge-na';
  case TASK_STATUS.TODO:
  default:
  return 'status-badge-todo';
@@ -54,6 +56,7 @@ export default function TaskStatusSelect({ status, taskId, taskTitle, onStatusCh
         <option value={TASK_STATUS.IN_PROGRESS}>In Progress</option>
         <option value={TASK_STATUS.BLOCKED}>Blocked</option>
         <option value={TASK_STATUS.COMPLETED}>Complete</option>
+        <option value={TASK_STATUS.NOT_APPLICABLE}>N/A</option>
       </select>
     </div>
   );

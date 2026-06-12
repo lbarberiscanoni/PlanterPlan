@@ -2,6 +2,7 @@ import { supabase } from '../db/client';
 import { toIsoDate, nowUtcIso, calculateMinMaxDates } from '@/shared/lib/date-engine';
 import { retry } from '../lib/retry';
 import { assertSafeUrl } from '@/shared/lib/safe-url';
+import { isResolvedStatus } from '@/shared/constants/domain';
 import type { Database } from '@/shared/db/database.types';
 import type {
     Project,
@@ -1007,8 +1008,10 @@ export const planter: PlanterClient = {
                         const children = await planter.entities.Task.filter({ parent_task_id: parentId });
                         if (!children.length) return;
 
-                        const allChildrenCompleted = children.every(child => child.status === 'completed');
-                        const parentPatch: TaskUpdate = allChildrenCompleted
+                        // A child marked `na` (not applicable) is "resolved" — it
+                        // doesn't keep the parent from rolling up to complete.
+                        const allChildrenResolved = children.every(child => isResolvedStatus(child.status));
+                        const parentPatch: TaskUpdate = allChildrenResolved
                             ? { status: 'completed', updated_at: nowUtcIso() }
                             : { status: deriveParentStatus(children), updated_at: nowUtcIso() };
 
@@ -1026,15 +1029,17 @@ export const planter: PlanterClient = {
                         status,
                     } as TaskUpdate);
 
-                    if (status === 'completed') {
-                        // Cascade DOWN: mark all children as completed
+                    if (isResolvedStatus(status)) {
+                        // Cascade DOWN: a terminal/resolved status (completed or na)
+                        // propagates to every descendant. Marking a milestone N/A
+                        // marks its tasks N/A, mirroring the completion cascade.
                         const children = await planter.entities.Task.filter({ parent_task_id: taskId });
                         if (children && children.length > 0) {
                             const LIMIT = 3;
                             for (let i = 0; i < children.length; i += LIMIT) {
                                 const batch = children.slice(i, i + LIMIT);
                                 await Promise.all(
-                                    batch.map((child) => (planter.entities.Task as TaskEntityClient).updateStatus(child.id, 'completed'))
+                                    batch.map((child) => (planter.entities.Task as TaskEntityClient).updateStatus(child.id, status))
                                 );
                             }
                         }

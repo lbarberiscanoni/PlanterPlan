@@ -10,6 +10,7 @@ export const PRIORITY_DUE_SOON_DAYS = 7;
 
 export const PRIORITY_EXCLUDED_STATUSES = [
   'completed',
+  'na',
   'archived',
   'deleted',
   'cancelled',

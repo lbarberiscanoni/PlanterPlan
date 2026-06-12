@@ -231,7 +231,8 @@
       "todo": "To Do",
       "in_progress": "In Progress",
       "blocked": "Blocked",
-      "completed": "Completed"
+      "completed": "Completed",
+      "na": "N/A"
     },
     "comments": {
       "deleted_author": "Deleted user",
@@ -719,7 +720,7 @@
       "avatar_alt": "Profile",
       "avatar_url_label": "Avatar URL",
       "avatar_url_placeholder": "https://example.com/avatar.jpg",
-      "role_label": "Role",
+      "role_label": "Title",
       "role_placeholder": "e.g. Lead Planter",
       "organization_label": "Organization/Church",
       "organization_placeholder": "e.g. Hope City Church",

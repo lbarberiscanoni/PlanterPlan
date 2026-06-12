@@ -33,7 +33,11 @@ export const DERIVED_PROJECT_STATE_BADGE_CLASSES: Record<DerivedProjectState, st
  * @returns Derived project state and progress counts.
  */
 export function deriveProjectState(project: Project, tasks: readonly TaskRow[]): DerivedProjectStateResult {
-    const projectTasks = tasks.filter((task) => task.id !== project.id);
+    // Tasks marked `na` (not applicable) are excluded from progress entirely —
+    // they neither count toward the total nor block the project from completing.
+    const projectTasks = tasks.filter(
+        (task) => task.id !== project.id && task.status !== TASK_STATUS.NOT_APPLICABLE,
+    );
     const totalTasks = projectTasks.length;
 
     if (project.status === PROJECT_STATUS.ARCHIVED) {
