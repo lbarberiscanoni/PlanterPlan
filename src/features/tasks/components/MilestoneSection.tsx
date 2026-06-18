@@ -7,9 +7,11 @@ import { ChevronRight, Info, Plus, Trash2 } from 'lucide-react';
 import { useDroppable } from '@dnd-kit/core';
 import { SortableContext } from '@dnd-kit/sortable';
 import { cn } from '@/shared/lib/utils';
-import { TASK_STATUS } from '@/shared/constants';
+import { TASK_STATUS, isResolvedStatus } from '@/shared/constants';
 import { SortableTaskItem } from '@/features/tasks/components/TaskItem';
+import TaskStatusSelect from '@/features/tasks/components/TaskStatusSelect';
 import InlineTaskInput from '@/features/tasks/components/InlineTaskInput';
+import { useConfirm } from '@/shared/ui/confirm-dialog-context';
 
 import { TaskRow, Task } from '@/shared/db/app.types';
 import type { TaskUpdate } from '@/shared/db/app.types';
@@ -72,6 +74,7 @@ export default function MilestoneSection({
     numberByTaskId,
 }: MilestoneSectionProps) {
     const { t } = useTranslation();
+    const confirm = useConfirm();
     const [isExpanded, setIsExpanded] = useState(true);
 
     const { setNodeRef, isOver } = useDroppable({
@@ -93,8 +96,9 @@ export default function MilestoneSection({
             .sort(compareByDueThenPosition),
         [tasks, milestone.id],
     );
+    // N/A tasks count toward completion as resolved work (numerator + denominator).
     const completedTasks = useMemo(
-        () => milestoneTasks.filter((t) => t.status === TASK_STATUS.COMPLETED).length,
+        () => milestoneTasks.filter((t) => isResolvedStatus(t.status)).length,
         [milestoneTasks],
     );
     const totalTasks = milestoneTasks.length;
@@ -107,6 +111,36 @@ export default function MilestoneSection({
         (id: string, status: string) => onTaskUpdate?.(id, { status } as Partial<TaskRow>),
         [onTaskUpdate],
     );
+
+    // The milestone row itself was previously un-completable from the board —
+    // only its child tasks had a status pill. Marking the milestone complete
+    // cascades to children (planterClient.updateStatus), so mirror TaskItem's
+    // guard and confirm before completing over still-incomplete subtasks.
+    const handleMilestoneStatus = useCallback(
+        async (id: string, status: string) => {
+            if (status === TASK_STATUS.COMPLETED) {
+                const incompleteTasks = milestoneTasks.filter(
+                    (c) => c.status !== TASK_STATUS.COMPLETED && c.status !== TASK_STATUS.NOT_APPLICABLE,
+                );
+                if (incompleteTasks.length > 0) {
+                    const confirmed = await confirm({
+                        title: t('tasks.complete_with_incomplete_subtasks_title'),
+                        description: t('tasks.complete_with_incomplete_subtasks_description', {
+                            count: incompleteTasks.length,
+                        }),
+                        confirmText: t('common.confirm'),
+                    });
+                    if (!confirmed) return;
+                }
+            }
+            onTaskUpdate?.(id, { status } as Partial<TaskRow>);
+        },
+        [confirm, milestoneTasks, onTaskUpdate, t],
+    );
+
+    const canUpdateMilestoneStatus = canUpdateTaskStatus
+        ? canUpdateTaskStatus(milestone)
+        : Boolean(onTaskUpdate);
 
     return (
         <div
@@ -195,6 +229,17 @@ export default function MilestoneSection({
                     </Badge>
                 </div>
             </button>
+            {milestone.origin !== 'template' && (
+                <div className="flex items-center px-4 border-l border-slate-100">
+                    <TaskStatusSelect
+                        status={milestone.status}
+                        taskId={milestone.id}
+                        taskTitle={milestone.title}
+                        onStatusChange={handleMilestoneStatus}
+                        disabled={!canUpdateMilestoneStatus}
+                    />
+                </div>
+            )}
             {canEdit && onDeleteMilestone && (
                 <button
                     type="button"
