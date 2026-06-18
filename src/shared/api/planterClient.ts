@@ -926,6 +926,33 @@ export const planter: PlanterClient = {
 
         Task: {
             ...createEntityClient<Task, TaskInsert, TaskUpdate>('tasks'),
+            // The generic entity `list` is a single unbounded `.select('*')`, which
+            // PostgREST silently truncates at its `db-max-rows` cap (default 1000).
+            // Accounts whose visible task set exceeds the cap got an arbitrary slice,
+            // dropping milestone/phase ancestors — which made cross-project grouping
+            // (TasksPage) bucket the now-unresolvable children under "Other". Page
+            // through the full set with a stable `id` order so every container row is
+            // present client-side. Order + range guarantees no gaps/dupes between pages.
+            list: async (opts): Promise<Task[]> => {
+                const PAGE_SIZE = 1000;
+                return retry(async () => {
+                    const all: Task[] = [];
+                    for (let from = 0; ; from += PAGE_SIZE) {
+                        let query = supabase
+                            .from('tasks')
+                            .select('*')
+                            .order('id', { ascending: true })
+                            .range(from, from + PAGE_SIZE - 1);
+                        if (opts?.signal) query = query.abortSignal(opts.signal);
+                        const { data, error } = await query;
+                        if (error) throw new PlanterError(error.message, error.code ?? '500');
+                        const page = (data as Task[]) ?? [];
+                        all.push(...page);
+                        if (page.length < PAGE_SIZE) break;
+                    }
+                    return all;
+                });
+            },
             fetchChildren: async (taskId: string): Promise<{ data: Task[] | null, error: Error | null }> => {
                 try {
                     const targetTask = await planter.entities.Task.get(taskId);
