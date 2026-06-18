@@ -119,6 +119,57 @@ describe('Task.updateStatus — server payload trim (Wave 23 Task 3)', () => {
     expect(parentPayload).toHaveProperty('updated_at');
   });
 
+  it('marks the parent `na` when every child is `na`', async () => {
+    // A milestone whose only child is flipped to `na` has no real work left,
+    // so it rolls up to `na` rather than `completed`.
+    const child = makeTask({ id: 't-child', parent_task_id: 't-parent', status: 'na' });
+    const parent = makeTask({ id: 't-parent', parent_task_id: null });
+
+    const updateChildChain = createChain({ data: [{ ...child, parent_task_id: 't-parent' }], error: null });
+    const filterChildrenOfChild = createChain({ data: [], error: null });       // descendants of child (cascade-down)
+    const filterChildrenOfParent = createChain({ data: [child], error: null }); // children of parent (reconcile)
+    const updateParentChain = createChain({ data: [parent], error: null });     // parent patch
+    const tail = createChain({ data: [], error: null });
+
+    mockFrom
+      .mockReturnValueOnce(updateChildChain)
+      .mockReturnValueOnce(filterChildrenOfChild)
+      .mockReturnValueOnce(filterChildrenOfParent)
+      .mockReturnValueOnce(updateParentChain)
+      .mockReturnValue(tail);
+
+    await planter.entities.Task.updateStatus('t-child', 'na');
+
+    expect(updateParentChain.update).toHaveBeenCalled();
+    const parentPayload = updateParentChain.update.mock.calls[0][0] as Record<string, unknown>;
+    expect(parentPayload).toHaveProperty('status', 'na');
+  });
+
+  it('marks the parent `completed` when children mix `na` and `completed`', async () => {
+    // One child completed + one child na (no unresolved work) → parent completes.
+    const childCompleted = makeTask({ id: 't-done', parent_task_id: 't-parent', status: 'completed' });
+    const childNa = makeTask({ id: 't-na', parent_task_id: 't-parent', status: 'na' });
+    const parent = makeTask({ id: 't-parent', parent_task_id: null });
+
+    const updateChildChain = createChain({ data: [{ ...childCompleted, parent_task_id: 't-parent' }], error: null });
+    const filterChildrenOfChild = createChain({ data: [], error: null });
+    const filterChildrenOfParent = createChain({ data: [childCompleted, childNa], error: null });
+    const updateParentChain = createChain({ data: [parent], error: null });
+    const tail = createChain({ data: [], error: null });
+
+    mockFrom
+      .mockReturnValueOnce(updateChildChain)
+      .mockReturnValueOnce(filterChildrenOfChild)
+      .mockReturnValueOnce(filterChildrenOfParent)
+      .mockReturnValueOnce(updateParentChain)
+      .mockReturnValue(tail);
+
+    await planter.entities.Task.updateStatus('t-done', 'completed');
+
+    const parentPayload = updateParentChain.update.mock.calls[0][0] as Record<string, unknown>;
+    expect(parentPayload).toHaveProperty('status', 'completed');
+  });
+
   it('reopening a subtask reconciles the task, milestone, and phase ancestors', async () => {
     const subtask = makeTask({
       id: 'subtask-1',

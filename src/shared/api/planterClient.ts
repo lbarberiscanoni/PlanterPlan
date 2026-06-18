@@ -1015,11 +1015,17 @@ export const planter: PlanterClient = {
                         if (!children.length) return;
 
                         // A child marked `na` (not applicable) is "resolved" — it
-                        // doesn't keep the parent from rolling up to complete.
+                        // doesn't keep the parent from rolling up. When EVERY child
+                        // is `na`, the parent has no real work left either, so it
+                        // becomes `na` too; if at least one child was completed, the
+                        // parent rolls up to `completed`.
+                        const allChildrenNa = children.every(child => child.status === 'na');
                         const allChildrenResolved = children.every(child => isResolvedStatus(child.status));
-                        const parentPatch: TaskUpdate = allChildrenResolved
-                            ? { status: 'completed', updated_at: nowUtcIso() }
-                            : { status: deriveParentStatus(children), updated_at: nowUtcIso() };
+                        const parentPatch: TaskUpdate = allChildrenNa
+                            ? { status: 'na', updated_at: nowUtcIso() }
+                            : allChildrenResolved
+                                ? { status: 'completed', updated_at: nowUtcIso() }
+                                : { status: deriveParentStatus(children), updated_at: nowUtcIso() };
 
                         const parent = await planter.entities.Task.update(parentId, parentPatch);
                         if (parent?.parent_task_id) {

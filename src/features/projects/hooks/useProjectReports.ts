@@ -51,8 +51,9 @@ export function useProjectReports(
  },
  ];
 
- // Exclude `na` (not applicable) tasks from progress denominators — they are
- // resolved work that neither counts toward nor against completion.
+ // Drop `na` (not applicable) tasks from the progress denominator entirely —
+ // they leave the total so progress reaches 100% once every remaining task is
+ // completed.
  const totalTasks = tasks.filter((t) => t.status !== TASK_STATUS.NOT_APPLICABLE).length;
  const completedTasks = tasksByStatus.completed;
  const overallProgress = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;

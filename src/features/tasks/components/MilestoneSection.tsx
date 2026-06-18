@@ -7,7 +7,7 @@ import { ChevronRight, Info, Plus, Trash2 } from 'lucide-react';
 import { useDroppable } from '@dnd-kit/core';
 import { SortableContext } from '@dnd-kit/sortable';
 import { cn } from '@/shared/lib/utils';
-import { TASK_STATUS, isResolvedStatus } from '@/shared/constants';
+import { TASK_STATUS } from '@/shared/constants';
 import { SortableTaskItem } from '@/features/tasks/components/TaskItem';
 import TaskStatusSelect from '@/features/tasks/components/TaskStatusSelect';
 import InlineTaskInput from '@/features/tasks/components/InlineTaskInput';
@@ -96,12 +96,18 @@ export default function MilestoneSection({
             .sort(compareByDueThenPosition),
         [tasks, milestone.id],
     );
-    // N/A tasks count toward completion as resolved work (numerator + denominator).
-    const completedTasks = useMemo(
-        () => milestoneTasks.filter((t) => isResolvedStatus(t.status)).length,
+    // `na` (not applicable) tasks are dropped from the progress denominator
+    // entirely — they represent work that no longer needs doing, so a milestone
+    // reads 100% once every remaining (non-N/A) task is completed.
+    const activeTasks = useMemo(
+        () => milestoneTasks.filter((t) => t.status !== TASK_STATUS.NOT_APPLICABLE),
         [milestoneTasks],
     );
-    const totalTasks = milestoneTasks.length;
+    const completedTasks = useMemo(
+        () => activeTasks.filter((t) => t.status === TASK_STATUS.COMPLETED).length,
+        [activeTasks],
+    );
+    const totalTasks = activeTasks.length;
     const progress = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
 
     // Hoist the status-update adapter so every row gets the same function

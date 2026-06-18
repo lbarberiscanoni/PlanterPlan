@@ -41,8 +41,11 @@ export default function PhaseCard({ phase, tasks = [], milestones = [], isActive
  const { t } = useTranslation();
  const order = phase.position || 1;
 
- // Filter tasks that belong to this phase (via milestones)
+ // Filter tasks that belong to this phase (via milestones), dropping `na`
+ // (not applicable) tasks from the progress denominator entirely — they leave
+ // the total so the phase reads 100% once every remaining task is completed.
  const phaseTasks = tasks.filter((t) =>
+ t.status !== TASK_STATUS.NOT_APPLICABLE &&
  milestones.some((m) => m.id === t.parent_task_id && m.parent_task_id === phase.id)
  );
 

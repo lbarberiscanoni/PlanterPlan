@@ -9,6 +9,7 @@
 import type { Task as GanttTaskApiType } from 'gantt-task-react';
 import type { HierarchyTask } from '@/shared/db/app.types';
 import { addDaysToDate, compareDateAsc } from '@/shared/lib/date-engine';
+import { TASK_STATUS } from '@/shared/constants';
 
 export interface GanttRowOptions {
     includeLeafTasks: boolean;
@@ -76,7 +77,11 @@ export function tasksToGanttRows(tasks: HierarchyTask[], opts: GanttRowOptions):
         return null;
     }
 
-    /** Counts completed vs total descendants under `node` (excluding subtasks). */
+    /**
+     * Counts completed vs total descendants under `node` (excluding subtasks).
+     * `na` (not applicable) tasks are dropped from the denominator entirely, so
+     * a parent reaches 100% once every remaining (non-N/A) descendant is done.
+     */
     function collectProgress(node: HierarchyTask): { completed: number; total: number } {
         let completed = 0;
         let total = 0;
@@ -84,9 +89,10 @@ export function tasksToGanttRows(tasks: HierarchyTask[], opts: GanttRowOptions):
         while (stack.length > 0) {
             const cur = stack.pop() as HierarchyTask;
             if (cur.task_type === 'subtask') continue;
+            for (const child of byParent.get(cur.id) ?? []) stack.push(child);
+            if (cur.status === TASK_STATUS.NOT_APPLICABLE) continue;
             total += 1;
             if (cur.is_complete) completed += 1;
-            for (const child of byParent.get(cur.id) ?? []) stack.push(child);
         }
         return { completed, total };
     }
