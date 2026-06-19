@@ -100,7 +100,10 @@ const TaskFormFields = ({
  )}
  </div>
 
- {origin === 'instance' && isAdmin && (
+ {/* Duration is a template-level property: authored on the master template
+    (admin-only) and flows into instances at clone time. Project members do
+    not edit duration on instances — only the manual overrides below. */}
+ {canEditTemplateFlags && (
  <div className="grid grid-cols-1 gap-4 md:grid-cols-2 mt-4">
  <div className="space-y-2">
  <Label htmlFor="days_from_start">Duration (working days)</Label>
