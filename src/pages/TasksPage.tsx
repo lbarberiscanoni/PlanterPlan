@@ -1,11 +1,12 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useCallback, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { DndContext, closestCorners, useSensor, useSensors, PointerSensor, KeyboardSensor } from '@dnd-kit/core';
 import { sortableKeyboardCoordinates } from '@dnd-kit/sortable';
 import type { DragEndEvent } from '@dnd-kit/core';
-import type { TaskRow, TaskUpdate } from '@/shared/db/app.types';
+import type { TaskRow, TaskUpdate, TaskFormData } from '@/shared/db/app.types';
+import { constructUpdatePayload } from '@/shared/lib/date-engine/payloadHelpers';
 import { planter } from '@/shared/api/planterClient';
 import { STALE_TIMES } from '@/shared/lib/react-query-config';
 import TaskItem from '@/features/tasks/components/TaskItem';
@@ -16,7 +17,7 @@ import { Input } from '@/shared/ui/input';
 import { useAuth } from '@/shared/contexts/auth-context';
 import { useTeam } from '@/features/people/hooks/useTeam';
 import { ROLES } from '@/shared/constants';
-import { useDeleteTask } from '@/features/tasks/hooks/useTaskMutations';
+import { useDeleteTask, useUpdateTask } from '@/features/tasks/hooks/useTaskMutations';
 import { useConfirm } from '@/shared/ui/confirm-dialog-context';
 import { toast } from 'sonner';
 import {
@@ -61,7 +62,9 @@ export default function TasksPage() {
               staleTime: STALE_TIMES.medium,
        });
        const deleteTask = useDeleteTask();
+       const updateTaskMutation = useUpdateTask();
        const confirm = useConfirm();
+       const [searchParams, setSearchParams] = useSearchParams();
 
        const findTask = useCallback((id: string) => tasks.find((t: TaskRow) => t.id === id), [tasks]);
        const invalidateTasks = useCallback(() => queryClient.invalidateQueries({ queryKey: ['tasks'] }), [queryClient]);
@@ -70,6 +73,13 @@ export default function TasksPage() {
        const [groupMode, setGroupMode] = useState<'grouped' | 'flat'>('grouped');
        const [sort, setSort] = useState<TaskSortKey>('chronological');
        const [selectedTask, setSelectedTask] = useState<TaskRow | null>(null);
+       // Wave 37: clicking a row opens the task's edit form directly (not the
+       // read-only view), with a shareable `?task=<id>` deep-link that reopens
+       // it in edit mode.
+       const [taskFormState, setTaskFormState] = useState<
+              { mode?: 'create' | 'edit'; origin?: 'instance' | 'template'; isPhase?: boolean } | null
+       >(null);
+       const handledDeepLinkRef = useRef<string | null>(null);
        const [searchQuery, setSearchQuery] = useState<string>('');
        const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
        const effectiveSort: TaskSortKey = filter === 'priority' ? 'chronological' : sort;
@@ -115,13 +125,63 @@ export default function TasksPage() {
        const handleStatusChange = useCallback((id: string, status: string) => {
               updateTask(id, { status });
        }, [updateTask]);
-       const handleTaskClick = useCallback((task: TaskRow) => {
+       const openTaskInEditMode = useCallback((task: TaskRow) => {
               setSelectedTask(task);
+              setTaskFormState({ mode: 'edit', origin: (task.origin as 'instance' | 'template') ?? 'instance' });
        }, []);
+       const handleTaskClick = useCallback((task: TaskRow) => {
+              openTaskInEditMode(task);
+              const next = new URLSearchParams(searchParams);
+              next.set('task', task.id);
+              setSearchParams(next, { replace: false });
+       }, [openTaskInEditMode, searchParams, setSearchParams]);
        const closeDetailsPanel = useCallback(() => {
               setSelectedTask(null);
-       }, []);
+              setTaskFormState(null);
+              if (searchParams.has('task')) {
+                     const next = new URLSearchParams(searchParams);
+                     next.delete('task');
+                     setSearchParams(next, { replace: true });
+              }
+       }, [searchParams, setSearchParams]);
+       // Deep-link: when the URL carries `?task=<id>`, open that task in edit
+       // mode once its row is present in the loaded list.
+       const deepLinkTaskId = searchParams.get('task');
+       useEffect(() => {
+              if (!deepLinkTaskId) {
+                     handledDeepLinkRef.current = null;
+                     return;
+              }
+              if (handledDeepLinkRef.current === deepLinkTaskId) return;
+              const target = tasks.find((tk: TaskRow) => tk.id === deepLinkTaskId);
+              if (!target) return;
+              handledDeepLinkRef.current = deepLinkTaskId;
+              openTaskInEditMode(target);
+       }, [deepLinkTaskId, tasks, openTaskInEditMode]);
        const selectedTaskId = selectedTask?.id ?? null;
+       const handleTaskSubmit = useCallback(async (formData: TaskFormData) => {
+              if (!selectedTask) return;
+              try {
+                     const updatePayload = constructUpdatePayload(formData, selectedTask, {
+                            origin: selectedTask.origin ?? 'instance',
+                            parentId: selectedTask.parent_task_id ?? null,
+                            rootId: selectedTask.root_id ?? null,
+                            contextTasks: tasks as TaskRow[],
+                     });
+                     await updateTaskMutation.mutateAsync({
+                            id: selectedTask.id,
+                            ...updatePayload,
+                            root_id: selectedTask.root_id ?? selectedTask.id,
+                     });
+                     await invalidateTasks();
+                     setTaskFormState(null);
+                     toast.success(t('projects.task_updated_toast'));
+              } catch (err) {
+                     const message = err instanceof Error ? err.message : t('errors.unknown');
+                     toast.error(t('projects.task_save_failed_toast'), { description: message });
+                     throw err;
+              }
+       }, [selectedTask, tasks, updateTaskMutation, invalidateTasks, t]);
        const handleDeleteTaskById = useCallback(
               async (taskId: string) => {
                      const task = findTask(taskId);
@@ -138,6 +198,7 @@ export default function TasksPage() {
                             await deleteTask.mutateAsync({ id: task.id, root_id: task.root_id });
                             await invalidateTasks();
                             setSelectedTask((current) => current?.id === task.id ? null : current);
+                            setTaskFormState(null);
                             toast.success(t('tasks.delete_success'));
                      } catch (err) {
                             console.error('Failed to delete task:', err);
@@ -644,12 +705,17 @@ export default function TasksPage() {
                                    {selectedTaskForPanel && (
                                           <TaskDetailsPanel
                                                  showForm={false}
+                                                 taskFormState={selectedCanEdit ? taskFormState : null}
                                                  selectedTask={selectedTaskForPanel}
+                                                 taskBeingEdited={taskFormState?.mode === 'edit' ? selectedTaskForPanel : undefined}
+                                                 setTaskFormState={setTaskFormState}
+                                                 handleTaskSubmit={handleTaskSubmit}
                                                  allProjectTasks={selectedProjectTasks}
                                                  membershipRole={selectedMembershipRole}
                                                  teamMembers={selectedTeamMembers}
                                                  onClose={closeDetailsPanel}
                                                  canEdit={selectedCanEdit}
+                                                 handleEditTask={selectedCanEdit ? ((task) => openTaskInEditMode(task as TaskRow)) : undefined}
                                                  onDeleteTaskWrapper={selectedCanDelete ? handleDeleteTaskById : undefined}
                                                  className="w-full border-l-0 shadow-none sm:w-full sm:min-w-0 sm:max-w-none"
                                           />

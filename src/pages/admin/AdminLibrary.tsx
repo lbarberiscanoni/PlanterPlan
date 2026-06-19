@@ -11,6 +11,7 @@ import {
     useUpdateLibraryItem,
     useDeleteLibraryItem,
 } from '@/features/admin/hooks/useLibraryItemMutations';
+import CreateLibraryItemDialog from '@/features/admin/components/CreateLibraryItemDialog';
 import { useAuth } from '@/shared/contexts/auth-context';
 import { useConfirm } from '@/shared/ui/confirm-dialog-context';
 import useDebounce from '@/shared/lib/hooks/useDebounce';
@@ -52,6 +53,7 @@ export default function AdminLibrary() {
     const [typeFilter, setTypeFilter] = useState<NonNullable<AdminLibraryItemsFilter['taskType']>>('all');
     const [templateFilter, setTemplateFilter] = useState<string>('all');
     const [panel, setPanel] = useState<PanelState>(null);
+    const [showCreateDialog, setShowCreateDialog] = useState(false);
 
     const filter = useMemo<AdminLibraryItemsFilter>(
         () => ({
@@ -128,7 +130,7 @@ export default function AdminLibrary() {
                     <p className="mt-1 max-w-2xl text-sm text-muted-foreground">{t('admin.library_subtitle')}</p>
                 </div>
                 <Button
-                    onClick={() => setPanel({ mode: 'create' })}
+                    onClick={() => { setPanel(null); setShowCreateDialog(true); }}
                     data-testid="admin-library-add"
                     className="shrink-0"
                 >
@@ -313,6 +315,25 @@ export default function AdminLibrary() {
                     />
                 )}
             </div>
+
+            <CreateLibraryItemDialog
+                open={showCreateDialog}
+                onClose={() => setShowCreateDialog(false)}
+                onCreate={async (payload) => {
+                    if (!user?.id) {
+                        toast.error(t('admin.library_toast_error'));
+                        throw new Error('missing user');
+                    }
+                    try {
+                        await createMutation.mutateAsync({ ...payload, userId: user.id });
+                    } catch (err) {
+                        toast.error(t('admin.library_toast_error'));
+                        throw err;
+                    }
+                    toast.success(t('admin.library_toast_created'));
+                    setShowCreateDialog(false);
+                }}
+            />
         </div>
     );
 }

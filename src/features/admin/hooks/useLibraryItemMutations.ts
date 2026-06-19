@@ -8,6 +8,10 @@ export interface CreateLibraryItemPayload {
     taskType: LibraryItemType;
     daysFromStart: number | null;
     userId: string;
+    /** Optional rich fields surfaced by the full task form (Add Item popup). */
+    purpose?: string | null;
+    actions?: string | null;
+    notes?: string | null;
 }
 
 export interface UpdateLibraryItemPayload {
@@ -34,6 +38,9 @@ export function useCreateLibraryItem(): UseMutationResult<TaskRow, Error, Create
             const insert = {
                 title: data.title,
                 description: data.description,
+                purpose: data.purpose ?? null,
+                actions: data.actions ?? null,
+                notes: data.notes ?? null,
                 origin: 'template',
                 parent_task_id: null,
                 root_id: null,
