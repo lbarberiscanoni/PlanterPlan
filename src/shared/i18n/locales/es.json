@@ -175,6 +175,7 @@
     "search_empty": "Ninguna tarea coincide con tu búsqueda y filtros.",
     "clear_search": "Borrar búsqueda de tareas",
     "result_count": "Mostrando {{shown}} de {{total}} elementos de trabajo",
+    "open_milestone_aria": "Abrir {{title}} en su proyecto",
     "view_aria": "Vista de tareas",
     "project_scope_label": "Proyecto",
     "project_scope_aria": "Filtrar por proyecto",

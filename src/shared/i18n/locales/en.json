@@ -169,6 +169,7 @@
     "search_empty": "No tasks match your search and filters.",
     "clear_search": "Clear task search",
     "result_count": "Showing {{shown}} of {{total}} work items",
+    "open_milestone_aria": "Open {{title}} in its project",
     "view_aria": "Task view",
     "project_scope_label": "Project",
     "project_scope_aria": "Filter by project",

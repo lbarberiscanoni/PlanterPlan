@@ -1,5 +1,5 @@
-import { useState, useMemo, useCallback } from 'react';
-import { useParams } from 'react-router-dom';
+import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
+import { useParams, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/shared/contexts/auth-context';
 import { useQueryClient } from '@tanstack/react-query';
 import { useProjectData } from '@/features/projects/hooks/useProjectData';
@@ -93,6 +93,37 @@ export default function Project() {
     // task through the same subscribed channel.
     const { presentUsers } = useProjectPresence(projectId ?? null, state.selectedTask?.id ?? null);
     useProjectRealtime(projectId ?? null, { enabled: !!projectId });
+
+    // Deep link from the /tasks grouped view: `/project/:id?task=<id>` opens that
+    // milestone/task's details and focuses its owning phase. Handled once per id
+    // (guarded by a ref) and the param is stripped afterward so closing the dialog
+    // or refreshing doesn't reopen it. The effect re-runs as the hierarchy loads.
+    const [searchParams, setSearchParams] = useSearchParams();
+    const deepLinkTaskId = searchParams.get('task');
+    const handledDeepLinkRef = useRef<string | null>(null);
+    useEffect(() => {
+        if (!deepLinkTaskId || handledDeepLinkRef.current === deepLinkTaskId) return;
+        const all = (projectHierarchy as TaskRow[]) || [];
+        const target = all.find((row) => row.id === deepLinkTaskId);
+        if (!target) return; // hierarchy not loaded yet — effect re-runs when it is
+        handledDeepLinkRef.current = deepLinkTaskId;
+
+        // Best-effort: focus the owning phase so the board shows the right column
+        // once the details dialog is closed (the dialog opens regardless).
+        const byId = new Map(all.map((row) => [row.id, row]));
+        let cursor: TaskRow | undefined = target;
+        while (cursor && cursor.task_type?.toLowerCase() !== 'phase' && cursor.parent_task_id) {
+            cursor = byId.get(cursor.parent_task_id);
+        }
+        if (cursor && cursor.task_type?.toLowerCase() === 'phase') {
+            actions.setSelectedPhase(cursor);
+        }
+        actions.setSelectedTask(target);
+
+        const next = new URLSearchParams(searchParams);
+        next.delete('task');
+        setSearchParams(next, { replace: true });
+    }, [deepLinkTaskId, projectHierarchy, actions, searchParams, setSearchParams]);
 
     const queryClient = useQueryClient();
 

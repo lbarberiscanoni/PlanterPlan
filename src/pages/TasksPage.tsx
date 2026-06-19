@@ -555,7 +555,17 @@ export default function TasksPage() {
                                                                                                          id={`priority-group-heading-${group.id}`}
                                                                                                          className="text-base font-semibold text-card-foreground"
                                                                                                   >
-                                                                                                         {group.title}
+                                                                                                         {group.milestone && (group.milestone.root_id ?? group.tasks[0]?.task.root_id) ? (
+                                                                                                                <Link
+                                                                                                                       to={`/project/${group.milestone.root_id ?? group.tasks[0]?.task.root_id}?task=${group.milestone.id}`}
+                                                                                                                       className="rounded-sm underline-offset-2 outline-none hover:text-brand-600 hover:underline focus-visible:text-brand-600 focus-visible:underline"
+                                                                                                                       aria-label={t('tasks.open_milestone_aria', { title: group.title })}
+                                                                                                                >
+                                                                                                                       {group.title}
+                                                                                                                </Link>
+                                                                                                         ) : (
+                                                                                                                group.title
+                                                                                                         )}
                                                                                                   </h2>
                                                                                            </div>
                                                                                            <div
