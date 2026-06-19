@@ -157,7 +157,10 @@ export interface TaskFormData {
     notes?: string | null;
     purpose?: string | null;
     actions?: string | null;
+    /** Offset in days from the project start (template relative scheduling). */
     days_from_start?: number;
+    /** Length of the task in days; leaf due = start + duration (envelope engine). */
+    duration?: number;
     start_date?: string | null;
     due_date?: string | null;
     templateId?: string | null;

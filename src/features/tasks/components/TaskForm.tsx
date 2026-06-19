@@ -1,7 +1,6 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useForm, FormProvider, type SubmitHandler } from 'react-hook-form';
-import { isDateValid, isBeforeDate } from '@/shared/lib/date-engine';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import TaskFormFields from '@/features/tasks/components/TaskFormFields';
@@ -28,6 +27,11 @@ const getTaskSchema = (origin: 'instance' | 'template') => z.object({
  const num = typeof val === 'number' ? val : Number(val);
  return isNaN(num) ? undefined : num;
  }, z.number().min(0, 'Days from start must be zero or greater').optional()),
+ duration: z.preprocess((val) => {
+ if (val === '' || val === null || val === undefined) return undefined;
+ const num = typeof val === 'number' ? val : Number(val);
+ return isNaN(num) ? undefined : num;
+ }, z.number().min(0, 'Duration must be zero or greater').optional()),
  start_date: z.string().optional().nullable(),
  due_date: z.string().optional().nullable(),
  templateId: z.string().nullable().optional(),
@@ -44,18 +48,6 @@ const getTaskSchema = (origin: 'instance' | 'template') => z.object({
  }, z.number().min(1).max(28).optional()),
  recurrence_target_project_id: z.string().optional().nullable(),
  is_strategy_template: z.boolean().optional(),
-}).refine((data) => {
- if (origin === 'instance' && data.start_date && data.due_date) {
- const start = `${data.start_date}T00:00:00.000Z`;
- const due = `${data.due_date}T00:00:00.000Z`;
- if (isDateValid(start) && isDateValid(due) && isBeforeDate(due, start)) {
- return false;
- }
- }
- return true;
-}, {
- message: 'Due date cannot be before start date',
- path: ['due_date']
 }).refine((data) => {
  // Template recurrence rules must specify a target project.
  if (origin === 'template' && (data.recurrence_kind === 'weekly' || data.recurrence_kind === 'monthly')) {
@@ -85,6 +77,10 @@ const createInitialState = (task?: Partial<TaskRow> | null) => {
  days_from_start:
  task?.days_from_start !== null && task?.days_from_start !== undefined
  ? Number(task.days_from_start)
+ : undefined,
+ duration:
+ task?.duration !== null && task?.duration !== undefined
+ ? Number(task.duration)
  : undefined,
  start_date: extractDateInput(task?.start_date),
  due_date: extractDateInput(task?.due_date),
@@ -158,6 +154,9 @@ const TaskForm = ({
  setValue('notes', task.notes || '', { shouldValidate: true });
  if (task.days_from_start !== null && task.days_from_start !== undefined) {
  setValue('days_from_start', Number(task.days_from_start), { shouldValidate: true });
+ }
+ if (task.duration !== null && task.duration !== undefined) {
+ setValue('duration', Number(task.duration), { shouldValidate: true });
  }
  setLastAppliedTaskTitle(task.title || '');
  }, [setValue]);

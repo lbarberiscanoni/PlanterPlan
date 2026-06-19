@@ -100,13 +100,14 @@ const TaskFormFields = ({
  )}
  </div>
 
- {/* Duration is a template-level property: authored on the master template
-    (admin-only) and flows into instances at clone time. Project members do
-    not edit duration on instances — only the manual overrides below. */}
+ {/* Start-offset + duration are template-level properties (admin-only). The
+    template defines, per task, when it begins (offset from the project start)
+    and how long it lasts; instances inherit both at clone time and the date
+    engine derives each due as start + duration. */}
  {canEditTemplateFlags && (
  <div className="grid grid-cols-1 gap-4 md:grid-cols-2 mt-4">
  <div className="space-y-2">
- <Label htmlFor="days_from_start">Duration (working days)</Label>
+ <Label htmlFor="days_from_start">Start offset (days from project start)</Label>
  <Input
  type="number"
  id="days_from_start"
@@ -117,7 +118,22 @@ const TaskFormFields = ({
  />
  {errors.days_from_start && <span className="text-sm text-red-500">{errors.days_from_start.message}</span>}
  <p className="text-xs text-slate-500">
- Number of working days this task takes. Milestone and phase durations update automatically.
+ When this {itemLabel.toLowerCase()} begins, relative to the project start date.
+ </p>
+ </div>
+ <div className="space-y-2">
+ <Label htmlFor="duration">Duration (days)</Label>
+ <Input
+ type="number"
+ id="duration"
+ className={errors.duration ? 'border-red-500' : ''}
+ placeholder="0"
+ min="0"
+ {...register('duration', { valueAsNumber: true })}
+ />
+ {errors.duration && <span className="text-sm text-red-500">{errors.duration.message}</span>}
+ <p className="text-xs text-slate-500">
+ How long it lasts. Milestone and phase spans roll up automatically.
  </p>
  </div>
  </div>
@@ -147,7 +163,10 @@ const TaskFormFields = ({
 
  {origin === 'instance' && (
  <div className="my-6 border-t border-slate-200 pt-4">
- <h4 className="mb-4 text-sm font-medium text-slate-700">Manual Schedule Overrides</h4>
+ <h4 className="mb-1 text-sm font-medium text-slate-700">Start Date</h4>
+ <p className="mb-3 text-xs text-slate-500">
+ The due date is derived from the task duration and rolls up to the milestone automatically.
+ </p>
  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
  <div className="space-y-2">
  <Label htmlFor="start_date">Start Date</Label>
@@ -156,17 +175,6 @@ const TaskFormFields = ({
  id="start_date"
  {...register('start_date')}
  />
- </div>
-
- <div className="space-y-2">
- <Label htmlFor="due_date">Due Date</Label>
- <Input
- type="date"
- id="due_date"
- className={errors.due_date ? 'border-red-500' : ''}
- {...register('due_date')}
- />
- {errors.due_date && <span className="text-sm text-red-500">{errors.due_date.message}</span>}
  </div>
  </div>
  </div>

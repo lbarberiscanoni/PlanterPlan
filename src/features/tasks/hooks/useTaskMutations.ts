@@ -27,12 +27,9 @@ export function useCreateTask() {
  console.warn('[useCreateTask] cannot resolve rootId for invalidation; cache may be stale', { variables, data });
  }
 
- // §3.3 Date Engine: bubble-up dates to parent after task creation
- const parentId = data?.parent_task_id;
- if (parentId) {
- await planterClient.entities.Task.updateParentDates(parentId);
- if (rootId) queryClient.invalidateQueries({ queryKey: ['projectHierarchy', rootId] });
- }
+ // Date roll-up to the ancestor milestone/phase/root is handled DB-side by
+ // the envelope trigger (trg_envelope_rollup); the hierarchy invalidation
+ // above refetches the rolled-up parents.
  }
  })
 }
@@ -113,20 +110,16 @@ export function useUpdateTask() {
  queryClient.setQueryData(['task', ctx.updatedTaskId], ctx.previousTaskInfo);
  }
  },
- onSettled: async (data, _error, variables) => {
+ onSettled: async (_data, _error, variables) => {
  const rootId = variables.root_id;
  if (rootId) {
  queryClient.invalidateQueries({ queryKey: ['projectHierarchy', rootId] })
  }
  queryClient.invalidateQueries({ queryKey: ['task', variables.id] })
 
- // §3.3 Date Engine: bubble-up dates to parent when dates change
- const dateChanged = 'start_date' in variables || 'due_date' in variables;
- const parentId = data?.parent_task_id;
- if (dateChanged && parentId) {
- await planterClient.entities.Task.updateParentDates(parentId);
- if (rootId) queryClient.invalidateQueries({ queryKey: ['projectHierarchy', rootId] });
- }
+ // Date roll-up (leaf due = start + duration, milestone/phase/root = MIN/MAX
+ // envelope) is handled DB-side by the envelope triggers; the hierarchy
+ // invalidation above refetches the rolled-up parents.
  }
  })
 }
@@ -180,19 +173,15 @@ export function useDeleteTask() {
  queryClient.setQueryData(['projectHierarchy', ctx.rootId], ctx.previousTasks);
  }
  },
- onSettled: async (_, _error, variables, context) => {
+ onSettled: async (_, _error, variables) => {
  const rootId = variables.root_id;
  if (rootId) {
  queryClient.invalidateQueries({ queryKey: ['projectHierarchy', rootId] })
  }
  queryClient.removeQueries({ queryKey: ['task', variables.id] })
 
- // §3.3 Date Engine: recalculate parent dates after task deletion
- const parentId = context?.parentId;
- if (parentId) {
- await planterClient.entities.Task.updateParentDates(parentId);
- if (rootId) queryClient.invalidateQueries({ queryKey: ['projectHierarchy', rootId] });
- }
+ // Parent date recompute after deletion is handled DB-side by the envelope
+ // trigger; the hierarchy invalidation above refetches the rolled-up parents.
  }
  })
 }

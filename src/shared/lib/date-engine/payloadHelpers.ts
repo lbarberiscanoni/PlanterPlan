@@ -1,5 +1,4 @@
-import { calculateScheduleFromOffset, toIsoDate, nowUtcIso } from './index';
-import type { ScheduleDates } from './index';
+import { toIsoDate, nowUtcIso } from './index';
 import { POSITION_STEP } from '@/shared/constants';
 
 // ---------------------------------------------------------------------------
@@ -13,7 +12,10 @@ export interface TaskFormData {
  notes?: string | null;
  purpose?: string | null;
  actions?: string | null;
+ /** Offset in days from project start (template relative scheduling). */
  days_from_start?: string | number | null;
+ /** Task length in days; leaf due = start + duration (envelope engine). */
+ duration?: string | number | null;
  start_date?: string | Date | null;
  due_date?: string | Date | null;
 }
@@ -47,6 +49,7 @@ export interface UpdatePayload {
  purpose: string | null;
  actions: string | null;
  days_from_start: number | null;
+ duration?: number;
  updated_at: string;
  start_date?: string | null;
  due_date?: string | null;
@@ -60,6 +63,7 @@ export interface InsertPayload {
  purpose: string | null;
  actions: string | null;
  days_from_start: number | null;
+ duration?: number;
  origin: string;
  creator: string;
  parent_task_id: string | null;
@@ -93,41 +97,13 @@ export const constructUpdatePayload = (
  _currentTask: CurrentTask,
  context: UpdateContext,
 ): UpdatePayload => {
- const { origin, parentId, contextTasks } = context;
+ const { origin } = context;
 
- const parsedDays = parseDays(formData.days_from_start);
-
+ const parsedDays = parseDays(formData.days_from_start);    // offset from project start
+ const parsedDuration = parseDays(formData.duration);       // task length (days)
  const manualStartDate = toIsoDate(formData.start_date);
- const manualDueDate = toIsoDate(formData.due_date);
- const hasManualDates = Boolean(manualStartDate || manualDueDate);
 
- let scheduleUpdates: ScheduleDates = {};
-
- // Logic from useTaskMutations: Instance-specific date math
- if (origin === 'instance') {
- if (parsedDays !== null) {
- scheduleUpdates = calculateScheduleFromOffset(
- contextTasks ?? [],
- parentId,
- parsedDays,
- );
- }
-
- // Manual overrides take precedence or fallback to calculated
- if (hasManualDates) {
- scheduleUpdates = {
- start_date: manualStartDate ?? undefined,
- due_date: manualDueDate ?? manualStartDate ?? scheduleUpdates.due_date ?? undefined,
- };
- }
-
- // Clear dates if clearing days_from_start and no manual dates
- if (!hasManualDates && parsedDays === null) {
- scheduleUpdates = {};
- }
- }
-
- return {
+ const payload: UpdatePayload = {
  title: formData.title,
  description: formData.description ?? null,
  notes: formData.notes ?? null,
@@ -135,8 +111,21 @@ export const constructUpdatePayload = (
  actions: formData.actions ?? null,
  days_from_start: parsedDays,
  updated_at: nowUtcIso(),
- ...scheduleUpdates,
  };
+
+ // Envelope engine: `due` is derived by the DB leaf trigger (start + duration)
+ // and containers roll up MIN/MAX — never compute or write due here. Only write
+ // duration when the form supplied it (omit to leave the stored value intact and
+ // avoid zeroing a template-seeded duration on an instance edit).
+ if (parsedDuration !== null) {
+ payload.duration = parsedDuration;
+ }
+ // Instances carry absolute dates; start is user-authoritative (manual / drag).
+ if (origin === 'instance' && manualStartDate) {
+ payload.start_date = manualStartDate;
+ }
+
+ return payload;
 };
 
 /**
@@ -146,13 +135,11 @@ export const constructCreatePayload = (
  formData: TaskFormData,
  context: CreateContext,
 ): InsertPayload => {
- const { origin, parentId, rootId, contextTasks, userId, maxPosition } = context;
+ const { origin, parentId, rootId, userId, maxPosition } = context;
 
- const parsedDays = parseDays(formData.days_from_start);
-
+ const parsedDays = parseDays(formData.days_from_start);    // offset from project start
+ const parsedDuration = parseDays(formData.duration);       // task length (days)
  const manualStartDate = toIsoDate(formData.start_date);
- const manualDueDate = toIsoDate(formData.due_date);
- const hasManualDates = Boolean(manualStartDate || manualDueDate);
 
  const insertPayload: InsertPayload = {
  title: formData.title,
@@ -169,16 +156,14 @@ export const constructCreatePayload = (
  root_id: rootId,
  };
 
- if (origin === 'instance') {
- if (parsedDays !== null) {
- const scheduleDates = calculateScheduleFromOffset(contextTasks ?? [], parentId, parsedDays);
- if (scheduleDates?.start_date) insertPayload.start_date = scheduleDates.start_date;
- if (scheduleDates?.due_date) insertPayload.due_date = scheduleDates.due_date;
+ if (parsedDuration !== null) {
+ insertPayload.duration = parsedDuration;
  }
- if (hasManualDates) {
+ // Instances anchor on an absolute start; `due` is derived by the DB leaf
+ // trigger and containers roll up MIN/MAX. New tasks without a start stay
+ // unscheduled until one is set (or seeded by clone).
+ if (origin === 'instance' && manualStartDate) {
  insertPayload.start_date = manualStartDate;
- insertPayload.due_date = manualDueDate ?? manualStartDate ?? insertPayload.due_date ?? null;
- }
  }
 
  return insertPayload;

@@ -349,9 +349,9 @@ const TaskItem = ({
  {task.title}
  </span>
  )}
- {task.duration && (
+ {typeof task.duration === 'number' && task.duration > 0 && (
  <span className="text-xs bg-slate-100 px-2 py-0.5 rounded text-slate-500 whitespace-nowrap flex-shrink-0">
- {task.duration}
+ {task.duration}d
  </span>
  )}
  {task.resource_type && (

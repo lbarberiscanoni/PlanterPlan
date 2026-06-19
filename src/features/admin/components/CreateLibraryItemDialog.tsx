@@ -47,6 +47,10 @@ export default function CreateLibraryItemDialog({ open, onClose, onCreate }: Cre
                 data.days_from_start === undefined || data.days_from_start === null
                     ? 0
                     : Number(data.days_from_start),
+            duration:
+                data.duration === undefined || data.duration === null
+                    ? 0
+                    : Number(data.duration),
             purpose: data.purpose ?? null,
             actions: data.actions ?? null,
             notes: data.notes ?? null,

@@ -12,6 +12,8 @@ export interface CreateLibraryItemPayload {
     purpose?: string | null;
     actions?: string | null;
     notes?: string | null;
+    /** Task length in days (envelope engine). */
+    duration?: number | null;
 }
 
 export interface UpdateLibraryItemPayload {
@@ -49,6 +51,7 @@ export function useCreateLibraryItem(): UseMutationResult<TaskRow, Error, Create
                 creator: data.userId,
                 assignee_id: data.userId,
                 days_from_start: data.daysFromStart ?? 0,
+                duration: data.duration ?? 0,
                 settings: { library_loose: true },
             } satisfies TaskInsert;
             return planter.entities.Task.create(insert);

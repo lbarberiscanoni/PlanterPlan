@@ -773,6 +773,7 @@ export type Database = {
           created_at: string | null
           creator: string | null
           days_from_start: number | null
+          duration: number
           description: string | null
           due_date: string | null
           id: string
@@ -805,6 +806,7 @@ export type Database = {
           created_at?: string | null
           creator?: string | null
           days_from_start?: number | null
+          duration?: number
           description?: string | null
           due_date?: string | null
           id?: string
@@ -837,6 +839,7 @@ export type Database = {
           created_at?: string | null
           creator?: string | null
           days_from_start?: number | null
+          duration?: number
           description?: string | null
           due_date?: string | null
           id?: string
@@ -987,6 +990,7 @@ export type Database = {
           created_at: string | null
           creator: string | null
           days_from_start: number | null
+          duration: number
           description: string | null
           due_date: string | null
           id: string | null
@@ -1154,6 +1158,7 @@ export type Database = {
           created_at: string | null
           creator: string | null
           days_from_start: number | null
+          duration: number
           description: string | null
           due_date: string | null
           id: string | null
@@ -1176,6 +1181,7 @@ export type Database = {
           created_at?: string | null
           creator?: string | null
           days_from_start?: number | null
+          duration?: number
           description?: string | null
           due_date?: string | null
           id?: string | null
@@ -1198,6 +1204,7 @@ export type Database = {
           created_at?: string | null
           creator?: string | null
           days_from_start?: number | null
+          duration?: number
           description?: string | null
           due_date?: string | null
           id?: string | null

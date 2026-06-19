@@ -87,8 +87,6 @@ export default function TasksPage() {
        const updateTask = useCallback(
               async (taskId: string, updates: Record<string, unknown>) => {
                      try {
-                            const task = findTask(taskId);
-                            const oldParentId = task ? task.parent_task_id : null;
                             const keys = Object.keys(updates);
                             const statusUpdate = updates.status;
 
@@ -98,28 +96,15 @@ export default function TasksPage() {
                             } else {
                                    await planter.entities.Task.update(taskId, updates as TaskUpdate);
                             }
+                            // Parent date roll-up (envelope) is handled DB-side by
+                            // trg_envelope_rollup; just refetch.
                             await invalidateTasks();
-
-                            if (task && task.origin === 'instance') {
-                                   const parentUpdates = new Set<string>();
-                                   if ((updates.start_date !== undefined || updates.due_date !== undefined) && task.parent_task_id) {
-                                          parentUpdates.add(task.parent_task_id);
-                                   }
-                                   if (updates.parent_task_id !== undefined && updates.parent_task_id !== oldParentId) {
-                                          if (oldParentId) parentUpdates.add(oldParentId);
-                                          if (updates.parent_task_id) parentUpdates.add(updates.parent_task_id as string);
-                                   }
-                                   for (const pId of parentUpdates) {
-                                          await planter.entities.Task.updateParentDates(pId);
-                                   }
-                                   await invalidateTasks();
-                            }
                      } catch (error) {
                             console.error('Error updating task:', error);
                             throw error;
                      }
               },
-              [findTask, invalidateTasks]
+              [invalidateTasks]
        );
 
        const handleStatusChange = useCallback((id: string, status: string) => {
