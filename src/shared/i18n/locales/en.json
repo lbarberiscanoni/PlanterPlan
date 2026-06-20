@@ -423,6 +423,8 @@
     "phase_heading_title": "Phase {{position}}: {{title}}",
     "delete_phase_button": "Delete Phase",
     "delete_phase_aria": "Delete phase {{title}}",
+    "show_completed_milestones": "Show completed ({{count}})",
+    "hide_completed_milestones": "Hide completed",
     "phase_milestone_count_one": "{{count}} milestone",
     "phase_milestone_count_other": "{{count}} milestones",
     "phase_template_task_count_one": "{{count}} task",

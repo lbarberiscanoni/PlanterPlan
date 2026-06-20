@@ -429,6 +429,8 @@
     "phase_heading_title": "Fase {{position}}: {{title}}",
     "delete_phase_button": "Eliminar fase",
     "delete_phase_aria": "Eliminar fase {{title}}",
+    "show_completed_milestones": "Mostrar completados ({{count}})",
+    "hide_completed_milestones": "Ocultar completados",
     "phase_milestone_count_one": "{{count}} hito",
     "phase_milestone_count_other": "{{count}} hitos",
     "phase_template_task_count_one": "{{count}} tarea",

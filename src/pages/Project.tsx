@@ -129,6 +129,9 @@ export default function Project() {
 
     // Form states restored
     const [taskFormState, setTaskFormState] = useState<{ mode?: 'create' | 'edit'; origin?: 'instance' | 'template'; isPhase?: boolean } | null>(null);
+    // Wave 38: completed milestones are *filtered* (with a toggle), not vanished —
+    // so completion is reversible. See handleMilestoneStatus / the status dropdown.
+    const [showCompletedMilestones, setShowCompletedMilestones] = useState(false);
 
     const handleTaskSubmit = async (formData: TaskFormData) => {
         try {
@@ -240,14 +243,26 @@ export default function Project() {
         [milestones]
     );
 
-    const phaseMilestones = projectMilestones
+    // A milestone counts as complete when it is explicitly marked completed, or
+    // (having children) all of its children are completed / N-A. Such milestones
+    // are hidden by default but kept one toggle away — never silently dropped —
+    // so completion stays reversible (revert via the milestone status dropdown
+    // or by un-completing a child task).
+    const isMilestoneComplete = (m: TaskRow) => {
+        if (m.status === TASK_STATUS.COMPLETED) return true;
+        const childTasks = ((tasks as TaskRow[]) || []).filter(t => t.parent_task_id === m.id);
+        if (childTasks.length === 0) return false;
+        return childTasks.every(
+            t => t.status === TASK_STATUS.COMPLETED || t.status === TASK_STATUS.NOT_APPLICABLE,
+        );
+    };
+    const phaseMilestonesAll = projectMilestones
         .filter((m: TaskRow) => m.parent_task_id === activePhase?.id)
-        .filter((m: TaskRow) => {
-            const childTasks = (tasks as TaskRow[] || []).filter(t => t.parent_task_id === m.id);
-            if (childTasks.length === 0) return true;
-            return childTasks.some(t => t.status !== TASK_STATUS.COMPLETED);
-        })
         .sort((a: TaskRow, b: TaskRow) => (a.position || 0) - (b.position || 0));
+    const completedMilestoneCount = phaseMilestonesAll.filter(isMilestoneComplete).length;
+    const phaseMilestones = showCompletedMilestones
+        ? phaseMilestonesAll
+        : phaseMilestonesAll.filter(m => !isMilestoneComplete(m));
 
     if (loadingProject) {
         return (
@@ -352,19 +367,35 @@ export default function Project() {
                                                     <p className="text-slate-600 mt-1">{(activePhase as { description?: string }).description}</p>
                                                 )}
                                             </div>
-                                            {canDeleteTaskForRole(userRole, activePhase as TaskRow) && (
-                                                <Button
-                                                    variant="ghost"
-                                                    size="sm"
-                                                    aria-label={t('projects.delete_phase_aria', { title: (activePhase as { title?: string }).title ?? '' })}
-                                                    data-testid={`delete-phase-${activePhase.id}`}
-                                                    className="text-slate-500 hover:text-rose-600 hover:bg-rose-50"
-                                                    onClick={async () => { await handlers.handleDeleteTask(activePhase as TaskRow); }}
-                                                >
-                                                    <Trash2 className="w-4 h-4 mr-2" aria-hidden="true" />
-                                                    {t('projects.delete_phase_button')}
-                                                </Button>
-                                            )}
+                                            <div className="flex items-center gap-2">
+                                                {completedMilestoneCount > 0 && (
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        data-testid="toggle-completed-milestones"
+                                                        aria-pressed={showCompletedMilestones}
+                                                        className="text-slate-500 hover:text-slate-700"
+                                                        onClick={() => setShowCompletedMilestones(v => !v)}
+                                                    >
+                                                        {showCompletedMilestones
+                                                            ? t('projects.hide_completed_milestones')
+                                                            : t('projects.show_completed_milestones', { count: completedMilestoneCount })}
+                                                    </Button>
+                                                )}
+                                                {canDeleteTaskForRole(userRole, activePhase as TaskRow) && (
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        aria-label={t('projects.delete_phase_aria', { title: (activePhase as { title?: string }).title ?? '' })}
+                                                        data-testid={`delete-phase-${activePhase.id}`}
+                                                        className="text-slate-500 hover:text-rose-600 hover:bg-rose-50"
+                                                        onClick={async () => { await handlers.handleDeleteTask(activePhase as TaskRow); }}
+                                                    >
+                                                        <Trash2 className="w-4 h-4 mr-2" aria-hidden="true" />
+                                                        {t('projects.delete_phase_button')}
+                                                    </Button>
+                                                )}
+                                            </div>
                                         </div>
 
                                         <div className="space-y-4">
