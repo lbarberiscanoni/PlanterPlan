@@ -738,6 +738,8 @@ export type Database = {
         Row: {
           created_at: string
           id: string
+          name: string | null
+          resource_id: string | null
           resource_text: string | null
           resource_type: Database["public"]["Enums"]["task_resource_type"]
           resource_url: string | null
@@ -749,6 +751,8 @@ export type Database = {
         Insert: {
           created_at?: string
           id?: string
+          name?: string | null
+          resource_id?: string | null
           resource_text?: string | null
           resource_type: Database["public"]["Enums"]["task_resource_type"]
           resource_url?: string | null
@@ -760,6 +764,8 @@ export type Database = {
         Update: {
           created_at?: string
           id?: string
+          name?: string | null
+          resource_id?: string | null
           resource_text?: string | null
           resource_type?: Database["public"]["Enums"]["task_resource_type"]
           resource_url?: string | null
