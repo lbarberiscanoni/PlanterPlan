@@ -48,6 +48,10 @@ export type PersonUpdate = Database['public']['Tables']['people']['Update'];
 // Resources & Relationships
 // ----------------------------------------------------------------------------
 export type TaskResourceRow = Database['public']['Tables']['task_resources']['Row'];
+/** Admin-curated global resource catalog (the /resources library). */
+export type ResourceRow = Database['public']['Tables']['resources']['Row'];
+export type ResourceInsert = Database['public']['Tables']['resources']['Insert'];
+export type ResourceUpdate = Database['public']['Tables']['resources']['Update'];
 export type TaskRelationshipRow = Database['public']['Tables']['task_relationships']['Row'];
 export type TeamMemberRow = Database['public']['Tables']['project_members']['Row'];
 export type TeamMemberWithProfile = TeamMemberRow & {

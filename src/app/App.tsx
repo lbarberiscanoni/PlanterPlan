@@ -21,6 +21,7 @@ import ResetPassword from '@/pages/ResetPassword';
 // primary Tasks / Project routes don't pay the cost. Gantt + Admin are already
 // lazy for the same reason.
 const Reports = lazy(() => import('@/pages/Reports'));
+const Resources = lazy(() => import('@/pages/Resources'));
 const Gantt = lazy(() => import('@/pages/Gantt'));
 const Team = lazy(() => import('@/pages/Team'));
 const AdminLayout = lazy(() => import('@/pages/admin/AdminLayout'));
@@ -102,6 +103,10 @@ export default function App() {
  element={<Suspense fallback={<div className="p-6 text-sm text-slate-600">Loading team…</div>}><Team /></Suspense>}
  />
  <Route path="daily" element={<Navigate to="/tasks" replace />} />
+ <Route
+ path="resources"
+ element={<Suspense fallback={<div className="p-6 text-sm text-slate-600">Loading resources…</div>}><Resources /></Suspense>}
+ />
  <Route path="settings" element={<Settings />} />
  <Route
  path="gantt"

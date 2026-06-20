@@ -3,6 +3,7 @@
     "save": "Save",
     "save_changes": "Save Changes",
     "cancel": "Cancel",
+    "clear": "Clear",
     "confirm": "Confirm",
     "discard": "Discard",
     "keep_editing": "Keep editing",
@@ -44,6 +45,7 @@
   "nav": {
     "my_tasks": "Tasks",
     "reports": "Reports",
+    "resources": "Resources",
     "team": "Team",
     "projects": "Projects",
     "library": "Library",
@@ -722,6 +724,51 @@
       "no_tasks_on_page": "No tasks on page {{page}}",
       "loading_subtasks": "Loading subtasks…",
       "no_tasks": "No tasks in the master library yet."
+    }
+  },
+  "resources": {
+    "page_title": "Resources",
+    "page_subtitle": "Browse and search the resource library — templates, guides, and tools curated for your church plant.",
+    "search_placeholder": "Search resources",
+    "filter_kind_label": "Type",
+    "add_button": "Add Resource",
+    "col_name": "Name",
+    "col_kind": "Type",
+    "col_url": "Link",
+    "col_updated": "Updated",
+    "col_actions": "Actions",
+    "empty": "No resources in the library yet.",
+    "empty_search": "No resources match your search.",
+    "delete_button": "Delete",
+    "delete_confirm": "Remove this resource from the library? Tasks that already link to it are unaffected.",
+    "form_create_title": "Add resource",
+    "form_edit_title": "Edit resource",
+    "form_description": "Give the resource a clear name and paste its link. The type is detected automatically.",
+    "form_name_label": "Name",
+    "form_name_placeholder": "e.g. Church Plant Budget Template",
+    "form_name_required": "Name is required",
+    "form_url_label": "URL",
+    "form_url_required": "A valid URL is required",
+    "form_detected_kind": "Detected type: {{kind}}",
+    "form_create_submit": "Add resource",
+    "form_save": "Save changes",
+    "toast_created": "Resource added.",
+    "toast_updated": "Resource updated.",
+    "toast_deleted": "Resource removed.",
+    "toast_error": "Something went wrong. Please try again.",
+    "filters": {
+      "all": "All types"
+    },
+    "kinds": {
+      "google_doc": "Google Doc",
+      "google_sheet": "Google Sheet",
+      "google_slides": "Google Slides",
+      "google_drive": "Google Drive",
+      "pdf": "PDF",
+      "word": "Word Document",
+      "excel": "Spreadsheet",
+      "video": "Video",
+      "web": "Web Page"
     }
   },
   "settings": {

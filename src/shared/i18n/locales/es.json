@@ -9,6 +9,7 @@
     "save": "Guardar",
     "save_changes": "Guardar cambios",
     "cancel": "Cancelar",
+    "clear": "Limpiar",
     "confirm": "Confirmar",
     "discard": "Descartar",
     "keep_editing": "Seguir editando",
@@ -50,6 +51,7 @@
   "nav": {
     "my_tasks": "Tareas",
     "reports": "Informes",
+    "resources": "Recursos",
     "team": "Equipo",
     "projects": "Proyectos",
     "library": "Biblioteca",
@@ -728,6 +730,51 @@
       "no_tasks_on_page": "No hay tareas en la página {{page}}",
       "loading_subtasks": "Cargando subtareas…",
       "no_tasks": "Aún no hay tareas en la biblioteca maestra."
+    }
+  },
+  "resources": {
+    "page_title": "Recursos",
+    "page_subtitle": "Explora y busca en la biblioteca de recursos: plantillas, guías y herramientas seleccionadas para tu plantación de iglesias.",
+    "search_placeholder": "Buscar recursos",
+    "filter_kind_label": "Tipo",
+    "add_button": "Añadir recurso",
+    "col_name": "Nombre",
+    "col_kind": "Tipo",
+    "col_url": "Enlace",
+    "col_updated": "Actualizado",
+    "col_actions": "Acciones",
+    "empty": "Aún no hay recursos en la biblioteca.",
+    "empty_search": "Ningún recurso coincide con tu búsqueda.",
+    "delete_button": "Eliminar",
+    "delete_confirm": "¿Quitar este recurso de la biblioteca? Las tareas que ya lo enlazan no se verán afectadas.",
+    "form_create_title": "Añadir recurso",
+    "form_edit_title": "Editar recurso",
+    "form_description": "Dale al recurso un nombre claro y pega su enlace. El tipo se detecta automáticamente.",
+    "form_name_label": "Nombre",
+    "form_name_placeholder": "p. ej. Plantilla de presupuesto",
+    "form_name_required": "El nombre es obligatorio",
+    "form_url_label": "URL",
+    "form_url_required": "Se requiere una URL válida",
+    "form_detected_kind": "Tipo detectado: {{kind}}",
+    "form_create_submit": "Añadir recurso",
+    "form_save": "Guardar cambios",
+    "toast_created": "Recurso añadido.",
+    "toast_updated": "Recurso actualizado.",
+    "toast_deleted": "Recurso eliminado.",
+    "toast_error": "Algo salió mal. Inténtalo de nuevo.",
+    "filters": {
+      "all": "Todos los tipos"
+    },
+    "kinds": {
+      "google_doc": "Documento de Google",
+      "google_sheet": "Hoja de cálculo de Google",
+      "google_slides": "Presentación de Google",
+      "google_drive": "Google Drive",
+      "pdf": "PDF",
+      "word": "Documento de Word",
+      "excel": "Hoja de cálculo",
+      "video": "Vídeo",
+      "web": "Página web"
     }
   },
   "settings": {

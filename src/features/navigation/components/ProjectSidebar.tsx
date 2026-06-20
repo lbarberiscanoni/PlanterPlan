@@ -5,7 +5,7 @@ import InstanceList from './InstanceList';
 import JoinedProjectsList from './JoinedProjectsList';
 import SharedTemplatesList from './SharedTemplatesList';
 import TemplateList from './TemplateList';
-import { BarChart, Settings, Calendar, ShieldAlert } from 'lucide-react';
+import { BarChart, Settings, Calendar, ShieldAlert, Library } from 'lucide-react';
 import GlobalNavItem from './GlobalNavItem';
 import { useIsAdmin } from '@/features/admin/hooks/useIsAdmin';
 
@@ -98,6 +98,12 @@ const ProjectSidebar = ({
  isActive={location.pathname === '/reports'}
  onClick={() => handleGlobalNav(selectedTaskId ? `/reports?project=${selectedTaskId}` : '/reports')}
  icon={<BarChart className="w-5 h-5" />}
+ />
+ <GlobalNavItem
+ label={t('nav.resources')}
+ isActive={location.pathname === '/resources'}
+ onClick={() => handleGlobalNav('/resources')}
+ icon={<Library className="w-5 h-5" />}
  />
  <GlobalNavItem
  label={t('nav.settings')}

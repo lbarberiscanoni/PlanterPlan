@@ -12,6 +12,9 @@ import type {
     TaskUpdate,
     JsonObject,
     TaskResourceRow,
+    ResourceRow,
+    ResourceInsert,
+    ResourceUpdate,
     ResourceWithTask,
     TaskRelationshipRow,
     PersonRow,
@@ -277,6 +280,7 @@ export interface PlanterClient {
             listAllVisibleTemplates: (viewerId?: string) => Promise<Task[]>;
         };
         TaskResource: TaskResourceEntityClient;
+        Resource: EntityClient<ResourceRow, ResourceInsert, ResourceUpdate>;
         TeamMember: TeamMemberEntityClient;
         Person: EntityClient<PersonRow, Database['public']['Tables']['people']['Insert'], Database['public']['Tables']['people']['Update']>;
         TaskComment: TaskCommentEntityClient;
@@ -1380,6 +1384,34 @@ export const planter: PlanterClient = {
                         if (error) throw new PlanterError(error.message, error.code ?? '500');
                         return (data as ResourceWithTask[]) || [];
                     });
+                },
+            };
+        })(),
+        // Admin-curated global resource catalog. Authorization (admin-only
+        // writes, all-user reads) is enforced by RLS on `public.resources`;
+        // this wrapper only validates the `url` scheme, mirroring TaskResource.
+        Resource: (() => {
+            const base = createEntityClient<ResourceRow, ResourceInsert, ResourceUpdate>('resources');
+            const throwUnsafe = (reason: string) => new PlanterError(reason, 400);
+            return {
+                ...base,
+                create: async (payload: ResourceInsert | ResourceInsert[], options?: { signal?: AbortSignal }) => {
+                    const rows = Array.isArray(payload) ? payload : [payload];
+                    for (const row of rows) {
+                        assertSafeUrl((row as { url?: unknown }).url, throwUnsafe);
+                    }
+                    return base.create(payload, options);
+                },
+                update: async (id: string, payload: ResourceUpdate, options?: { signal?: AbortSignal }) => {
+                    assertSafeUrl((payload as { url?: unknown }).url, throwUnsafe);
+                    return base.update(id, payload, options);
+                },
+                upsert: async (payload: ResourceInsert | ResourceInsert[], options?: { onConflict?: string; ignoreDuplicates?: boolean; signal?: AbortSignal }) => {
+                    const rows = Array.isArray(payload) ? payload : [payload];
+                    for (const row of rows) {
+                        assertSafeUrl((row as { url?: unknown }).url, throwUnsafe);
+                    }
+                    return base.upsert(payload, options);
                 },
             };
         })(),
