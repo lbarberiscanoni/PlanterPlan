@@ -67,27 +67,37 @@ export function useUpdateProject() {
     const queryClient = useQueryClient();
     return useMutation({
         mutationFn: async ({ projectId, updates }: UpdateProjectPayload) => {
-            // Normalize start_date / due_date to YYYY-MM-DD ISO. Raw form values
-            // are already in that shape, but `toIsoDate` defends against Date
-            // objects, trailing whitespace, or timezone-shifted ISO strings.
-            const newStartIso = toIsoDate(updates.start_date);
-            const newDueIso = toIsoDate(updates.due_date);
+            // Project (root) dates are governed by the bottom-up envelope
+            // roll-up, so neither date is a plain column write here:
+            //   * due_date is DERIVED (MAX of child dues) — read-only, never sent.
+            //   * start_date moves the whole project via an anchored subtree
+            //     shift (reschedule_project_start RPC). A direct column write
+            //     would be rejected by enforce_task_date_envelope (children fall
+            //     outside the new span) or silently reverted by the roll-up.
+            const { start_date, due_date: _derivedDue, ...rest } = updates;
+            void _derivedDue;
 
             const dbUpdates: TaskUpdate = {
-                title: updates.title,
-                description: updates.description,
-                due_date: newDueIso ?? updates.due_date,
-                start_date: newStartIso ?? updates.start_date,
+                title: rest.title,
+                description: rest.description,
                 updated_at: nowUtcIso(),
-                settings: updates.settings,
-                status: updates.status,
-                supervisor_email: updates.supervisor_email,
+                settings: rest.settings,
+                status: rest.status,
+                supervisor_email: rest.supervisor_email,
             };
-
-            // The DB trigger `trg_waterfall_recompute` cascades dates across
-            // every descendant whenever start_date / parent_task_id / position /
-            // days_from_start changes. The client no longer recomputes anything.
             await planter.entities.Project.update(projectId, dbUpdates);
+
+            // Reschedule shifts the root + every descendant by (new - old) days.
+            // No-ops in the RPC when the delta is zero, so it is safe to call on
+            // every save where a start date is present.
+            const newStartIso = toIsoDate(start_date);
+            if (newStartIso) {
+                const { error } = await planter.rpc('reschedule_project_start', {
+                    p_root_id: projectId,
+                    p_new_start: newStartIso,
+                });
+                if (error) throw error;
+            }
         },
         onSuccess: (_, variables) => {
             queryClient.invalidateQueries({ queryKey: ['projects'], refetchType: 'active' });

@@ -318,7 +318,15 @@ export default function EditProjectModal({ project, isOpen, onClose }: EditProje
        <Label htmlFor="due_date" className="block mb-1 font-semibold text-amber-800">
         {t('projects.edit_modal.due_date_label')}
        </Label>
-       <Input type="date" id="due_date" {...register('due_date')} />
+       <Input
+        type="date"
+        id="due_date"
+        value={toIsoDate(project.due_date) || ''}
+        readOnly
+        disabled
+        className="bg-amber-100/60 text-amber-900"
+       />
+       <p className="mt-1 text-xs text-amber-700">{t('projects.edit_modal.due_date_derived_note')}</p>
       </div>
      </div>
      )}

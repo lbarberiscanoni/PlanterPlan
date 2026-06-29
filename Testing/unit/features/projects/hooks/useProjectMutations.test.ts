@@ -129,9 +129,11 @@ describe('useCreateProject', () => {
 // ---------------------------------------------------------------------------
 // useUpdateProject
 //
-// Date cascading moved to the DB (trg_waterfall_recompute). The client mutation
-// is now a thin wrapper around Project.update — these tests assert the payload
-// shape and the absence of client-side cascade work.
+// Project dates are governed by the envelope roll-up: due_date is derived (never
+// written from the client) and start_date moves the whole project via the
+// `reschedule_project_start` RPC (anchored subtree shift), not a direct column
+// write. Non-date fields still go through Project.update. These tests assert
+// that split and the absence of client-side cascade work.
 // ---------------------------------------------------------------------------
 describe('useUpdateProject', () => {
   it('updates project root with the provided payload', async () => {
@@ -153,6 +155,7 @@ describe('useUpdateProject', () => {
 
   it('does not fetch project tasks or fan out client-side cascade writes', async () => {
     mockProjectUpdate.mockResolvedValueOnce(makeTask());
+    mockRpc.mockResolvedValueOnce({ error: null });
     const { Wrapper } = createWrapper();
 
     const { result } = renderHook(() => useUpdateProject(), { wrapper: Wrapper });
@@ -164,15 +167,19 @@ describe('useUpdateProject', () => {
       });
     });
 
-    // The waterfall trigger handles propagation in the DB. The hook must not
+    // The reschedule RPC shifts the subtree in the DB. The hook must not
     // re-introduce client-side cascade logic.
     expect(mockTaskFilter).not.toHaveBeenCalled();
     expect(mockTaskUpsert).not.toHaveBeenCalled();
-    expect(mockProjectUpdate).toHaveBeenCalledTimes(1);
+    expect(mockRpc).toHaveBeenCalledWith('reschedule_project_start', {
+      p_root_id: 'proj-1',
+      p_new_start: '2026-01-06',
+    });
   });
 
-  it('passes start_date through to Project.update so the DB trigger cascades', async () => {
+  it('routes start_date through the reschedule RPC, never as a Project.update column', async () => {
     mockProjectUpdate.mockResolvedValueOnce(makeTask());
+    mockRpc.mockResolvedValueOnce({ error: null });
     const { Wrapper } = createWrapper();
 
     const { result } = renderHook(() => useUpdateProject(), { wrapper: Wrapper });
@@ -180,14 +187,19 @@ describe('useUpdateProject', () => {
     await act(async () => {
       await result.current.mutateAsync({
         projectId: 'proj-1',
-        updates: { start_date: '2026-01-06' },
+        updates: { start_date: '2026-01-06', due_date: '2026-02-01' },
       });
     });
 
-    expect(mockProjectUpdate).toHaveBeenCalledWith(
-      'proj-1',
-      expect.objectContaining({ start_date: '2026-01-06' }),
-    );
+    expect(mockRpc).toHaveBeenCalledWith('reschedule_project_start', {
+      p_root_id: 'proj-1',
+      p_new_start: '2026-01-06',
+    });
+    // due_date is derived and start_date is RPC-driven — neither is written as
+    // a column on the root.
+    const updateArg = (mockProjectUpdate.mock.calls[0]?.[1] ?? {}) as Record<string, unknown>;
+    expect(updateArg).not.toHaveProperty('start_date');
+    expect(updateArg).not.toHaveProperty('due_date');
   });
 
   it('invalidates project-specific query keys on success', async () => {

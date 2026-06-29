@@ -334,11 +334,11 @@ describe('EditProjectModal — start/end date visibility (Wave 37)', () => {
       settings: null,
     });
     renderModal(template);
-    expect(screen.queryByLabelText(/launch date/i)).toBeNull();
-    expect(screen.queryByLabelText(/due date/i)).toBeNull();
+    expect(screen.queryByLabelText(/project start date/i)).toBeNull();
+    expect(screen.queryByLabelText(/project due date/i)).toBeNull();
   });
 
-  it('shows the date section for instance projects', () => {
+  it('shows the date section for instance projects, with a read-only due date', () => {
     const instance = makeTask({
       id: 'proj-1',
       title: 'A Project',
@@ -346,6 +346,9 @@ describe('EditProjectModal — start/end date visibility (Wave 37)', () => {
       start_date: '2026-01-01',
     });
     renderModal(instance);
-    expect(screen.getByLabelText(/launch date/i)).toBeInTheDocument();
+    // Start date is editable; due date is derived from task dates (read-only).
+    expect(screen.getByLabelText(/project start date/i)).toBeInTheDocument();
+    const due = screen.getByLabelText(/project due date/i) as HTMLInputElement;
+    expect(due).toBeDisabled();
   });
 });
