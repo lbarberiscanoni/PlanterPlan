@@ -9,7 +9,7 @@ npm run dev          # Start Vite dev server
 npm run build        # TypeScript check + Vite production build (tsc -b && vite build)
 npm run lint         # ESLint (zero-tolerance)
 npm test             # Vitest unit/integration tests
-npm run test:e2e     # Playwright BDD end-to-end tests
+npm run test:e2e     # Playwright browser e2e — smoke + regression (SUITE SCAFFOLD PENDING; see Testing & Regression Policy)
 ```
 
 **Always run `npm run build` after code changes to verify.** The build enforces `noUnusedLocals` and `noUnusedParameters` — unused variables are errors, not warnings.
@@ -69,6 +69,26 @@ Component → React Query hook → planterClient → Supabase SDK
 - **No direct Supabase calls in components** — go through `planterClient` or mutation hooks.
 - **Styling**: Tailwind utility classes only. No custom CSS files. Use `class-variance-authority` for variants.
 - **Localization (Wave 31)**: every user-visible string in JSX, attribute values (`aria-label`, `placeholder`, `title`), and toast calls must resolve via `t('namespace.key')` from `react-i18next`. Source strings live in `src/shared/i18n/locales/en.json`; translations in sibling files (currently `es.json`). Namespaces: `common, nav, onboarding, auth, tasks, projects, library, dashboard, settings, notifications, errors`. Display-time date/number/currency formatting routes through `src/shared/i18n/formatters.ts` (Intl-based); internal date math stays on `src/shared/lib/date-engine`. Locale persisted to `localStorage.planterplan.locale` via the `LocaleSwitcher` in Settings → Profile. **`es.json` is machine-translated — see `docs/dev-notes.md`; do not market "Spanish support" until a human-review pass lands.** A few surfaces remain un-extracted (TaskDetailsView family, Home marketing, deep library views) — follow-up wave tracked in dev-notes.
+
+## Testing & Regression Policy
+
+> **A bug is a missing assertion.** When you fix a user-visible bug or change a behavioral rule, add or tighten the test that would have caught it **in the same change** — phrased as the specific nuance, not "the feature works." The fix and its guard ship together, or the fix is incomplete.
+
+**When a fix earns a test (and which kind):**
+- **Behavioral rules, parity bugs (add vs. edit forms), scoping/RLS gating, cascade/rollup, cross-project labeling** → a browser **e2e** test under `e2e/`, tagged `@regression` plus its feature tag.
+- **Pure logic / date math / edge cases** → a **vitest** unit test (cheaper, faster, more precise — don't pay e2e cost for what a unit test guards better).
+- **Skip** for pure copy/cosmetic changes and one-off data cleanup.
+
+**Tag taxonomy** (Playwright `--grep`): `@smoke` (core loop, runs per-PR), `@regression` (a scar from a specific fix), plus one feature tag — `@templates @library @resources @tasks @projects @dates @admin @account`. Each `@regression` spec carries a one-line comment linking the commit or stakeholder item it guards, so the test documents *why* it exists.
+
+**Status:** the e2e suite under `e2e/` is being (re)introduced — the old Playwright BDD suite was removed in commit `3a9fd788`. `@playwright/test` is still a dependency; what's pending is `playwright.config.ts`, the `globalSetup`/`globalTeardown`, and the seed specs (6 `@smoke` + the initial `@regression` set). Until that lands, this policy governs **vitest** tests, which the guard already enforces.
+
+**How the suite runs** (see `docs/qa/` for the full flow list):
+- e2e hits a **deployed URL** (local can't reach remote Supabase; no local Docker), using the seeded `test-user.{admin,planter,team}@mail.com` accounts.
+- Tests create data tagged `[e2e-<runId>]` and tear it down by tag + creator in `globalTeardown`; a nightly reaper sweeps stragglers. **There is no separate test DB — cleanup runs against live Supabase, so teardown is tag-scoped and owner-pinned.**
+- **Per-PR:** `@smoke` only. **Nightly / pre-release:** full `@regression`. Never gate `main` on the full suite — smoke gates, regression reports.
+
+**Enforcement:** `.github/workflows/test-guard.yml` warns when a PR touches `src/features/**` as a fix without a matching `*.test.*` or `e2e/**` change. It's a soft nudge, not a hard block — but the expectation above stands.
 
 ## Routes
 

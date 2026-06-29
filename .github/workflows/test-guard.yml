@@ -1,0 +1,69 @@
+name: test-guard
+
+# Soft "fix-without-test" nudge. Per CLAUDE.md → Testing & Regression Policy,
+# a bug fix should ship with the assertion that would have caught it. This guard
+# WARNS (never blocks) when a PR looks like a fix touching src/features/** but
+# changes no *.test.* or e2e/** file. It is a reminder, not a gate.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited]
+
+permissions:
+  contents: read
+
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Warn on fix without a test
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${BASE_SHA:-}" ]; then
+            echo "No base SHA available; skipping guard."
+            exit 0
+          fi
+
+          CHANGED="$(git diff --name-only "$BASE_SHA" HEAD || true)"
+          MSGS="$(git log --format=%s "$BASE_SHA"..HEAD 2>/dev/null || true)"
+
+          echo "Changed files:"
+          echo "$CHANGED"
+
+          # Heuristic: does this read like a bug fix? (PR title OR any commit subject)
+          if printf '%s\n%s\n' "$PR_TITLE" "$MSGS" | grep -qiE 'fix|bug|regress|broke|broken|incorrect|wrong'; then
+            IS_FIX=1
+          else
+            IS_FIX=0
+          fi
+
+          # Touches feature code?
+          if echo "$CHANGED" | grep -qE '^src/features/'; then TOUCHES_FEATURE=1; else TOUCHES_FEATURE=0; fi
+
+          # Adds or updates a test? (vitest unit OR the e2e suite)
+          if echo "$CHANGED" | grep -qE '(\.test\.tsx?$)|^e2e/'; then HAS_TEST=1; else HAS_TEST=0; fi
+
+          echo "is_fix=$IS_FIX touches_feature=$TOUCHES_FEATURE has_test=$HAS_TEST"
+
+          if [ "$IS_FIX" = 1 ] && [ "$TOUCHES_FEATURE" = 1 ] && [ "$HAS_TEST" = 0 ]; then
+            echo "::warning title=Fix without a test::This PR looks like a bug fix touching src/features/** but changes no *.test.* or e2e/** file. Per CLAUDE.md Testing & Regression Policy, the fix and its guard should ship together."
+            {
+              echo "### ⚠️ Fix without a test"
+              echo ""
+              echo "This PR touches \`src/features/**\` and reads like a fix, but no \`*.test.*\` or \`e2e/**\` file changed."
+              echo ""
+              echo "Per **CLAUDE.md → Testing & Regression Policy**, add or tighten the assertion that would have caught this — a vitest unit test for pure logic, or an \`@regression\`-tagged e2e for behavioral/UI nuance — in this same PR."
+              echo ""
+              echo "_This is a soft nudge, not a blocking check._"
+            } >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "Guard OK — no action needed." >> "$GITHUB_STEP_SUMMARY"
+          fi
