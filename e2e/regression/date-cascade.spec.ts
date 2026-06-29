@@ -16,7 +16,7 @@ test('@regression @dates editing project start shifts descendant due dates', asy
   test.skip((await badge.count()) === 0, 'no dated task visible to observe cascade');
   const before = ((await badge.textContent()) ?? '').trim();
 
-  await page.getByRole('button', { name: /Settings for/i }).click();
+  await page.getByRole('button', { name: /^Open settings for / }).click();
   const start = page.locator('#start_date');
   const current = await start.inputValue();
   test.skip(!current, 'project has no start date set');

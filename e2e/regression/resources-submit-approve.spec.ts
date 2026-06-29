@@ -19,8 +19,8 @@ test('@regression @resources submit → hidden from catalog → admin approves �
 
   const form = page.getByTestId('resources-form-dialog');
   await expect(form).toBeVisible();
-  await form.getByTestId('resources-form-name').locator('input, textarea').first().fill(name);
-  await form.getByTestId('resources-form-url').locator('input').first().fill('https://example.com/e2e');
+  await form.locator('#resource-name').fill(name);
+  await form.locator('#resource-url').fill('https://example.com/e2e');
   await page.getByTestId('resources-form-save').click();
 
   await expect(page.getByText(/Submitted for review/i)).toBeVisible();

@@ -15,7 +15,7 @@ test('@smoke @dates project start date saves and due date is read-only', async (
   await loginAs(page, 'planter');
   await createProjectFromTemplate(page, tagged(`Dates ${Date.now()}`));
 
-  await page.getByRole('button', { name: /Settings for/i }).click();
+  await page.getByRole('button', { name: /^Open settings for / }).click();
   const start = page.locator('#start_date');
   await expect(start).toBeEditable();
   await expect(page.locator('#due_date')).toBeDisabled(); // read-only + disabled
@@ -25,7 +25,7 @@ test('@smoke @dates project start date saves and due date is read-only', async (
   await page.getByRole('button', { name: 'Save Changes' }).click();
 
   // Reopen settings → the new start must have persisted (the bug was: it silently didn't).
-  await page.getByRole('button', { name: /Settings for/i }).click();
+  await page.getByRole('button', { name: /^Open settings for / }).click();
   await expect(page.locator('#start_date')).toHaveValue(newStart);
 });
 
