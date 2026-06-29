@@ -13,13 +13,6 @@
     "db:local:test:fresh": "npm run db:local:bootstrap:fresh && npx --no-install supabase test db",
     "verify-dependencies": "node scripts/verify-dependency-guardrails.cjs",
     "verify-architecture": "node scripts/verify-architecture.cjs",
-    "verify-e2e": "bash scripts/verify-e2e.sh",
-    "test:e2e": "node scripts/run-e2e.cjs",
-    "test:e2e:release": "node scripts/run-e2e.cjs --grep @release",
-    "test:e2e:mobile": "node scripts/run-e2e.cjs --project=mobile-chrome",
-    "test:e2e:headed": "node scripts/run-e2e.cjs --headed",
-    "test:e2e:vision": "node scripts/run-e2e.cjs --grep @vision",
-    "test:e2e:a11y": "node scripts/run-e2e.cjs --project=accessibility",
     "lint": "eslint .",
     "test": "vitest --run",
     "preview": "vite preview"
