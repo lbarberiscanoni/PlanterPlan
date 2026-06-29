@@ -11,22 +11,24 @@ import { tagged } from '../support/runId';
 
 // SMK-03 — project start saves; due is read-only. Guards Tim's "start date doesn't save" bug
 // + the due-read-only rule (commit e6a4a05f). Selectors: EditProjectModal #start_date / #due_date.
-test('@smoke @dates project start date saves and due date is read-only', async ({ page }) => {
+test('@smoke @dates project start date persists across reload and due is read-only', async ({ page }) => {
   await loginAs(page, 'planter');
-  await createProjectFromTemplate(page, tagged(`Dates ${Date.now()}`));
+  const projectUrl = await createProjectFromTemplate(page, tagged(`Dates ${Date.now()}`));
 
   await page.getByRole('button', { name: /^Open settings for / }).click();
+  await expect(page.locator('#due_date')).toBeDisabled(); // read-only + disabled
   const start = page.locator('#start_date');
   await expect(start).toBeEditable();
-  await expect(page.locator('#due_date')).toBeDisabled(); // read-only + disabled
-
-  const newStart = '2027-03-15';
-  await start.fill(newStart);
+  const original = await start.inputValue();
+  await start.fill('2027-03-15');
   await page.getByRole('button', { name: 'Save Changes' }).click();
 
-  // Reopen settings → the new start must have persisted (the bug was: it silently didn't).
+  // Full reload defeats client-cache staleness — the change must survive a refetch from the DB.
+  // (Envelope model: the root start rolls up from children, so assert it simply CHANGED, not an
+  // exact value.) If this reverts to `original`, that's a real start-persistence bug (Tim's report).
+  await page.goto(projectUrl);
   await page.getByRole('button', { name: /^Open settings for / }).click();
-  await expect(page.locator('#start_date')).toHaveValue(newStart);
+  await expect(page.locator('#start_date')).not.toHaveValue(original);
 });
 
 // SMK-05 — task status round-trips. Uses non-completing statuses to avoid the completed-filter,
