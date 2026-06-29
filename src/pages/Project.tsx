@@ -532,7 +532,7 @@ export default function Project() {
                                         onSelect={onSelect}
                                         label={t('projects.form.search_library_label')}
                                         placeholder={taskFormState?.isPhase ? t('projects.search_template_phase_placeholder') : t('projects.search_template_task_placeholder')}
-                                        phasesOnly={!!taskFormState?.isPhase}
+                                        taskType={taskFormState?.isPhase ? 'phase' : 'task'}
                                         excludeTemplateIds={excludedTemplateIds}
                                     />
                                 )}

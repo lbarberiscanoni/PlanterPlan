@@ -9,6 +9,16 @@ export interface UseMasterLibrarySearchProps {
  enabled?: boolean;
  phasesOnly?: boolean;
  /**
+  * Restrict results to a single hierarchy type. The visible-templates feed
+  * returns every template ROOT, which mixes true project templates
+  * (`task_type='project'`) with loose library items (`task_type='task'`, etc.).
+  * Callers declare intent: `'project'` for "clone a whole template into a new
+  * project" (so loose tasks don't masquerade as templates), or `'task'` /
+  * `'phase'` for the "add an item to my project" picker (so whole templates
+  * don't appear as task options). Undefined keeps the legacy unfiltered set.
+  */
+ taskType?: 'project' | 'phase' | 'milestone' | 'task';
+ /**
   * Template ids to hide from the results. Typically the set of
   * `settings.spawnedFromTemplate` values already present in the active
   * project, so users aren't offered a template they've already cloned.
@@ -20,6 +30,7 @@ export const useMasterLibrarySearch = ({
  query = '',
  enabled = true,
  phasesOnly = false,
+ taskType,
  excludeTemplateIds,
 }: UseMasterLibrarySearchProps = {}) => {
  const { user } = useAuth();
@@ -37,7 +48,10 @@ export const useMasterLibrarySearch = ({
  const { results, exclusionDrained } = useMemo(() => {
  if (!allTemplates) return { results: [], exclusionDrained: false };
  let filtered = allTemplates;
- if (phasesOnly) {
+ if (taskType) {
+ // Roots carry task_type; legacy roots may be NULL → treat as 'project'.
+ filtered = filtered.filter((t) => (t.task_type ?? 'project') === taskType);
+ } else if (phasesOnly) {
  filtered = filtered.filter((t) => t.parent_task_id && t.parent_task_id === t.root_id);
  }
 
@@ -55,7 +69,7 @@ export const useMasterLibrarySearch = ({
  // `drainedByExclusion === true` already implies `filtered.length === 0`,
  // and therefore `queryFiltered.length === 0`, so no extra clause needed.
  return { results: queryFiltered, exclusionDrained: drainedByExclusion };
- }, [allTemplates, trimmed, phasesOnly, excludeTemplateIds]);
+ }, [allTemplates, trimmed, phasesOnly, taskType, excludeTemplateIds]);
 
  return {
  results,

@@ -500,18 +500,9 @@ export default function AdminUsers() {
                                         <dt className="text-muted-foreground">{t('admin.users_col_projects')}</dt>
                                         <dd className="tabular-nums">{detail.data.projects.length}</dd>
                                     </div>
-                                    <div className="flex justify-between">
-                                        <dt className="text-muted-foreground">{t('admin.users_detail_assigned')}</dt>
-                                        <dd className="tabular-nums">{detail.data.task_counts.assigned}</dd>
-                                    </div>
-                                    <div className="flex justify-between">
-                                        <dt className="text-muted-foreground">{t('admin.users_col_completed_30d')}</dt>
-                                        <dd className="tabular-nums">{detail.data.task_counts.completed}</dd>
-                                    </div>
-                                    <div className="flex justify-between">
-                                        <dt className="text-muted-foreground">{t('admin.users_col_overdue')}</dt>
-                                        <dd className="tabular-nums">{detail.data.task_counts.overdue}</dd>
-                                    </div>
+                                    {/* Per-user task counts removed (Patrick/Tim 2026-06):
+                                      * these are end-user project tasks, not a master task
+                                      * library, and the aggregate was confusing. */}
                                 </dl>
                                 {detail.data.projects.length > 0 && (
                                     <section className="mt-5">

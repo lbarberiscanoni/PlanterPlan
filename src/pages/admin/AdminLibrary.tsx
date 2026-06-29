@@ -1,7 +1,9 @@
 import { useMemo, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { Plus, X } from 'lucide-react';
+import planter from '@/shared/api/planterClient';
 import {
     useAdminLibraryItems,
     useAdminLibraryTemplates,
@@ -294,6 +296,10 @@ export default function AdminLibrary() {
                                         description: values.description,
                                         taskType: values.taskType,
                                         daysFromStart: values.daysFromStart,
+                                        purpose: values.purpose,
+                                        actions: values.actions,
+                                        notes: values.notes,
+                                        duration: values.duration,
                                         userId: user.id,
                                     });
                                     toast.success(t('admin.library_toast_created'));
@@ -304,6 +310,10 @@ export default function AdminLibrary() {
                                         description: values.description,
                                         taskType: values.taskType,
                                         daysFromStart: values.daysFromStart,
+                                        purpose: values.purpose,
+                                        actions: values.actions,
+                                        notes: values.notes,
+                                        duration: values.duration,
                                     });
                                     toast.success(t('admin.library_toast_updated'));
                                 }
@@ -343,6 +353,10 @@ interface FormValues {
     description: string;
     taskType: LibraryItemType;
     daysFromStart: number | null;
+    purpose: string;
+    actions: string;
+    notes: string;
+    duration: number | null;
 }
 
 interface LibraryItemPanelProps {
@@ -355,8 +369,35 @@ interface LibraryItemPanelProps {
     onSubmit: (values: FormValues) => void;
 }
 
-function LibraryItemPanel({ panel, isLoose, saving, deleting, onClose, onDelete, onSubmit }: LibraryItemPanelProps) {
+/**
+ * Edit fetches the full task first because the admin_library_items list RPC
+ * omits purpose/actions/notes/duration. We hold the form unmounted until the
+ * row arrives so the inner form can initialize its state straight from props
+ * (no setState-in-effect). The create dialog already has these via TaskForm.
+ */
+function LibraryItemPanel(props: LibraryItemPanelProps) {
+    const { panel } = props;
     const { t } = useTranslation();
+    const editItemId = panel.mode === 'edit' ? panel.item.id : null;
+    const fullItem = useQuery({
+        queryKey: ['adminLibraryItemFull', editItemId],
+        queryFn: () => planter.entities.Task.get(editItemId as string),
+        enabled: editItemId !== null,
+        staleTime: 0,
+    });
+
+    if (editItemId !== null && fullItem.isLoading) {
+        return (
+            <aside
+                className="w-full flex-shrink-0 rounded-lg border border-border bg-card p-5 shadow-sm xl:w-96"
+                data-testid="admin-library-panel"
+            >
+                <p className="text-sm text-muted-foreground">{t('common.loading')}…</p>
+            </aside>
+        );
+    }
+
+    const full = fullItem.data ?? null;
     const initial: FormValues =
         panel.mode === 'edit'
             ? {
@@ -366,11 +407,18 @@ function LibraryItemPanel({ panel, isLoose, saving, deleting, onClose, onDelete,
                       ? (panel.item.task_type as LibraryItemType)
                       : 'task'),
                   daysFromStart: panel.item.days_from_start,
+                  purpose: full?.purpose ?? '',
+                  actions: full?.actions ?? '',
+                  notes: full?.notes ?? '',
+                  duration: full?.duration ?? 0,
               }
-            : { title: '', description: '', taskType: 'phase', daysFromStart: 0 };
+            : { title: '', description: '', taskType: 'phase', daysFromStart: 0, purpose: '', actions: '', notes: '', duration: 0 };
 
-    // The parent passes a `key` keyed to the panel mode/item id, so this
-    // component remounts on selection change and `initial` is always fresh.
+    return <LibraryItemForm {...props} initial={initial} />;
+}
+
+function LibraryItemForm({ panel, isLoose, saving, deleting, onClose, onDelete, onSubmit, initial }: LibraryItemPanelProps & { initial: FormValues }) {
+    const { t } = useTranslation();
     const [values, setValues] = useState<FormValues>(initial);
     const [touched, setTouched] = useState(false);
 
@@ -380,7 +428,14 @@ function LibraryItemPanel({ panel, isLoose, saving, deleting, onClose, onDelete,
         e.preventDefault();
         setTouched(true);
         if (values.title.trim().length === 0) return;
-        onSubmit({ ...values, title: values.title.trim(), description: values.description.trim() });
+        onSubmit({
+            ...values,
+            title: values.title.trim(),
+            description: values.description.trim(),
+            purpose: values.purpose.trim(),
+            actions: values.actions.trim(),
+            notes: values.notes.trim(),
+        });
     };
 
     return (
@@ -426,6 +481,39 @@ function LibraryItemPanel({ panel, isLoose, saving, deleting, onClose, onDelete,
                     />
                 </label>
 
+                <label className="flex flex-col gap-1 text-sm">
+                    <span className="font-medium text-slate-700">{t('admin.library_form_purpose_label')}</span>
+                    <textarea
+                        value={values.purpose}
+                        onChange={(e) => setValues((v) => ({ ...v, purpose: e.target.value }))}
+                        rows={2}
+                        data-testid="admin-library-form-purpose"
+                        className="rounded-md border border-input bg-card px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                    />
+                </label>
+
+                <label className="flex flex-col gap-1 text-sm">
+                    <span className="font-medium text-slate-700">{t('admin.library_form_actions_label')}</span>
+                    <textarea
+                        value={values.actions}
+                        onChange={(e) => setValues((v) => ({ ...v, actions: e.target.value }))}
+                        rows={2}
+                        data-testid="admin-library-form-actions"
+                        className="rounded-md border border-input bg-card px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                    />
+                </label>
+
+                <label className="flex flex-col gap-1 text-sm">
+                    <span className="font-medium text-slate-700">{t('admin.library_form_notes_label')}</span>
+                    <textarea
+                        value={values.notes}
+                        onChange={(e) => setValues((v) => ({ ...v, notes: e.target.value }))}
+                        rows={2}
+                        data-testid="admin-library-form-notes"
+                        className="rounded-md border border-input bg-card px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                    />
+                </label>
+
                 <div className="flex flex-col gap-1 text-sm">
                     <span className="font-medium text-slate-700">{t('admin.library_form_type_label')}</span>
                     <Select
@@ -456,6 +544,23 @@ function LibraryItemPanel({ panel, isLoose, saving, deleting, onClose, onDelete,
                             }))
                         }
                         data-testid="admin-library-form-offset"
+                        className="h-9 w-32 rounded-md border border-input bg-card px-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                    />
+                </label>
+
+                <label className="flex flex-col gap-1 text-sm">
+                    <span className="font-medium text-slate-700">{t('admin.library_form_duration_label')}</span>
+                    <input
+                        type="number"
+                        min="0"
+                        value={values.duration ?? 0}
+                        onChange={(e) =>
+                            setValues((v) => ({
+                                ...v,
+                                duration: e.target.value === '' ? null : Number(e.target.value),
+                            }))
+                        }
+                        data-testid="admin-library-form-duration"
                         className="h-9 w-32 rounded-md border border-input bg-card px-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
                     />
                 </label>

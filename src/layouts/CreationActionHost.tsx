@@ -64,6 +64,9 @@ export default function CreationActionHost() {
     } = useMasterLibrarySearch({
         query: '',
         enabled: showCreateModal,
+        // Only true project templates are clonable into a new project — loose
+        // library tasks (task_type='task' roots) must not appear here.
+        taskType: 'project',
     });
 
     useEffect(() => {

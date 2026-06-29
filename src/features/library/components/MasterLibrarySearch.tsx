@@ -18,6 +18,7 @@ interface MasterLibrarySearchProps {
  label?: string;
  placeholder?: string;
  phasesOnly?: boolean;
+ taskType?: 'project' | 'phase' | 'milestone' | 'task';
  excludeTemplateIds?: readonly string[];
 }
 
@@ -27,6 +28,7 @@ const MasterLibrarySearch = ({
  label,
  placeholder,
  phasesOnly = false,
+ taskType,
  excludeTemplateIds,
 }: MasterLibrarySearchProps) => {
  const { t } = useTranslation();
@@ -40,6 +42,7 @@ const MasterLibrarySearch = ({
  const { results, isLoading, hasResults, exclusionDrained } = useMasterLibrarySearch({
  query,
  phasesOnly,
+ taskType,
  excludeTemplateIds,
  });
 

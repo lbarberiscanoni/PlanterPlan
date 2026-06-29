@@ -22,6 +22,12 @@ export interface UpdateLibraryItemPayload {
     description: string;
     taskType: LibraryItemType;
     daysFromStart: number | null;
+    /** Rich fields — kept editable in parity with the create form. */
+    purpose?: string | null;
+    actions?: string | null;
+    notes?: string | null;
+    /** Task length in days (envelope engine). */
+    duration?: number | null;
 }
 
 function invalidate(queryClient: ReturnType<typeof useQueryClient>) {
@@ -70,6 +76,10 @@ export function useUpdateLibraryItem(): UseMutationResult<TaskRow, Error, Update
                 description: data.description,
                 task_type: data.taskType,
                 days_from_start: data.daysFromStart ?? 0,
+                duration: data.duration ?? 0,
+                purpose: data.purpose ?? null,
+                actions: data.actions ?? null,
+                notes: data.notes ?? null,
             });
         },
         onSuccess: () => invalidate(queryClient),
