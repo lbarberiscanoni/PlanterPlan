@@ -278,6 +278,7 @@ export interface PlanterClient {
             listTemplates: (options?: { from?: number, limit?: number, resourceType?: string | null, userId?: string, viewerId?: string, signal?: AbortSignal }) => Promise<{ data: Task[], error: Error | null }>;
             searchTemplates: (options: { query: string, limit?: number, resourceType?: string | null, userId?: string, viewerId?: string, signal?: AbortSignal }) => Promise<{ data: Task[], error: Error | null }>;
             listAllVisibleTemplates: (viewerId?: string) => Promise<Task[]>;
+            listTemplateDescendants: (rootIds: string[], taskType?: string) => Promise<Task[]>;
         };
         TaskResource: TaskResourceEntityClient;
         Resource: EntityClient<ResourceRow, ResourceInsert, ResourceUpdate>;
@@ -1317,6 +1318,28 @@ export const planter: PlanterClient = {
                         query = query.or(`creator.eq.${viewerId},settings->>published.eq.true`);
                     }
                     query = query.order('created_at', { ascending: false });
+
+                    const { data, error } = await query;
+                    if (error) throw new PlanterError(error.message, error.code ?? '500');
+                    return (data as Task[]) || [];
+                });
+            },
+            // Reusable library items live NESTED inside templates (phases /
+            // milestones / tasks are descendants, not roots). The master-library
+            // picker searches these so you can copy any template's phase/task —
+            // scoped to `rootIds` (the set of templates the viewer may see, from
+            // listAllVisibleTemplates) so visibility matches the clone picker.
+            listTemplateDescendants: async (rootIds: string[], taskType?: string): Promise<Task[]> => {
+                if (!rootIds.length) return [];
+                return retry(async () => {
+                    let query = supabase
+                        .from('tasks_with_primary_resource')
+                        .select('*')
+                        .eq('origin', 'template')
+                        .not('parent_task_id', 'is', null)
+                        .in('root_id', rootIds);
+                    if (taskType) query = query.eq('task_type', taskType);
+                    query = query.order('title', { ascending: true });
 
                     const { data, error } = await query;
                     if (error) throw new PlanterError(error.message, error.code ?? '500');

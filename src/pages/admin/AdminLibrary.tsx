@@ -573,7 +573,10 @@ function LibraryItemForm({ panel, isLoose, saving, deleting, onClose, onDelete, 
                     <Button type="submit" disabled={saving} data-testid="admin-library-form-save">
                         {panel.mode === 'create' ? t('admin.library_form_create_submit') : t('admin.library_form_save')}
                     </Button>
-                    {panel.mode === 'edit' && isLoose && onDelete && (
+                    {/* Admins may delete any library item, including nested
+                      * template phases/milestones/tasks (Patrick/Tim 2026-06).
+                      * The delete_task RPC cascades the subtree and is admin-only. */}
+                    {panel.mode === 'edit' && onDelete && (
                         <Button
                             type="button"
                             variant="destructive"

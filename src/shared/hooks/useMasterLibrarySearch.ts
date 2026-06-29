@@ -36,16 +36,50 @@ export const useMasterLibrarySearch = ({
  const { user } = useAuth();
  const viewerId = user?.id;
 
- const { data: allTemplates, isLoading, error } = useQuery({
+ const { data: allTemplates, isLoading: rootsLoading, error: rootsError } = useQuery({
  queryKey: ['masterLibraryTemplates', viewerId],
  queryFn: () => planter.entities.TaskWithResources.listAllVisibleTemplates(viewerId),
  enabled,
  staleTime: STALE_TIMES.long,
  });
 
+ // Reusable library items (phases / milestones / tasks) live NESTED inside
+ // templates, so the "add an item to my project" picker must search template
+ // DESCENDANTS — not roots. The 'project' picker (clone a whole template) and
+ // the legacy unfiltered path stay on roots. Descendants are scoped to the
+ // visible roots so visibility matches the clone picker.
+ const wantsDescendants = !!taskType && taskType !== 'project';
+ const visibleRootIds = useMemo(() => (allTemplates ?? []).map((t) => t.id), [allTemplates]);
+
+ const { data: descendants, isLoading: descLoading, error: descError } = useQuery({
+ queryKey: ['masterLibraryDescendants', viewerId, taskType, visibleRootIds],
+ queryFn: () => planter.entities.TaskWithResources.listTemplateDescendants(visibleRootIds, taskType),
+ enabled: enabled && wantsDescendants && visibleRootIds.length > 0,
+ staleTime: STALE_TIMES.long,
+ });
+
  const trimmed = query.trim().toLowerCase();
 
+ const matchesQuery = (t: { title?: string | null; description?: string | null }) =>
+ !trimmed || t.title?.toLowerCase().includes(trimmed) || t.description?.toLowerCase().includes(trimmed);
+
  const { results, exclusionDrained } = useMemo(() => {
+ // Descendant path: server already scoped to origin/type/visible-roots, so
+ // only exclude items from templates already cloned into the project, then
+ // apply the text search.
+ if (wantsDescendants) {
+ if (!descendants) return { results: [], exclusionDrained: false };
+ let filtered = descendants;
+ const before = filtered.length;
+ if (excludeTemplateIds && excludeTemplateIds.length > 0 && before > 0) {
+ const exclusionSet = new Set(excludeTemplateIds);
+ filtered = filtered.filter((t) => !(t.root_id && exclusionSet.has(t.root_id)));
+ }
+ const drained = before > 0 && filtered.length === 0;
+ return { results: drained ? [] : filtered.filter(matchesQuery), exclusionDrained: drained };
+ }
+
+ // Roots path: taskType==='project' or the legacy phasesOnly/unfiltered case.
  if (!allTemplates) return { results: [], exclusionDrained: false };
  let filtered = allTemplates;
  if (taskType) {
@@ -54,27 +88,20 @@ export const useMasterLibrarySearch = ({
  } else if (phasesOnly) {
  filtered = filtered.filter((t) => t.parent_task_id && t.parent_task_id === t.root_id);
  }
-
- const beforeExclusionCount = filtered.length;
- if (excludeTemplateIds && excludeTemplateIds.length > 0 && beforeExclusionCount > 0) {
+ const before = filtered.length;
+ if (excludeTemplateIds && excludeTemplateIds.length > 0 && before > 0) {
  const exclusionSet = new Set(excludeTemplateIds);
  filtered = filtered.filter((t) => !exclusionSet.has(t.id));
  }
- const drainedByExclusion = beforeExclusionCount > 0 && filtered.length === 0;
-
- if (!trimmed) return { results: filtered, exclusionDrained: drainedByExclusion };
- const queryFiltered = filtered.filter(
- (t) => t.title?.toLowerCase().includes(trimmed) || t.description?.toLowerCase().includes(trimmed)
- );
- // `drainedByExclusion === true` already implies `filtered.length === 0`,
- // and therefore `queryFiltered.length === 0`, so no extra clause needed.
- return { results: queryFiltered, exclusionDrained: drainedByExclusion };
- }, [allTemplates, trimmed, phasesOnly, taskType, excludeTemplateIds]);
+ const drained = before > 0 && filtered.length === 0;
+ return { results: drained ? [] : filtered.filter(matchesQuery), exclusionDrained: drained };
+ // eslint-disable-next-line react-hooks/exhaustive-deps
+ }, [wantsDescendants, descendants, allTemplates, trimmed, phasesOnly, taskType, excludeTemplateIds]);
 
  return {
  results,
- isLoading,
- error,
+ isLoading: wantsDescendants ? rootsLoading || descLoading : rootsLoading,
+ error: rootsError ?? descError,
  hasResults: results.length > 0,
  exclusionDrained,
  };
