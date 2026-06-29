@@ -90,12 +90,15 @@ export async function reapByTag(): Promise<void> {
   // Non-roots log against the still-present root; the root delete is skipped by the logging trigger
   // and cascades the activity_log rows (FK is ON DELETE CASCADE).
   if (rootIds.length > 0) {
+    // NO creator filter on descendants: the roots are already verified test data (tagged +
+    // test-creator), so the whole subtree under them is fair game. Pinning descendants by creator
+    // risks leaving some behind, which the root delete then cascade-deletes AFTER the root is gone —
+    // exactly the activity_log FK 23503 that rolls the teardown back.
     const { error: eKids } = await admin
       .from('tasks')
       .delete()
       .in('root_id', rootIds)
-      .not('parent_task_id', 'is', null)
-      .in('creator', creatorIds);
+      .not('parent_task_id', 'is', null);
     if (eKids) throw eKids;
 
     const { error: eRoots } = await admin.from('tasks').delete().in('id', rootIds).in('creator', creatorIds);
@@ -161,12 +164,12 @@ export async function reapStale(olderThanHours = 6): Promise<void> {
   // Non-roots first, then roots (see reapByTag for the activity_log FK rationale).
   const rootIds = stale.filter((t) => t.parent_task_id === null).map((t) => t.id);
   if (rootIds.length > 0) {
+    // Descendants of verified-test roots: no creator filter (see reapByTag).
     const { error: eKids } = await admin
       .from('tasks')
       .delete()
       .in('root_id', rootIds)
-      .not('parent_task_id', 'is', null)
-      .in('creator', creatorIds);
+      .not('parent_task_id', 'is', null);
     if (eKids) throw eKids;
 
     const { error: eRoots } = await admin.from('tasks').delete().in('id', rootIds).in('creator', creatorIds);
