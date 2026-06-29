@@ -26,17 +26,16 @@ export function canCreateChildTask(role: ProjectMembershipRole): boolean {
 }
 
 /**
- * Delete authority is role-only. The previous `!task?.cloned_from_task_id`
- * clause hid the delete button on every task in a template-cloned project
- * (all such rows carry `cloned_from_task_id`), which is the bulk of real
- * projects. Deletion is now gated authoritatively by the `delete_task` RPC
- * (SECURITY DEFINER, postgres-owned) which cascades through scaffold rows
- * safely, so the client no longer needs to special-case scaffold provenance.
- * The `_task` param is retained for call-site compatibility.
+ * Delete authority is Admin-only. Planters and Team members use the "N/A"
+ * status to retire a task they no longer need rather than destroying the row
+ * (and, for roots, the whole project subtree). This matches the authoritative
+ * gate in the `delete_task` RPC (SECURITY DEFINER, postgres-owned), which also
+ * rejects non-admins. The `_task` param is retained for call-site
+ * compatibility; deletion is role-gated, not provenance-gated.
  */
 export function canDeleteTask(role: ProjectMembershipRole, task?: Partial<TaskRow> | null): boolean {
-    void task; // retained for call-site compatibility; deletion is RPC-gated, not provenance-gated.
-    return hasFullTaskEditRole(role);
+    void task; // retained for call-site compatibility; deletion is role-gated, not provenance-gated.
+    return role === ROLES.ADMIN;
 }
 
 export function canReorderTask(role: ProjectMembershipRole): boolean {

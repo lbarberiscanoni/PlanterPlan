@@ -12,24 +12,25 @@ import {
 describe('task permission capabilities', () => {
     const instanceTask = makeTask({ origin: 'instance', settings: {} });
 
-    it('grants any project member full task capabilities on instance rows', () => {
+    it('grants any project member full task edit capabilities on instance rows', () => {
         for (const role of ['planter', 'team', 'admin'] as const) {
             expect(canEditTaskContent(role)).toBe(true);
             expect(canCreateChildTask(role)).toBe(true);
             expect(canReorderTask(role)).toBe(true);
             expect(canUpdateTaskProgress(role)).toBe(true);
-            expect(canDeleteTask(role, instanceTask)).toBe(true);
         }
     });
 
-    it('grants delete on cloned-from-template rows — provenance gating moved to the delete_task RPC', () => {
-        // The old `!task?.cloned_from_task_id` client clause hid the delete
-        // button on every scaffold row (the bulk of real projects). Deletion is
-        // now authoritatively gated by the SECURITY DEFINER `delete_task` RPC,
-        // so the client permission is role-only and ignores provenance.
+    it('restricts delete to admins; provenance is ignored (gating in the delete_task RPC)', () => {
+        // Planters/Team retire tasks via the 'na' status, never DELETE — delete
+        // is admin-only on both the client gate and the SECURITY DEFINER
+        // `delete_task` RPC. Provenance (cloned_from_task_id) is not consulted.
         const cloned = makeTask({ cloned_from_task_id: 'template-task-id' });
-        for (const role of ['planter', 'team', 'admin'] as const) {
-            expect(canDeleteTask(role, cloned)).toBe(true);
+        expect(canDeleteTask('admin', instanceTask)).toBe(true);
+        expect(canDeleteTask('admin', cloned)).toBe(true);
+        for (const role of ['planter', 'team'] as const) {
+            expect(canDeleteTask(role, instanceTask)).toBe(false);
+            expect(canDeleteTask(role, cloned)).toBe(false);
         }
     });
 

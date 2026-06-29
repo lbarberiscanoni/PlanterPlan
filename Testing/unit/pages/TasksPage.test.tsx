@@ -13,8 +13,9 @@ vi.mock('@/shared/db/client', () => ({
 }));
 
 // Wave 33 + 36: TasksPage now calls useAuth() + useTeam() to resolve the
-// caller's membership role for the delete guard. Stub both — neither is
-// exercised by the tests below but their absence would throw at mount.
+// caller's membership role for the delete guard. Delete is admin-only
+// (Patrick/Tim 2026-06), so u1 is mocked as an admin member of the selected
+// task's project — otherwise the panel delete affordance is correctly hidden.
 vi.mock('@/shared/contexts/auth-context', () => ({
     useAuth: () => ({
         user: { id: 'u1', email: 'me@example.com', role: 'owner' },
@@ -25,7 +26,7 @@ vi.mock('@/shared/contexts/auth-context', () => ({
 }));
 
 vi.mock('@/features/people/hooks/useTeam', () => ({
-    useTeam: () => ({ teamMembers: [], isLoading: false }),
+    useTeam: () => ({ teamMembers: [{ user_id: 'u1', role: 'admin' }], isLoading: false }),
 }));
 
 vi.mock('sonner', () => ({
