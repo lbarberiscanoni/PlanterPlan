@@ -2,13 +2,14 @@ import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import {
-    Plus, Search, X, ExternalLink, Pencil, Trash2, Loader2,
+    Plus, Search, X, ExternalLink, Pencil, Trash2, Loader2, Check, Lightbulb,
     FileText, Sheet, Presentation, HardDrive, Video, Globe,
     type LucideIcon,
 } from 'lucide-react';
-import { useResources } from '@/features/resources/hooks/useResources';
+import { useResources, usePendingResources } from '@/features/resources/hooks/useResources';
 import {
     useCreateResource, useUpdateResource, useDeleteResource,
+    useSubmitResource, useApproveResource,
 } from '@/features/resources/hooks/useResourceMutations';
 import { useIsAdmin } from '@/features/admin/hooks/useIsAdmin';
 import { useAuth } from '@/shared/contexts/auth-context';
@@ -34,7 +35,7 @@ const KIND_ICONS: Record<string, LucideIcon> = {
 
 const ALL_KINDS = '__all__';
 
-type EditState = { mode: 'create' } | { mode: 'edit'; resource: ResourceRow } | null;
+type EditState = { mode: 'create' } | { mode: 'suggest' } | { mode: 'edit'; resource: ResourceRow } | null;
 
 export default function Resources() {
     const { t } = useTranslation();
@@ -43,9 +44,12 @@ export default function Resources() {
     const confirm = useConfirm();
 
     const { data: resources = [], isLoading, error } = useResources();
+    const { data: pending = [] } = usePendingResources(isAdmin);
     const createMutation = useCreateResource();
     const updateMutation = useUpdateResource();
     const deleteMutation = useDeleteResource();
+    const submitMutation = useSubmitResource();
+    const approveMutation = useApproveResource();
 
     const [rawSearch, setRawSearch] = useState('');
     const search = useDebounce(rawSearch.trim().toLowerCase(), 200);
@@ -84,6 +88,31 @@ export default function Resources() {
         }
     };
 
+    const handleApprove = async (resource: ResourceRow) => {
+        try {
+            await approveMutation.mutateAsync(resource.id);
+            toast.success(t('resources.toast_approved'));
+        } catch {
+            toast.error(t('resources.toast_error'));
+        }
+    };
+
+    const handleReject = async (resource: ResourceRow) => {
+        const ok = await confirm({
+            title: t('resources.reject_button'),
+            description: t('resources.reject_confirm'),
+            confirmText: t('resources.reject_button'),
+            destructive: true,
+        });
+        if (!ok) return;
+        try {
+            await deleteMutation.mutateAsync(resource.id);
+            toast.success(t('resources.toast_rejected'));
+        } catch {
+            toast.error(t('resources.toast_error'));
+        }
+    };
+
     return (
         <div className="p-4 sm:p-6 lg:p-8" data-testid="resources-page">
             <header className="mb-6 flex flex-wrap items-start justify-between gap-3">
@@ -91,10 +120,15 @@ export default function Resources() {
                     <h1 className="text-2xl font-bold tracking-tight text-slate-900">{t('resources.page_title')}</h1>
                     <p className="mt-1 max-w-2xl text-sm text-muted-foreground">{t('resources.page_subtitle')}</p>
                 </div>
-                {isAdmin && (
+                {isAdmin ? (
                     <Button onClick={() => setEdit({ mode: 'create' })} data-testid="resources-add" className="shrink-0">
                         <Plus className="mr-1 h-4 w-4" aria-hidden="true" />
                         {t('resources.add_button')}
+                    </Button>
+                ) : (
+                    <Button variant="outline" onClick={() => setEdit({ mode: 'suggest' })} data-testid="resources-suggest" className="shrink-0">
+                        <Lightbulb className="mr-1 h-4 w-4" aria-hidden="true" />
+                        {t('resources.suggest_button')}
                     </Button>
                 )}
             </header>
@@ -141,6 +175,59 @@ export default function Resources() {
                     </Select>
                 </div>
             </div>
+
+            {/* Admin review queue — user-submitted resources awaiting approval */}
+            {isAdmin && pending.length > 0 && (
+                <section className="mb-6 rounded-lg border border-amber-200 bg-amber-50 p-4" data-testid="resources-pending">
+                    <h2 className="mb-3 text-sm font-semibold text-amber-900">
+                        {t('resources.pending_heading', { count: pending.length })}
+                    </h2>
+                    <ul className="flex flex-col gap-2">
+                        {pending.map((r) => (
+                            <li
+                                key={r.id}
+                                className="flex items-center justify-between gap-3 rounded-md border border-amber-200 bg-white px-3 py-2"
+                                data-testid={`resources-pending-row-${r.id}`}
+                            >
+                                <div className="min-w-0">
+                                    <p className="truncate text-sm font-medium text-slate-900">{r.name}</p>
+                                    <a
+                                        href={safeUrl(r.url)}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="inline-flex max-w-full items-center gap-1 truncate text-xs text-brand-600 hover:underline"
+                                    >
+                                        <ExternalLink className="h-3 w-3 flex-shrink-0" aria-hidden="true" />
+                                        <span className="truncate">{r.url}</span>
+                                    </a>
+                                </div>
+                                <div className="flex shrink-0 items-center gap-1">
+                                    <Button
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={() => handleApprove(r)}
+                                        disabled={approveMutation.isPending}
+                                        data-testid={`resources-approve-${r.id}`}
+                                    >
+                                        <Check className="mr-1 h-4 w-4" aria-hidden="true" />
+                                        {t('resources.approve_button')}
+                                    </Button>
+                                    <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        onClick={() => handleReject(r)}
+                                        disabled={deleteMutation.isPending}
+                                        className="text-rose-600 hover:bg-rose-50"
+                                        data-testid={`resources-reject-${r.id}`}
+                                    >
+                                        {t('resources.reject_button')}
+                                    </Button>
+                                </div>
+                            </li>
+                        ))}
+                    </ul>
+                </section>
+            )}
 
             {/* Table */}
             <div className="overflow-hidden rounded-lg border border-border bg-card shadow-sm">
@@ -223,15 +310,19 @@ export default function Resources() {
                 </div>
             </div>
 
-            {isAdmin && edit && (
+            {edit && (isAdmin || edit.mode === 'suggest') && (
                 <ResourceFormDialog
-                    key={edit.mode === 'edit' ? edit.resource.id : 'create'}
+                    key={edit.mode === 'edit' ? edit.resource.id : edit.mode}
                     edit={edit}
-                    saving={createMutation.isPending || updateMutation.isPending}
+                    saving={createMutation.isPending || updateMutation.isPending || submitMutation.isPending}
                     onClose={() => setEdit(null)}
                     onSubmit={async ({ name, url }) => {
                         try {
-                            if (edit.mode === 'create') {
+                            if (edit.mode === 'suggest') {
+                                if (!user?.id) { toast.error(t('resources.toast_error')); return; }
+                                await submitMutation.mutateAsync({ name, url, userId: user.id });
+                                toast.success(t('resources.toast_submitted'));
+                            } else if (edit.mode === 'create') {
                                 if (!user?.id) { toast.error(t('resources.toast_error')); return; }
                                 await createMutation.mutateAsync({ name, url, userId: user.id });
                                 toast.success(t('resources.toast_created'));
@@ -280,8 +371,16 @@ function ResourceFormDialog({ edit, saving, onClose, onSubmit }: ResourceFormDia
         <Dialog open onOpenChange={(next) => { if (!next) onClose(); }}>
             <DialogContent data-testid="resources-form-dialog" className="sm:max-w-[480px]">
                 <DialogHeader>
-                    <DialogTitle>{edit.mode === 'create' ? t('resources.form_create_title') : t('resources.form_edit_title')}</DialogTitle>
-                    <DialogDescription>{t('resources.form_description')}</DialogDescription>
+                    <DialogTitle>
+                        {edit.mode === 'suggest'
+                            ? t('resources.suggest_title')
+                            : edit.mode === 'create'
+                                ? t('resources.form_create_title')
+                                : t('resources.form_edit_title')}
+                    </DialogTitle>
+                    <DialogDescription>
+                        {edit.mode === 'suggest' ? t('resources.suggest_description') : t('resources.form_description')}
+                    </DialogDescription>
                 </DialogHeader>
                 <form onSubmit={handleSubmit} className="flex flex-col gap-4">
                     <div className="flex flex-col gap-1.5">
@@ -316,7 +415,7 @@ function ResourceFormDialog({ edit, saving, onClose, onSubmit }: ResourceFormDia
                     <div className="flex justify-end gap-2 pt-1">
                         <Button type="button" variant="outline" onClick={onClose} disabled={saving}>{t('common.cancel')}</Button>
                         <Button type="submit" disabled={saving || !trimmedName || !trimmedUrl} data-testid="resources-form-save">
-                            {saving ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : (edit.mode === 'create' ? t('resources.form_create_submit') : t('resources.form_save'))}
+                            {saving ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : edit.mode === 'suggest' ? t('resources.suggest_submit') : edit.mode === 'create' ? t('resources.form_create_submit') : t('resources.form_save')}
                         </Button>
                     </div>
                 </form>

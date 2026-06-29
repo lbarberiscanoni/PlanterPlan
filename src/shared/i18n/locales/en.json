@@ -763,6 +763,17 @@
     "toast_updated": "Resource updated.",
     "toast_deleted": "Resource removed.",
     "toast_error": "Something went wrong. Please try again.",
+    "suggest_button": "Suggest a resource",
+    "suggest_title": "Suggest a resource",
+    "suggest_description": "Suggest a resource for the master library. An admin will review it before it's published.",
+    "suggest_submit": "Submit for review",
+    "toast_submitted": "Submitted for review. An admin will take a look.",
+    "pending_heading": "Pending review ({{count}})",
+    "approve_button": "Approve",
+    "reject_button": "Reject",
+    "reject_confirm": "Reject this submission? It will be permanently removed.",
+    "toast_approved": "Resource approved and published.",
+    "toast_rejected": "Submission rejected.",
     "filters": {
       "all": "All types"
     },

@@ -3,6 +3,8 @@ import { planter } from '@/shared/api/planterClient';
 import type { ResourceRow, ResourceInsert } from '@/shared/db/app.types';
 
 function invalidate(queryClient: QueryClient) {
+    // Covers both ['resources','approved'] (catalog) and ['resources','pending']
+    // (admin review queue).
     queryClient.invalidateQueries({ queryKey: ['resources'] });
 }
 
@@ -12,12 +14,35 @@ export interface CreateResourcePayload {
     userId: string;
 }
 
-/** Create a catalog resource (admin-only — enforced by RLS). */
+/** Create a catalog resource (admin-only — enforced by RLS). Goes in approved. */
 export function useCreateResource() {
     const queryClient = useQueryClient();
     return useMutation<ResourceRow, Error, CreateResourcePayload>({
         mutationFn: ({ name, url, userId }) =>
-            planter.entities.Resource.create({ name, url, created_by: userId } satisfies ResourceInsert),
+            planter.entities.Resource.create({ name, url, created_by: userId, status: 'approved' } satisfies ResourceInsert),
+        onSuccess: () => invalidate(queryClient),
+    });
+}
+
+/**
+ * Submit a resource suggestion (any authenticated user). RLS pins it to
+ * `status='pending'` and `created_by=self`; it stays out of the catalog until
+ * an admin approves it.
+ */
+export function useSubmitResource() {
+    const queryClient = useQueryClient();
+    return useMutation<ResourceRow, Error, CreateResourcePayload>({
+        mutationFn: ({ name, url, userId }) =>
+            planter.entities.Resource.create({ name, url, created_by: userId, status: 'pending' } satisfies ResourceInsert),
+        onSuccess: () => invalidate(queryClient),
+    });
+}
+
+/** Approve a pending submission (admin-only) — moves it into the catalog. */
+export function useApproveResource() {
+    const queryClient = useQueryClient();
+    return useMutation<ResourceRow, Error, string>({
+        mutationFn: (id) => planter.entities.Resource.update(id, { status: 'approved' }),
         onSuccess: () => invalidate(queryClient),
     });
 }

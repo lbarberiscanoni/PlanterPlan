@@ -523,6 +523,7 @@ export type Database = {
           created_by: string | null
           id: string
           name: string
+          status: string
           updated_at: string
           url: string
         }
@@ -531,6 +532,7 @@ export type Database = {
           created_by?: string | null
           id?: string
           name: string
+          status?: string
           updated_at?: string
           url: string
         }
@@ -539,6 +541,7 @@ export type Database = {
           created_by?: string | null
           id?: string
           name?: string
+          status?: string
           updated_at?: string
           url?: string
         }

@@ -769,6 +769,17 @@
     "toast_updated": "Recurso actualizado.",
     "toast_deleted": "Recurso eliminado.",
     "toast_error": "Algo salió mal. Inténtalo de nuevo.",
+    "suggest_button": "Sugerir un recurso",
+    "suggest_title": "Sugerir un recurso",
+    "suggest_description": "Sugiere un recurso para la biblioteca principal. Un administrador lo revisará antes de publicarlo.",
+    "suggest_submit": "Enviar para revisión",
+    "toast_submitted": "Enviado para revisión. Un administrador lo revisará.",
+    "pending_heading": "Pendientes de revisión ({{count}})",
+    "approve_button": "Aprobar",
+    "reject_button": "Rechazar",
+    "reject_confirm": "¿Rechazar esta propuesta? Se eliminará permanentemente.",
+    "toast_approved": "Recurso aprobado y publicado.",
+    "toast_rejected": "Propuesta rechazada.",
     "filters": {
       "all": "Todos los tipos"
     },
