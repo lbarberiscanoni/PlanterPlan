@@ -52,5 +52,12 @@ export default defineConfig({
       grep: /@regression/,
       use: { ...devices['Desktop Chrome'] },
     },
+    {
+      // Nightly backstop — no browser navigation; runs the stale-data sweep. Kept out of the
+      // smoke/regression projects so a normal run never reaps mid-flight.
+      name: 'reaper',
+      grep: /@reaper/,
+      use: { ...devices['Desktop Chrome'] },
+    },
   ],
 });

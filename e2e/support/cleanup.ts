@@ -18,6 +18,7 @@ import { E2E_TAG, assertSafeRunId } from './runId';
  */
 
 const SANITY_CEILING = 500;
+const REAPER_CEILING = 5000;
 
 function adminClient(): SupabaseClient | null {
   const url = process.env.E2E_SUPABASE_URL ?? process.env.VITE_SUPABASE_URL;
@@ -105,4 +106,64 @@ export async function reapByTag(): Promise<void> {
   console.log(
     `[e2e cleanup] removed ${tagged.length} tagged task(s) (${rootIds.length} project root(s)) for ${E2E_TAG}.`,
   );
+}
+
+/**
+ * Nightly reaper backstop: delete ANY `[e2e-*]` data older than `olderThanHours`, owned by the
+ * test accounts. This catches runs whose globalTeardown crashed or was skipped (no service key).
+ * Not run-scoped — guarded instead by the fixed [e2e- prefix, creator pinning, age cutoff, and a
+ * high ceiling. (Date is fine here — the ban is only on Workflow scripts.)
+ */
+export async function reapStale(olderThanHours = 6): Promise<void> {
+  const admin = adminClient();
+  if (!admin) {
+    console.warn('[e2e reaper] SKIPPED — no E2E_SUPABASE_SERVICE_ROLE_KEY (+ url).');
+    return;
+  }
+  const creatorIds = await testAccountIds(admin);
+  if (creatorIds.length === 0) {
+    console.warn('[e2e reaper] SKIPPED — could not resolve any test-account ids.');
+    return;
+  }
+
+  const cutoff = new Date(Date.now() - olderThanHours * 3_600_000).toISOString();
+  const like = '[e2e-%';
+
+  const { data: stale, error } = await admin
+    .from('tasks')
+    .select('id, parent_task_id, root_id')
+    .like('title', like)
+    .in('creator', creatorIds)
+    .lt('created_at', cutoff);
+  if (error) throw error;
+
+  if (!stale || stale.length === 0) {
+    console.log('[e2e reaper] nothing stale to remove.');
+    return;
+  }
+  if (stale.length > REAPER_CEILING) {
+    throw new Error(`[e2e reaper] ABORT — ${stale.length} stale rows (ceiling ${REAPER_CEILING}). Inspect manually.`);
+  }
+
+  const rootIds = stale.filter((t) => t.parent_task_id === null).map((t) => t.id);
+  if (rootIds.length > 0) {
+    const { error: e } = await admin.from('tasks').delete().in('root_id', rootIds).in('creator', creatorIds);
+    if (e) throw e;
+  }
+  {
+    const { error: e } = await admin
+      .from('tasks')
+      .delete()
+      .like('title', like)
+      .in('creator', creatorIds)
+      .lt('created_at', cutoff);
+    if (e) throw e;
+  }
+  try {
+    await admin.from('resources').delete().like('name', like).lt('created_at', cutoff);
+  } catch (e) {
+    console.warn('[e2e reaper] resource sweep skipped:', (e as Error).message);
+  }
+
+  console.log(`[e2e reaper] removed ${stale.length} stale tagged task(s) (${rootIds.length} root(s)).`);
 }

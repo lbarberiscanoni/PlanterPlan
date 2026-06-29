@@ -21,6 +21,17 @@ This is the source-of-truth list of end-to-end UX flows. It serves **two** consu
 - **No separate test DB.** Tests stamp created data with `[e2e-<runId>]` and tear it down by
   tag + creator in `globalTeardown` (service-role, guarded). A nightly reaper sweeps stragglers.
 
+### CI (GitHub Actions)
+
+- **`e2e.yml`** — `@smoke` on every successful Vercel **preview** deploy (`deployment_status`,
+  uses the deploy's `target_url`); full **smoke + regression** nightly (07:00 UTC) and on manual
+  dispatch against `secrets.E2E_BASE_URL`. One `concurrency: e2e-live` group serializes all runs.
+- **`e2e-reaper.yml`** — nightly (06:00 UTC, same concurrency group) runs `--project=reaper` to
+  delete `[e2e-*]` data older than 6h.
+- **Required repo secrets:** `E2E_BASE_URL`, `E2E_PASSWORD`, `E2E_ADMIN_EMAIL`,
+  `E2E_PLANTER_EMAIL`, `E2E_TEAM_EMAIL`, `E2E_SUPABASE_URL`, `E2E_SUPABASE_SERVICE_ROLE_KEY`.
+  Without the service-role key, teardown is skipped and the reaper is the only cleanup — set it.
+
 ---
 
 ## `@smoke` — runs per-PR (core loop; must stay fast + stable)

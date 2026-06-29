@@ -1,0 +1,39 @@
+name: e2e-reaper
+
+# Backstop for the live-DB teardown: deletes any [e2e-*] data older than 6h owned by the test
+# accounts, catching runs whose globalTeardown crashed or ran without a service key. Shares the
+# e2e-live concurrency group so it never reaps while a suite is mid-flight.
+
+on:
+  schedule:
+    - cron: '0 6 * * *' # 06:00 UTC — an hour before the nightly e2e run
+  workflow_dispatch: {}
+
+concurrency:
+  group: e2e-live
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  reap:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Reap stale e2e data
+        env:
+          E2E_RUN_ID: reaper-${{ github.run_id }}
+          E2E_PASSWORD: ${{ secrets.E2E_PASSWORD }}
+          E2E_ADMIN_EMAIL: ${{ secrets.E2E_ADMIN_EMAIL }}
+          E2E_PLANTER_EMAIL: ${{ secrets.E2E_PLANTER_EMAIL }}
+          E2E_TEAM_EMAIL: ${{ secrets.E2E_TEAM_EMAIL }}
+          E2E_SUPABASE_URL: ${{ secrets.E2E_SUPABASE_URL }}
+          E2E_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.E2E_SUPABASE_SERVICE_ROLE_KEY }}
+        run: npx playwright test --project=reaper

@@ -1,0 +1,74 @@
+name: e2e
+
+# Smoke on every Vercel PREVIEW deploy; full smoke+regression nightly; manual on demand.
+# Runs against a DEPLOYED url (local can't reach remote Supabase). There is no test DB —
+# every run mutates LIVE Supabase, so the whole workflow serializes via one concurrency group
+# and tags + tears down its data (globalTeardown). The nightly reaper (e2e-reaper.yml) is the backstop.
+
+on:
+  deployment_status: {}
+  schedule:
+    - cron: '0 7 * * *' # 07:00 UTC nightly — full suite
+  workflow_dispatch:
+    inputs:
+      project:
+        description: 'Playwright project to run (blank = smoke + regression)'
+        required: false
+        default: ''
+
+concurrency:
+  group: e2e-live # never two live-DB runs at once (shared test accounts)
+  cancel-in-progress: false # queue, don't kill mid-teardown
+
+permissions:
+  contents: read
+
+jobs:
+  e2e:
+    # On deployment_status, only run for a SUCCESSFUL PREVIEW deploy (skip prod + in-progress).
+    if: >-
+      github.event_name != 'deployment_status' ||
+      (github.event.deployment_status.state == 'success' &&
+       github.event.deployment_status.environment == 'Preview')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+
+      - name: Resolve target URL + project
+        run: |
+          if [ "${{ github.event_name }}" = "deployment_status" ]; then
+            echo "E2E_BASE_URL=${{ github.event.deployment_status.target_url }}" >> "$GITHUB_ENV"
+            echo "PW_ARGS=--project=smoke" >> "$GITHUB_ENV"
+          else
+            echo "E2E_BASE_URL=${{ secrets.E2E_BASE_URL }}" >> "$GITHUB_ENV"
+            if [ -n "${{ github.event.inputs.project }}" ]; then
+              echo "PW_ARGS=--project=${{ github.event.inputs.project }}" >> "$GITHUB_ENV"
+            else
+              echo "PW_ARGS=--project=smoke --project=regression" >> "$GITHUB_ENV"
+            fi
+          fi
+
+      - name: Run Playwright
+        env:
+          E2E_RUN_ID: ${{ github.run_id }}-${{ github.run_attempt }}
+          E2E_PASSWORD: ${{ secrets.E2E_PASSWORD }}
+          E2E_ADMIN_EMAIL: ${{ secrets.E2E_ADMIN_EMAIL }}
+          E2E_PLANTER_EMAIL: ${{ secrets.E2E_PLANTER_EMAIL }}
+          E2E_TEAM_EMAIL: ${{ secrets.E2E_TEAM_EMAIL }}
+          E2E_SUPABASE_URL: ${{ secrets.E2E_SUPABASE_URL }}
+          E2E_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.E2E_SUPABASE_SERVICE_ROLE_KEY }}
+        run: npx playwright test $PW_ARGS
+
+      - name: Upload report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-${{ github.run_id }}
+          path: playwright-report/
+          retention-days: 7
