@@ -24,12 +24,32 @@ permissions:
   contents: read
 
 jobs:
+  # Skip cleanly (neutral, not red) until the e2e secrets are configured.
+  gate:
+    runs-on: ubuntu-latest
+    outputs:
+      configured: ${{ steps.c.outputs.configured }}
+    steps:
+      - id: c
+        env:
+          PW: ${{ secrets.E2E_PASSWORD }}
+          SR: ${{ secrets.E2E_SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          if [ -n "$PW" ] && [ -n "$SR" ]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::e2e secrets not set — skipping run. See docs/qa/e2e-flows.md."
+          fi
+
   e2e:
-    # On deployment_status, only run for a SUCCESSFUL PREVIEW deploy (skip prod + in-progress).
+    needs: gate
+    # Run only when configured, and (on deployment_status) only for a SUCCESSFUL PREVIEW deploy.
     if: >-
-      github.event_name != 'deployment_status' ||
-      (github.event.deployment_status.state == 'success' &&
-       github.event.deployment_status.environment == 'Preview')
+      needs.gate.outputs.configured == 'true' &&
+      (github.event_name != 'deployment_status' ||
+       (github.event.deployment_status.state == 'success' &&
+        github.event.deployment_status.environment == 'Preview'))
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
