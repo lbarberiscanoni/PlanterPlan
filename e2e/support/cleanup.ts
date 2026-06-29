@@ -84,13 +84,26 @@ export async function reapByTag(): Promise<void> {
 
   const rootIds = tagged.filter((t) => t.parent_task_id === null).map((t) => t.id);
 
-  // 1. Whole cloned subtrees (children reached via root_id), creator-pinned.
+  // Delete NON-ROOT descendants first, then the roots. Deleting a root in the same statement as
+  // its children raises FK 23503: a child-delete trigger logs to activity_log(project_id -> tasks)
+  // referencing the root that's being concurrently deleted, and the whole delete rolls back.
+  // Non-roots log against the still-present root; the root delete is skipped by the logging trigger
+  // and cascades the activity_log rows (FK is ON DELETE CASCADE).
   if (rootIds.length > 0) {
-    const { error } = await admin.from('tasks').delete().in('root_id', rootIds).in('creator', creatorIds);
-    if (error) throw error;
+    const { error: eKids } = await admin
+      .from('tasks')
+      .delete()
+      .in('root_id', rootIds)
+      .not('parent_task_id', 'is', null)
+      .in('creator', creatorIds);
+    if (eKids) throw eKids;
+
+    const { error: eRoots } = await admin.from('tasks').delete().in('id', rootIds).in('creator', creatorIds);
+    if (eRoots) throw eRoots;
   }
 
-  // 2. Any remaining directly-tagged rows (custom tasks in pre-existing projects).
+  // Any remaining directly-tagged rows (custom tasks in pre-existing projects whose root is NOT
+  // being deleted — logging against a present root is fine).
   {
     const { error } = await admin.from('tasks').delete().like('title', like).in('creator', creatorIds);
     if (error) throw error;
@@ -145,10 +158,19 @@ export async function reapStale(olderThanHours = 6): Promise<void> {
     throw new Error(`[e2e reaper] ABORT — ${stale.length} stale rows (ceiling ${REAPER_CEILING}). Inspect manually.`);
   }
 
+  // Non-roots first, then roots (see reapByTag for the activity_log FK rationale).
   const rootIds = stale.filter((t) => t.parent_task_id === null).map((t) => t.id);
   if (rootIds.length > 0) {
-    const { error: e } = await admin.from('tasks').delete().in('root_id', rootIds).in('creator', creatorIds);
-    if (e) throw e;
+    const { error: eKids } = await admin
+      .from('tasks')
+      .delete()
+      .in('root_id', rootIds)
+      .not('parent_task_id', 'is', null)
+      .in('creator', creatorIds);
+    if (eKids) throw eKids;
+
+    const { error: eRoots } = await admin.from('tasks').delete().in('id', rootIds).in('creator', creatorIds);
+    if (eRoots) throw eRoots;
   }
   {
     const { error: e } = await admin

@@ -32,16 +32,15 @@ test('@regression @dates editing project start shifts descendant due dates', asy
 });
 
 /**
- * KNOWN BUG — surfaced by this e2e suite on 2026-06-29. Editing a project's start date does NOT
- * persist on the root: after a full reload, #start_date reverts to created_at (start_date reads
- * back null), even though the descendant cascade fires. This is the app-layer envelope alignment
- * (form fields / payload) that was flagged TODO when the date engine switched to the bottom-up
- * envelope model — and a live echo of Tim's "I change the start date, it does not save it."
+ * REG-08b — editing the project start date PERSISTS across a reload. @regression @dates
  *
- * Marked `test.fail` so CI stays green while the bug is tracked; it flips RED (unexpected pass) the
- * moment persistence is fixed — that's the cue to delete this marker and keep the assertion.
+ * The save runs two awaited calls (Project.update, then the reschedule_project_start RPC), so the
+ * test MUST wait for the save to finish before navigating — otherwise page.goto aborts the in-flight
+ * reschedule and the change appears not to persist (that was a test race, not an app bug; the DB
+ * confirms reschedule_project_start persists correctly). The edit modal only closes after the
+ * mutation resolves, so wait for it to be hidden before reloading.
  */
-test.fail('@regression @dates project start date persists across reload (KNOWN BUG)', async ({ page }) => {
+test('@regression @dates project start date persists across reload', async ({ page }) => {
   await loginAs(page, 'planter');
   const projectUrl = await createProjectFromTemplate(page, tagged(`Start persist ${Date.now()}`));
 
@@ -50,6 +49,7 @@ test.fail('@regression @dates project start date persists across reload (KNOWN B
   const original = await start.inputValue();
   await start.fill('2027-03-15');
   await page.getByRole('button', { name: 'Save Changes' }).click();
+  await expect(page.getByTestId('edit-project-modal')).toBeHidden(); // save fully resolved
 
   await page.goto(projectUrl);
   await page.getByRole('button', { name: /^Open settings for / }).click();

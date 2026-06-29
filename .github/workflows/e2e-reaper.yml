@@ -7,7 +7,12 @@ name: e2e-reaper
 on:
   schedule:
     - cron: '0 6 * * *' # 06:00 UTC — an hour before the nightly e2e run
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      older_than_hours:
+        description: 'Delete [e2e-*] data older than this many hours (0 = everything)'
+        required: false
+        default: '6'
 
 concurrency:
   group: e2e-live
@@ -48,6 +53,7 @@ jobs:
       - name: Reap stale e2e data
         env:
           E2E_RUN_ID: reaper-${{ github.run_id }}
+          E2E_REAP_HOURS: ${{ github.event.inputs.older_than_hours || '6' }}
           E2E_PASSWORD: ${{ secrets.E2E_PASSWORD }}
           E2E_ADMIN_EMAIL: ${{ secrets.E2E_ADMIN_EMAIL }}
           E2E_PLANTER_EMAIL: ${{ secrets.E2E_PLANTER_EMAIL }}

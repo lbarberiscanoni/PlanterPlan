@@ -7,5 +7,7 @@ import { reapStale } from '../support/cleanup';
  * run via the reaper project / e2e-reaper workflow, NOT as part of smoke/regression.
  */
 test('@reaper sweep stale e2e data', async () => {
-  await expect(reapStale(6)).resolves.toBeUndefined();
+  // Default 6h; the reaper workflow can pass E2E_REAP_HOURS=0 for a full one-time sweep.
+  const hours = Number(process.env.E2E_REAP_HOURS ?? '6');
+  await expect(reapStale(Number.isFinite(hours) ? hours : 6)).resolves.toBeUndefined();
 });
