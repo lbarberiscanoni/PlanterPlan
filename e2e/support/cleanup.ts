@@ -2,23 +2,13 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { E2E_TAG, assertSafeRunId } from './runId';
 
 /**
- * Tag-scoped, owner-pinned teardown that runs against LIVE Supabase (there is no test DB).
+ * Tag-scoped teardown against LIVE Supabase (there is no test DB). Task deletion goes through the
+ * `e2e_purge_tagged` RPC (migration 20260629040000) — raw PostgREST deletes can't coordinate with
+ * the activity_log logging trigger during a subtree cascade and hit FK 23503. The RPC uses the same
+ * GUC the app's delete_project path uses, so the cascade is logged-skipped and deletes cleanly.
  *
- * Safety rails — because a bad DELETE here hits real data:
- *   1. assertSafeRunId() aborts on a missing/short run id (no broad-match wipe).
- *   2. Every delete is scoped to BOTH the run tag AND the test-account creator ids.
- *   3. A sanity ceiling aborts if the match set is implausibly large.
- *
- * Deletes:
- *   - cloned subtrees: all tasks whose root_id is a tagged root (children carry the
- *     creator but not the tag, so root_id is how we reach them).
- *   - directly-tagged tasks: custom tasks added to pre-existing projects (delete only
- *     the tagged row, never its project).
- *   - tagged resources (best-effort).
+ * Guards: missing/short run id aborts; the RPC itself enforces the '[e2e-' prefix + creator pinning.
  */
-
-const SANITY_CEILING = 500;
-const REAPER_CEILING = 5000;
 
 function adminClient(): SupabaseClient | null {
   const url = process.env.E2E_SUPABASE_URL ?? process.env.VITE_SUPABASE_URL;
@@ -43,152 +33,49 @@ async function testAccountIds(admin: SupabaseClient): Promise<string[]> {
     .map((u) => u.id);
 }
 
-export async function reapByTag(): Promise<void> {
-  assertSafeRunId();
-
+async function purge(prefix: string, olderThanHours: number, label: string): Promise<void> {
   const admin = adminClient();
   if (!admin) {
-    console.warn(
-      `[e2e cleanup] SKIPPED — no E2E_SUPABASE_SERVICE_ROLE_KEY (+ url). Test data tagged ` +
-        `${E2E_TAG} was left in the DB; the nightly reaper must catch it.`,
-    );
+    console.warn(`[${label}] SKIPPED — no E2E_SUPABASE_SERVICE_ROLE_KEY (+ url).`);
     return;
   }
-
   const creatorIds = await testAccountIds(admin);
   if (creatorIds.length === 0) {
-    console.warn('[e2e cleanup] SKIPPED — could not resolve any test-account ids; refusing to delete.');
+    console.warn(`[${label}] SKIPPED — could not resolve any test-account ids.`);
     return;
   }
 
-  const like = `${E2E_TAG}%`;
-
-  // Find the tagged rows (roots + custom tasks), pinned to test-account creators.
-  const { data: tagged, error: findErr } = await admin
-    .from('tasks')
-    .select('id, parent_task_id, root_id, creator')
-    .like('title', like)
-    .in('creator', creatorIds);
-  if (findErr) throw findErr;
-
-  if (!tagged || tagged.length === 0) {
-    console.log(`[e2e cleanup] nothing tagged ${E2E_TAG} to remove.`);
-    return;
-  }
-  if (tagged.length > SANITY_CEILING) {
+  const { data, error } = await admin.rpc('e2e_purge_tagged', {
+    p_tag_prefix: prefix,
+    p_creator_ids: creatorIds,
+    p_older_than_hours: olderThanHours,
+  });
+  if (error) {
+    // Most likely the migration (20260629040000) isn't applied to this project yet.
     throw new Error(
-      `[e2e cleanup] ABORT — ${tagged.length} rows match ${E2E_TAG} (ceiling ${SANITY_CEILING}). ` +
-        `Refusing to mass-delete; inspect manually.`,
+      `${label}: e2e_purge_tagged RPC failed (${error.message}). ` +
+        `Ensure migration 20260629040000_e2e_purge_tagged_cleanup_rpc.sql is applied.`,
     );
   }
 
-  const rootIds = tagged.filter((t) => t.parent_task_id === null).map((t) => t.id);
+  // Best-effort tagged-resource sweep (no FK-cascade concern on resources).
+  const resourceQuery = admin.from('resources').delete().like('name', `${prefix}%`);
+  const { error: resErr } = await resourceQuery;
+  if (resErr) console.warn(`[${label}] resource sweep skipped: ${resErr.message}`);
 
-  // Delete NON-ROOT descendants first, then the roots. Deleting a root in the same statement as
-  // its children raises FK 23503: a child-delete trigger logs to activity_log(project_id -> tasks)
-  // referencing the root that's being concurrently deleted, and the whole delete rolls back.
-  // Non-roots log against the still-present root; the root delete is skipped by the logging trigger
-  // and cascades the activity_log rows (FK is ON DELETE CASCADE).
-  if (rootIds.length > 0) {
-    // NO creator filter on descendants: the roots are already verified test data (tagged +
-    // test-creator), so the whole subtree under them is fair game. Pinning descendants by creator
-    // risks leaving some behind, which the root delete then cascade-deletes AFTER the root is gone —
-    // exactly the activity_log FK 23503 that rolls the teardown back.
-    const { error: eKids } = await admin
-      .from('tasks')
-      .delete()
-      .in('root_id', rootIds)
-      .not('parent_task_id', 'is', null);
-    if (eKids) throw eKids;
+  console.log(`[${label}] purged ${data ?? 0} task row(s) for prefix ${prefix}.`);
+}
 
-    const { error: eRoots } = await admin.from('tasks').delete().in('id', rootIds).in('creator', creatorIds);
-    if (eRoots) throw eRoots;
-  }
-
-  // Any remaining directly-tagged rows (custom tasks in pre-existing projects whose root is NOT
-  // being deleted — logging against a present root is fine).
-  {
-    const { error } = await admin.from('tasks').delete().like('title', like).in('creator', creatorIds);
-    if (error) throw error;
-  }
-
-  // 3. Tagged resources (best-effort; resources may not expose a creator column).
-  try {
-    await admin.from('resources').delete().like('name', like);
-  } catch (e) {
-    console.warn('[e2e cleanup] resource sweep skipped:', (e as Error).message);
-  }
-
-  console.log(
-    `[e2e cleanup] removed ${tagged.length} tagged task(s) (${rootIds.length} project root(s)) for ${E2E_TAG}.`,
-  );
+/** Run-scoped teardown: delete everything this run tagged. */
+export async function reapByTag(): Promise<void> {
+  assertSafeRunId();
+  await purge(E2E_TAG, 0, 'e2e cleanup');
 }
 
 /**
- * Nightly reaper backstop: delete ANY `[e2e-*]` data older than `olderThanHours`, owned by the
- * test accounts. This catches runs whose globalTeardown crashed or was skipped (no service key).
- * Not run-scoped — guarded instead by the fixed [e2e- prefix, creator pinning, age cutoff, and a
- * high ceiling. (Date is fine here — the ban is only on Workflow scripts.)
+ * Nightly reaper backstop: delete ANY [e2e-*] data older than `olderThanHours`, catching runs whose
+ * teardown crashed or ran without a service key. olderThanHours = 0 means "everything" (one-time sweep).
  */
 export async function reapStale(olderThanHours = 6): Promise<void> {
-  const admin = adminClient();
-  if (!admin) {
-    console.warn('[e2e reaper] SKIPPED — no E2E_SUPABASE_SERVICE_ROLE_KEY (+ url).');
-    return;
-  }
-  const creatorIds = await testAccountIds(admin);
-  if (creatorIds.length === 0) {
-    console.warn('[e2e reaper] SKIPPED — could not resolve any test-account ids.');
-    return;
-  }
-
-  const cutoff = new Date(Date.now() - olderThanHours * 3_600_000).toISOString();
-  const like = '[e2e-%';
-
-  const { data: stale, error } = await admin
-    .from('tasks')
-    .select('id, parent_task_id, root_id')
-    .like('title', like)
-    .in('creator', creatorIds)
-    .lt('created_at', cutoff);
-  if (error) throw error;
-
-  if (!stale || stale.length === 0) {
-    console.log('[e2e reaper] nothing stale to remove.');
-    return;
-  }
-  if (stale.length > REAPER_CEILING) {
-    throw new Error(`[e2e reaper] ABORT — ${stale.length} stale rows (ceiling ${REAPER_CEILING}). Inspect manually.`);
-  }
-
-  // Non-roots first, then roots (see reapByTag for the activity_log FK rationale).
-  const rootIds = stale.filter((t) => t.parent_task_id === null).map((t) => t.id);
-  if (rootIds.length > 0) {
-    // Descendants of verified-test roots: no creator filter (see reapByTag).
-    const { error: eKids } = await admin
-      .from('tasks')
-      .delete()
-      .in('root_id', rootIds)
-      .not('parent_task_id', 'is', null);
-    if (eKids) throw eKids;
-
-    const { error: eRoots } = await admin.from('tasks').delete().in('id', rootIds).in('creator', creatorIds);
-    if (eRoots) throw eRoots;
-  }
-  {
-    const { error: e } = await admin
-      .from('tasks')
-      .delete()
-      .like('title', like)
-      .in('creator', creatorIds)
-      .lt('created_at', cutoff);
-    if (e) throw e;
-  }
-  try {
-    await admin.from('resources').delete().like('name', like).lt('created_at', cutoff);
-  } catch (e) {
-    console.warn('[e2e reaper] resource sweep skipped:', (e as Error).message);
-  }
-
-  console.log(`[e2e reaper] removed ${stale.length} stale tagged task(s) (${rootIds.length} root(s)).`);
+  await purge('[e2e-', olderThanHours, 'e2e reaper');
 }
