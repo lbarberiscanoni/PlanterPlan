@@ -48,19 +48,19 @@ jobs:
           # Touches feature code?
           if echo "$CHANGED" | grep -qE '^src/features/'; then TOUCHES_FEATURE=1; else TOUCHES_FEATURE=0; fi
 
-          # Adds or updates a test? (vitest unit OR the e2e suite)
-          if echo "$CHANGED" | grep -qE '(\.test\.tsx?$)|^e2e/'; then HAS_TEST=1; else HAS_TEST=0; fi
+          # Adds or updates an e2e test? (vitest was removed; e2e is the only test layer)
+          if echo "$CHANGED" | grep -qE '^e2e/'; then HAS_TEST=1; else HAS_TEST=0; fi
 
           echo "is_fix=$IS_FIX touches_feature=$TOUCHES_FEATURE has_test=$HAS_TEST"
 
           if [ "$IS_FIX" = 1 ] && [ "$TOUCHES_FEATURE" = 1 ] && [ "$HAS_TEST" = 0 ]; then
-            echo "::warning title=Fix without a test::This PR looks like a bug fix touching src/features/** but changes no *.test.* or e2e/** file. Per CLAUDE.md Testing & Regression Policy, the fix and its guard should ship together."
+            echo "::warning title=Fix without a test::This PR looks like a bug fix touching src/features/** but changes no e2e/** file. Per CLAUDE.md Testing & Regression Policy, the fix and its guard should ship together."
             {
               echo "### ⚠️ Fix without a test"
               echo ""
-              echo "This PR touches \`src/features/**\` and reads like a fix, but no \`*.test.*\` or \`e2e/**\` file changed."
+              echo "This PR touches \`src/features/**\` and reads like a fix, but no \`e2e/**\` file changed."
               echo ""
-              echo "Per **CLAUDE.md → Testing & Regression Policy**, add or tighten the assertion that would have caught this — a vitest unit test for pure logic, or an \`@regression\`-tagged e2e for behavioral/UI nuance — in this same PR."
+              echo "Per **CLAUDE.md → Testing & Regression Policy**, add or tighten an \`@regression\`-tagged e2e test that would have caught this — in this same PR."
               echo ""
               echo "_This is a soft nudge, not a blocking check._"
             } >> "$GITHUB_STEP_SUMMARY"

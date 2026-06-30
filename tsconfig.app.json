@@ -30,12 +30,6 @@
       "@/*": [
         "./src/*"
       ],
-      "@test": [
-        "./Testing/test-utils/index.ts"
-      ],
-      "@test/*": [
-        "./Testing/test-utils/*"
-      ],
       "@layouts/*": [
         "./src/shared/layouts/*"
       ],

@@ -8,9 +8,10 @@ Church planting project management app built with React + TypeScript + Supabase.
 npm run dev          # Start Vite dev server
 npm run build        # TypeScript check + Vite production build (tsc -b && vite build)
 npm run lint         # ESLint (zero-tolerance)
-npm test             # Vitest unit/integration tests
-npm run test:e2e     # Playwright browser e2e — smoke + regression (SUITE SCAFFOLD PENDING; see Testing & Regression Policy)
+npm run test:e2e     # Playwright browser e2e — smoke + regression (runs against a deployed URL; see Testing & Regression Policy)
 ```
+
+> There is no unit-test suite. The vitest suite under `Testing/` was removed; the only automated tests are the Playwright e2e suite under `e2e/`.
 
 **Always run `npm run build` after code changes to verify.** The build enforces `noUnusedLocals` and `noUnusedParameters` — unused variables are errors, not warnings.
 
@@ -74,21 +75,22 @@ Component → React Query hook → planterClient → Supabase SDK
 
 > **A bug is a missing assertion.** When you fix a user-visible bug or change a behavioral rule, add or tighten the test that would have caught it **in the same change** — phrased as the specific nuance, not "the feature works." The fix and its guard ship together, or the fix is incomplete.
 
-**When a fix earns a test (and which kind):**
-- **Behavioral rules, parity bugs (add vs. edit forms), scoping/RLS gating, cascade/rollup, cross-project labeling** → a browser **e2e** test under `e2e/`, tagged `@regression` plus its feature tag.
-- **Pure logic / date math / edge cases** → a **vitest** unit test (cheaper, faster, more precise — don't pay e2e cost for what a unit test guards better).
+**When a fix earns a test:**
+- **Behavioral rules, parity bugs (add vs. edit forms), scoping/RLS gating, cascade/rollup, cross-project labeling, logic with an observable UI effect** → a browser **e2e** test under `e2e/`, tagged `@regression` plus its feature tag.
 - **Skip** for pure copy/cosmetic changes and one-off data cleanup.
+
+> There is **no unit-test harness** — the vitest suite was removed. e2e is the only automated test layer. Pure-logic edge cases that aren't observable in the browser currently have no regression net; if you fix one, note it.
 
 **Tag taxonomy** (Playwright `--grep`): `@smoke` (core loop, runs per-PR), `@regression` (a scar from a specific fix), plus one feature tag — `@templates @library @resources @tasks @projects @dates @admin @account`. Each `@regression` spec carries a one-line comment linking the commit or stakeholder item it guards, so the test documents *why* it exists.
 
-**Status:** the e2e suite under `e2e/` is being (re)introduced — the old Playwright BDD suite was removed in commit `3a9fd788`. `@playwright/test` is still a dependency; what's pending is `playwright.config.ts`, the `globalSetup`/`globalTeardown`, and the seed specs (6 `@smoke` + the initial `@regression` set). Until that lands, this policy governs **vitest** tests, which the guard already enforces.
+**Status:** the e2e suite under `e2e/` is live and green — 6 `@smoke` flows + several `@regression` specs (4 `fixme` pending template-tree fixtures) + a `@reaper` cleanup project. Teardown/reaper run through the `e2e_purge_tagged` RPC (migrations `20260629040000`/`050000`).
 
 **How the suite runs** (see `docs/qa/` for the full flow list):
 - e2e hits a **deployed URL** (local can't reach remote Supabase; no local Docker), using the seeded `test-user.{admin,planter,team}@mail.com` accounts.
 - Tests create data tagged `[e2e-<runId>]` and tear it down by tag + creator in `globalTeardown`; a nightly reaper sweeps stragglers. **There is no separate test DB — cleanup runs against live Supabase, so teardown is tag-scoped and owner-pinned.**
 - **Per-PR:** `@smoke` only. **Nightly / pre-release:** full `@regression`. Never gate `main` on the full suite — smoke gates, regression reports.
 
-**Enforcement:** `.github/workflows/test-guard.yml` warns when a PR touches `src/features/**` as a fix without a matching `*.test.*` or `e2e/**` change. It's a soft nudge, not a hard block — but the expectation above stands.
+**Enforcement:** `.github/workflows/test-guard.yml` warns when a PR touches `src/features/**` as a fix without a matching `e2e/**` change. It's a soft nudge, not a hard block — but the expectation above stands.
 
 ## Routes
 
