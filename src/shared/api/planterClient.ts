@@ -1255,7 +1255,12 @@ export const planter: PlanterClient = {
                         .from('tasks_with_primary_resource')
                         .select('*')
                         .eq('origin', 'template')
-                        .is('parent_task_id', null);
+                        .is('parent_task_id', null)
+                        // Only true project-template roots — loose Master Library items
+                        // (a phase/task saved with parent_task_id = NULL) must not appear
+                        // as top-level templates. Legacy roots may have NULL task_type →
+                        // treat as 'project'. Mirrors admin_template_roots / admin_library_templates.
+                        .or('task_type.eq.project,task_type.is.null');
 
                     if (userId) {
                         // Caller wants a specific user's templates (e.g. "my templates") — no published filter
