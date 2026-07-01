@@ -55,3 +55,37 @@ test('@regression @dates project start date persists across reload', async ({ pa
   await page.getByRole('button', { name: /^Open settings for / }).click();
   await expect(page.locator('#start_date')).not.toHaveValue(original);
 });
+
+/**
+ * REG-09 — calendar dates render their true stored day in a behind-UTC timezone. @regression @dates
+ * Guards Tim's "task/project date shows one day early" report (2026-06-30 review): due/start dates are
+ * stored as UTC-midnight timestamps, so the header + badges must format them as the UTC calendar day,
+ * not the runtime-local day. Before the fix, a due date of e.g. Jul 13 rendered "Jul 12" west of UTC.
+ * Fixed by formatCalendarDate (src/shared/lib/date-engine/index.ts).
+ */
+test.describe('calendar-date display is timezone-stable', () => {
+  // Force a timezone well behind UTC — a UTC-midnight date formatted in local time
+  // would fall back onto the previous calendar day here (the bug).
+  test.use({ timezoneId: 'America/Los_Angeles' });
+
+  test('@regression @dates project due date is not off-by-one west of UTC', async ({ page }) => {
+    await loginAs(page, 'planter');
+    await createProjectFromTemplate(page, tagged(`TZ display ${Date.now()}`));
+
+    // The canonical stored calendar day is exposed (read-only) in the due-date field.
+    await page.getByRole('button', { name: /^Open settings for / }).click();
+    const iso = await page.locator('#due_date').inputValue(); // "YYYY-MM-DD"
+    test.skip(!/^\d{4}-\d{2}-\d{2}$/.test(iso), 'project has no derived due date');
+    const [y, m, d] = iso.split('-').map(Number);
+    const expected = new Date(Date.UTC(y, m - 1, d)).toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      timeZone: 'UTC',
+    }); // e.g. "Jul 13, 2026"
+    await page.getByTestId('edit-project-modal').getByRole('button', { name: 'Cancel' }).click();
+
+    // Header must show that exact calendar day — pre-fix it showed the day before.
+    await expect(page.getByText(`Due: ${expected}`)).toBeVisible();
+  });
+});

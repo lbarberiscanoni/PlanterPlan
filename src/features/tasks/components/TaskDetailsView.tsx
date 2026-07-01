@@ -9,7 +9,7 @@ import TaskDependencies from '@/features/tasks/components/TaskDependencies';
 import TaskComments from '@/features/tasks/components/TaskComments/TaskComments';
 import { useTaskActivity } from '@/shared/hooks/useActivityLog';
 import { ActivityRow } from '@/shared/ui/ActivityRow';
-import { formatDisplayDate } from '@/shared/lib/date-engine';
+import { formatCalendarDate, formatDisplayDate } from '@/shared/lib/date-engine';
 import { useAuth } from '@/shared/contexts/auth-context';
 import {
     Dialog,
@@ -38,8 +38,8 @@ function buildEmailBody(task: TaskItemData, t: TFunction): string {
     const lines: string[] = [t('tasks.detail.email_body_task', { title: task.title })];
     if (task.purpose) lines.push('', t('tasks.detail.email_body_purpose'), task.purpose);
     if (task.actions) lines.push('', t('tasks.detail.email_body_actions'), task.actions);
-    lines.push('', t('tasks.detail.email_body_start', { date: formatDisplayDate(task.start_date) || emptyDate }));
-    lines.push(t('tasks.detail.email_body_due', { date: formatDisplayDate(task.due_date) || emptyDate }));
+    lines.push('', t('tasks.detail.email_body_start', { date: formatCalendarDate(task.start_date, 'EEE, MMM d, yyyy') || emptyDate }));
+    lines.push(t('tasks.detail.email_body_due', { date: formatCalendarDate(task.due_date, 'EEE, MMM d, yyyy') || emptyDate }));
     if (typeof window !== 'undefined') {
         const projectId = task.root_id || task.id;
         lines.push('', t('tasks.detail.email_body_link', { url: `${window.location.origin}/project/${projectId}` }));
@@ -188,7 +188,7 @@ const TaskDetailsView = ({
                             {t('tasks.detail.start_date')}
                         </span>
                         <span className="text-sm font-bold text-card-foreground tracking-tight">
-                            {formatDisplayDate(task.start_date)}
+                            {formatCalendarDate(task.start_date, 'EEE, MMM d, yyyy') || 'Not set'}
                         </span>
                     </div>
                     <div className="p-4 bg-card border border-border rounded-lg shadow-sm flex flex-col gap-1">
@@ -196,7 +196,7 @@ const TaskDetailsView = ({
                             {t('tasks.detail.due_date')}
                         </span>
                         <span className="text-sm font-bold text-card-foreground tracking-tight">
-                            {formatDisplayDate(task.due_date)}
+                            {formatCalendarDate(task.due_date, 'EEE, MMM d, yyyy') || 'Not set'}
                         </span>
                     </div>
                 </div>

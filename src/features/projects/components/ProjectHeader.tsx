@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { Button } from '@/shared/ui/button';
 import { Badge } from '@/shared/ui/badge';
 import { ProgressRing } from '@/shared/ui/progress-ring';
-import { formatDate } from '@/shared/lib/date-engine';
+import { formatCalendarDate } from '@/shared/lib/date-engine';
 import {
     ArrowLeft,
     Calendar,
@@ -157,7 +157,7 @@ export default function ProjectHeader({
                         {project.due_date && (
                             <div className="flex items-center gap-1.5">
                                 <Calendar className="w-4 h-4 text-slate-400" />
-                                <span>{t('projects.header.launch_date', { date: formatDate(project.due_date, 'MMM d, yyyy') })}</span>
+                                <span>{t('projects.header.launch_date', { date: formatCalendarDate(project.due_date, 'MMM d, yyyy') })}</span>
                             </div>
                         )}
                         <Users className="w-4 h-4 text-slate-400" />

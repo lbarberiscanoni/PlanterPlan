@@ -67,8 +67,12 @@ export function formatDateLocalized(
     if (Math.abs(diffDays) < 30) return rtf.format(diffDays, 'day');
     return rtf.format(Math.trunc(diffDays / 30), 'month');
   }
+  // Calendar-date fields are stored as UTC midnight; format in UTC so viewers
+  // behind UTC don't render the previous day (matches the date-engine's
+  // UTC-calendar-day convention). `d` is the UTC-midnight instant built above.
   return getDateTimeFormat(locale, {
     dateStyle: format === 'long' ? 'full' : 'medium',
+    timeZone: 'UTC',
   }).format(d);
 }
 

@@ -2,7 +2,7 @@ import { useNavigate } from 'react-router-dom';
 import { Card } from '@/shared/ui/card';
 import { Button } from '@/shared/ui/button';
 import { Calendar, ChevronRight } from 'lucide-react';
-import { formatDate, endOfDayDate, isBeforeDate, nowUtcIso } from '@/shared/lib/date-engine';
+import { formatCalendarDate, endOfDayDate, isBeforeDate, nowUtcIso } from '@/shared/lib/date-engine';
 import { TASK_STATUS } from '@/shared/constants';
 
 interface AgendaTask {
@@ -63,7 +63,7 @@ export default function MobileAgenda({ tasks = [] }: MobileAgendaProps) {
  <div>
  <p className="font-medium text-sm line-clamp-1">{task.title}</p>
  <p className="text-xs text-brand-100">
- {task.due_date ? formatDate(task.due_date, 'MMM d') : 'Today'}
+ {task.due_date ? formatCalendarDate(task.due_date, 'MMM d') : 'Today'}
  </p>
  </div>
  <ChevronRight className="w-4 h-4 opacity-50" />

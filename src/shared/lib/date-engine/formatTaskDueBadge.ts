@@ -1,4 +1,4 @@
-import { diffInCalendarDays, formatDate, toIsoDate } from '@/shared/lib/date-engine/index';
+import { diffInCalendarDays, formatCalendarDate, toIsoDate } from '@/shared/lib/date-engine/index';
 
 export type DueBadgeTone = 'overdue' | 'due_soon' | 'neutral';
 /**
@@ -89,10 +89,10 @@ export function formatTaskDueBadge({
         label = 'Tomorrow';
     } else if (diff >= -7 && diff <= 7) {
         kind = 'weekdayShort';
-        label = formatDate(dueDate, 'EEE MMM d');
+        label = formatCalendarDate(dueDate, 'EEE MMM d');
     } else {
         kind = 'fullDate';
-        label = formatDate(dueDate, 'MMM d, yyyy');
+        label = formatCalendarDate(dueDate, 'MMM d, yyyy');
     }
 
     return { label, kind, tone };

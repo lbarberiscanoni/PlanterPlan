@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAdminTasks } from '@/features/admin/hooks/useAdminTasks';
 import useDebounce from '@/shared/lib/hooks/useDebounce';
-import { formatDisplayDate } from '@/shared/lib/date-engine';
+import { formatCalendarDate } from '@/shared/lib/date-engine';
 import { Button } from '@/shared/ui/button';
 import {
     Select,
@@ -136,7 +136,7 @@ export default function AdminTasks() {
                                             {task.assignee_email ?? <span className="text-muted-foreground">{t('admin.tasks_unassigned')}</span>}
                                         </td>
                                         <td className="px-4 py-2 text-slate-700">{task.status ?? '—'}</td>
-                                        <td className="px-4 py-2">{task.due_date ? formatDisplayDate(task.due_date) : '—'}</td>
+                                        <td className="px-4 py-2">{task.due_date ? formatCalendarDate(task.due_date, 'EEE, MMM d, yyyy') : '—'}</td>
                                     </tr>
                                 ))
                             )}

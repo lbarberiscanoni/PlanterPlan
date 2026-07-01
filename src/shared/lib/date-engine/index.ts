@@ -77,11 +77,37 @@ const resolve = (input: DateInput | null | undefined): Date | null => {
  return isValid(d) ? d : null;
 };
 
-/** Formats a date using the given `date-fns` format string. */
+/** Formats a date using the given `date-fns` format string.
+ *
+ * NOTE: `date-fns` `format` renders in the runtime's LOCAL timezone. Use this
+ * only for genuine datetimes (e.g. `created_at`, activity timestamps) where the
+ * local wall-clock is what you want. For calendar-date fields (`start_date` /
+ * `due_date`), which are stored as UTC-midnight timestamps, use
+ * {@link formatCalendarDate} instead — otherwise viewers behind UTC render the
+ * previous day (the "yesterday" bug).
+ */
 export const formatDate = (date: DateInput | null | undefined, formatStr: string): string => {
  const d = resolve(date);
  if (!d) return '';
  return format(d, formatStr);
+};
+
+/** Formats a calendar-date field (`start_date` / `due_date`) for display.
+ *
+ * These fields carry a pure calendar date encoded as UTC midnight
+ * (`2026-07-13T00:00:00+00:00`). We recover the intended day via UTC
+ * ({@link toIsoDate}) and format from a LOCAL-midnight `Date` built from that
+ * day, so the rendered date equals the stored calendar day in every timezone —
+ * matching the UTC-calendar-day convention the comparison helpers already use
+ * ({@link isTodayDate} / {@link isPastDate}). Returns `''` on invalid input. */
+export const formatCalendarDate = (
+ date: DateInput | null | undefined,
+ formatStr: string,
+): string => {
+ const iso = toIsoDate(date);
+ if (!iso) return '';
+ const [year, month, day] = iso.split('-').map(Number);
+ return format(new Date(year, month - 1, day), formatStr);
 };
 
 /** Returns `true` if the date is strictly in the past (not today).
