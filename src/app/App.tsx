@@ -31,7 +31,6 @@ const AdminAnalytics = lazy(() => import('@/pages/admin/AdminAnalytics'));
 const AdminTemplates = lazy(() => import('@/pages/admin/AdminTemplates'));
 const AdminLibrary = lazy(() => import('@/pages/admin/AdminLibrary'));
 const AdminProjects = lazy(() => import('@/pages/admin/AdminProjects'));
-const AdminTasks = lazy(() => import('@/pages/admin/AdminTasks'));
 
 const queryClient = new QueryClient();
 
@@ -123,7 +122,6 @@ export default function App() {
  <Route path="templates" element={<Suspense fallback={null}><AdminTemplates /></Suspense>} />
  <Route path="library" element={<Suspense fallback={null}><AdminLibrary /></Suspense>} />
  <Route path="projects" element={<Suspense fallback={null}><AdminProjects /></Suspense>} />
- <Route path="tasks" element={<Suspense fallback={null}><AdminTasks /></Suspense>} />
  </Route>
  </Route>
  </Routes>

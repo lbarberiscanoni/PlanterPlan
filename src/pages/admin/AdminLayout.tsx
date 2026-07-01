@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/shared/contexts/auth-context';
 import { useIsAdmin } from '@/features/admin/hooks/useIsAdmin';
 import { cn } from '@/shared/lib/utils';
-import { LayoutDashboard, Users, BarChart3, FileStack, Library, FolderKanban, ListChecks } from 'lucide-react';
+import { LayoutDashboard, Users, BarChart3, FileStack, Library, FolderKanban } from 'lucide-react';
 
 type AdminLabelKey =
     | 'admin.nav_home'
@@ -13,8 +13,7 @@ type AdminLabelKey =
     | 'admin.nav_analytics'
     | 'admin.nav_templates'
     | 'admin.nav_library'
-    | 'admin.nav_projects'
-    | 'admin.nav_tasks';
+    | 'admin.nav_projects';
 
 type NavItem = {
     to: string;
@@ -34,7 +33,6 @@ const NAV_ITEMS: NavItem[] = [
     { to: '/admin/templates', labelKey: 'admin.nav_templates', testIdKey: 'templates', icon: FileStack },
     { to: '/admin/library', labelKey: 'admin.nav_library', testIdKey: 'library', icon: Library },
     { to: '/admin/projects', labelKey: 'admin.nav_projects', testIdKey: 'projects', icon: FolderKanban },
-    { to: '/admin/tasks', labelKey: 'admin.nav_tasks', testIdKey: 'tasks', icon: ListChecks },
 ];
 
 /**
