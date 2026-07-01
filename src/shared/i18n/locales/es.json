@@ -970,6 +970,7 @@
     "no_activity": "Aún no hay actividad.",
     "activity_on": "en",
     "activity_actor_system": "sistema",
+    "activity_project_prefix": "proyecto",
     "activity_project_none": "—",
     "users_title": "Usuarios",
     "users_subtitle": "Filtrado en el servidor por rol, último acceso, estado de atraso o búsqueda libre.",

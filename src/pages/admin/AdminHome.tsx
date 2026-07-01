@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { planter } from '@/shared/api/planterClient';
@@ -18,6 +19,18 @@ export default function AdminHome() {
     const activity = useQuery<AdminActivityRow[]>({
         queryKey: ['adminRecentActivity'],
         queryFn: () => planter.admin.recentActivity(50),
+    });
+
+    // Resolve project ids in the feed to names — the RPC only returns project_id,
+    // so without this the feed shows raw UUIDs.
+    const projectIds = useMemo(
+        () => [...new Set((activity.data ?? []).map((r) => r.project_id).filter((id): id is string => Boolean(id)))],
+        [activity.data],
+    );
+    const projectTitles = useQuery<Record<string, string | null>>({
+        queryKey: ['adminActivityProjectTitles', projectIds],
+        queryFn: () => planter.admin.projectTitles(projectIds),
+        enabled: projectIds.length > 0,
     });
 
     return (
@@ -49,7 +62,11 @@ export default function AdminHome() {
                                         <span>{row.entity_type}</span>
                                     </p>
                                     <p className="truncate text-xs text-muted-foreground">
-                                        {row.actor_email ?? t('admin.activity_actor_system')} · project {row.project_id ?? t('admin.activity_project_none')}
+                                        {row.actor_email ?? t('admin.activity_actor_system')} · {t('admin.activity_project_prefix')} {
+                                            row.project_id
+                                                ? (projectTitles.data?.[row.project_id] || row.project_id)
+                                                : t('admin.activity_project_none')
+                                        }
                                     </p>
                                 </div>
                                 <span className="flex-shrink-0 text-xs text-muted-foreground">

@@ -964,6 +964,7 @@
     "no_activity": "No activity yet.",
     "activity_on": "on",
     "activity_actor_system": "system",
+    "activity_project_prefix": "project",
     "activity_project_none": "—",
     "users_title": "Users",
     "users_subtitle": "Server-side filtered by role, last login, overdue status, or free-text search.",

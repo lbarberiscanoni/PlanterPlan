@@ -75,21 +75,15 @@ export default function AdminLibrary() {
     const updateMutation = useUpdateLibraryItem();
     const deleteMutation = useDeleteLibraryItem();
 
-    // Metrics reflect the *current filtered view* so admins can read off counts
-    // for whatever slice they're inspecting.
-    const metrics = useMemo(() => {
-        let phases = 0;
-        let milestones = 0;
-        let tasks = 0;
-        let loose = 0;
-        for (const it of items) {
-            if (it.task_type === 'phase') phases += 1;
-            else if (it.task_type === 'milestone') milestones += 1;
-            else if (it.task_type === 'task') tasks += 1;
-            if (it.is_loose) loose += 1;
-        }
-        return { total: items.length, phases, milestones, tasks, loose };
-    }, [items]);
+    // Library-WIDE totals (not the paginated page). Counting the fetched `items`
+    // under-reported every card once the library exceeded one 200-row page; the
+    // metrics RPC counts server-side, so the cards stay accurate at any size.
+    const metricsQuery = useQuery({
+        queryKey: ['adminLibraryMetrics'],
+        queryFn: () => planter.admin.libraryMetrics(),
+        staleTime: 30_000,
+    });
+    const metrics = metricsQuery.data ?? { total: 0, phases: 0, milestones: 0, tasks: 0, loose: 0 };
 
     const typeLabel = (type: string | null): string => {
         switch (type) {

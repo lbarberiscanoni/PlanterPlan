@@ -28,7 +28,18 @@ export function useProjectReports(
  const tasksByStatus = {
  completed: tasks.filter((t) => t.status === TASK_STATUS.COMPLETED).length,
  in_progress: tasks.filter((t) => t.status === TASK_STATUS.IN_PROGRESS).length,
- not_started: tasks.filter((t) => t.status === TASK_STATUS.TODO).length,
+ // Remainder: every non-`na` task that isn't completed/in-progress/blocked
+   // (todo + any legacy/off-enum status like `planning` or the old
+   // `not_started`). Guarantees the four cards sum to `totalTasks`; previously
+   // this counted only `todo`, so off-enum tasks vanished from the cards while
+   // still counting toward the total.
+   not_started: tasks.filter(
+    (t) =>
+     t.status !== TASK_STATUS.NOT_APPLICABLE &&
+     t.status !== TASK_STATUS.COMPLETED &&
+     t.status !== TASK_STATUS.IN_PROGRESS &&
+     t.status !== TASK_STATUS.BLOCKED,
+   ).length,
  blocked: tasks.filter((t) => t.status === TASK_STATUS.BLOCKED).length,
  };
 

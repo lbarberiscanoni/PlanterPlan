@@ -319,6 +319,10 @@ export interface PlanterClient {
         userDetail: (uid: string) => Promise<AdminUserDetail | null>;
         /** Cross-project activity feed (hydrated with actor email). */
         recentActivity: (limit?: number) => Promise<AdminActivityRow[]>;
+        /** Resolve task/project ids to their titles (for labeling the activity feed). */
+        projectTitles: (ids: string[]) => Promise<Record<string, string | null>>;
+        /** Library-wide totals for the Master Library metric cards (accurate, not page-capped). */
+        libraryMetrics: () => Promise<{ total: number; phases: number; milestones: number; tasks: number; loose: number }>;
         /** Paginated user list with server-side filters (Wave 34 Task 2). */
         listUsers: (filter: AdminListUsersFilter, limit?: number, offset?: number) => Promise<AdminListUserRow[]>;
         /** Admin-gated project/template root search. */
@@ -1841,6 +1845,56 @@ export const planter: PlanterClient = {
             });
             if (error) throw error;
             return data ?? [];
+        },
+        /**
+         * Resolve a set of task/project ids to their titles. Used by the admin
+         * activity feed to label rows by project name instead of raw UUID
+         * (`admin_recent_activity` returns only `project_id`). Admins bypass the
+         * `tasks` SELECT RLS via the `is_admin` fallback, so any id resolves.
+         *
+         * @returns Map of `id -> title` (titles may be null in the DB).
+         */
+        projectTitles: async (ids: string[]): Promise<Record<string, string | null>> => {
+            const unique = [...new Set(ids.filter(Boolean))];
+            if (unique.length === 0) return {};
+            const { data, error } = await supabase
+                .from('tasks')
+                .select('id, title')
+                .in('id', unique);
+            if (error) throw new PlanterError(error.message, error.code ?? '500');
+            return Object.fromEntries((data ?? []).map((r) => [r.id as string, (r.title as string | null) ?? null]));
+        },
+        /**
+         * Library-wide totals for the Master Library metric cards. Uses
+         * `head: true` exact-count requests (no rows fetched, NOT subject to the
+         * PostgREST 1000-row cap), so the counts stay correct when the library
+         * exceeds a page. Previously the cards counted the paginated 200-row
+         * page client-side and under-counted every metric.
+         *
+         * Scope mirrors `admin_library_items`: template-origin, non-project
+         * (`task_type <> 'project'`, which also drops NULL/`project` roots).
+         * `loose` = those with no parent.
+         */
+        libraryMetrics: async (): Promise<{ total: number; phases: number; milestones: number; tasks: number; loose: number }> => {
+            const base = () =>
+                supabase
+                    .from('tasks')
+                    .select('*', { count: 'exact', head: true })
+                    .eq('origin', 'template')
+                    .neq('task_type', 'project');
+            const countOf = async (q: ReturnType<typeof base>): Promise<number> => {
+                const { count, error } = await q;
+                if (error) throw new PlanterError(error.message, error.code ?? '500');
+                return count ?? 0;
+            };
+            const [total, phases, milestones, tasks, loose] = await Promise.all([
+                countOf(base()),
+                countOf(base().eq('task_type', 'phase')),
+                countOf(base().eq('task_type', 'milestone')),
+                countOf(base().eq('task_type', 'task')),
+                countOf(base().is('parent_task_id', null)),
+            ]);
+            return { total, phases, milestones, tasks, loose };
         },
         /**
          * Wave 34 — paginated user list with server-side filtering.
