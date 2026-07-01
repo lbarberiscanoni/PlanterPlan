@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { planter } from '@/shared/api/planterClient';
@@ -40,13 +40,30 @@ export default function TaskDependencies({ task, allProjectTasks }: TaskDependen
  const [open, setOpen] = useState(false);
  const [selectedType] = useState('relates_to');
 
- const { data: relationships = [] } = useQuery<TaskRelationship[]>({
+ // Titles of the project's tasks, so we can label the "other" side of each
+ // relationship without a server-side join.
+ const titleById = useMemo(
+ () => new Map((allProjectTasks || []).map((t) => [t.id, t.title])),
+ [allProjectTasks],
+ );
+
+ const { data: rawRelationships = [] } = useQuery({
  queryKey: ['taskRelationships', task.id],
- queryFn: async () => {
- const { data } = await planter.rpc('get_task_relationships', { p_task_id: task.id }) as { data: TaskRelationship[] | null };
- return data || [];
- }
+ queryFn: () => planter.entities.TaskRelationship.listForTask(task.id),
  });
+
+ const relationships: TaskRelationship[] = useMemo(
+ () =>
+ rawRelationships.map((r) => ({
+ id: r.id,
+ from_task_id: r.from_task_id ?? '',
+ to_task_id: r.to_task_id ?? '',
+ type: r.type ?? 'relates_to',
+ from_task: r.from_task_id && titleById.has(r.from_task_id) ? { title: titleById.get(r.from_task_id) ?? '' } : undefined,
+ to_task: r.to_task_id && titleById.has(r.to_task_id) ? { title: titleById.get(r.to_task_id) ?? '' } : undefined,
+ })),
+ [rawRelationships, titleById],
+ );
 
  const addMutation = useMutation({
  mutationFn: async (targetTaskId: string) => {

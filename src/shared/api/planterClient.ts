@@ -269,7 +269,10 @@ export interface PlanterClient {
     entities: {
         Project: ProjectEntityClient;
         Task: TaskEntityClient;
-        TaskRelationship: EntityClient<TaskRelationshipRow, Database['public']['Tables']['task_relationships']['Insert'], Database['public']['Tables']['task_relationships']['Update']>;
+        TaskRelationship: EntityClient<TaskRelationshipRow, Database['public']['Tables']['task_relationships']['Insert'], Database['public']['Tables']['task_relationships']['Update']> & {
+            /** Relationships touching a task from either side (`from_task_id` OR `to_task_id`). */
+            listForTask: (taskId: string) => Promise<TaskRelationshipRow[]>;
+        };
         Phase: EntityClient<Task, TaskInsert, TaskUpdate>;
         Milestone: EntityClient<Task, TaskInsert, TaskUpdate>;
         TaskWithResources: {
@@ -1244,7 +1247,26 @@ export const planter: PlanterClient = {
         // Sub-phase 3.2c — Simple Entity Clients & Utility methods
         // ---------------------------------------------------------------------------
 
-        TaskRelationship: createEntityClient<TaskRelationshipRow, Database['public']['Tables']['task_relationships']['Insert'], Database['public']['Tables']['task_relationships']['Update']>('task_relationships'),
+        TaskRelationship: {
+            ...createEntityClient<TaskRelationshipRow, Database['public']['Tables']['task_relationships']['Insert'], Database['public']['Tables']['task_relationships']['Update']>('task_relationships'),
+            /**
+             * Relationships touching a task, from either side (`from_task_id` OR
+             * `to_task_id`). Replaces the never-created `get_task_relationships`
+             * RPC the deps panel used to call (which 404'd, so dependencies never
+             * loaded). Callers hydrate the other task's title from their already-
+             * loaded project task list.
+             */
+            listForTask: async (taskId: string): Promise<TaskRelationshipRow[]> => {
+                return retry(async () => {
+                    const { data, error } = await supabase
+                        .from('task_relationships')
+                        .select('*')
+                        .or(`from_task_id.eq.${taskId},to_task_id.eq.${taskId}`);
+                    if (error) throw new PlanterError(error.message, error.code ?? '500');
+                    return (data as TaskRelationshipRow[]) ?? [];
+                });
+            },
+        },
         Phase: createEntityClient<Task, TaskInsert, TaskUpdate>('tasks'),
         Milestone: createEntityClient<Task, TaskInsert, TaskUpdate>('tasks'),
         TaskWithResources: {
