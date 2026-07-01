@@ -44,8 +44,6 @@ import type {
     AdminLibraryTemplateOption,
     AdminListProjectRow,
     AdminListProjectsFilter,
-    AdminListTaskRow,
-    AdminListTasksFilter,
     AdminAnalyticsSnapshot,
     IcsFeedTokenRow,
     CreateIcsFeedTokenInput,
@@ -337,8 +335,6 @@ export interface PlanterClient {
         listLibraryTemplates: () => Promise<AdminLibraryTemplateOption[]>;
         /** Admin "Manage Projects" — paginated, filterable list of instance project roots. */
         listProjects: (filter: AdminListProjectsFilter, limit?: number, offset?: number) => Promise<AdminListProjectRow[]>;
-        /** Admin "Manage Tasks" — paginated, filterable list of instance tasks. */
-        listTasks: (filter: AdminListTasksFilter, limit?: number, offset?: number) => Promise<AdminListTaskRow[]>;
         /** Aggregated analytics snapshot for the /admin/analytics dashboard (Wave 34 Task 3). */
         analyticsSnapshot: () => Promise<AdminAnalyticsSnapshot | null>;
         /** Grant or revoke platform-admin status for a user. Self-demotion forbidden server-side. */
@@ -1980,23 +1976,6 @@ export const planter: PlanterClient = {
             offset?: number,
         ): Promise<AdminListProjectRow[]> => {
             const { data, error } = await planter.rpc<AdminListProjectRow[]>('admin_list_projects', {
-                filter,
-                p_limit: limit ?? 50,
-                p_offset: offset ?? 0,
-            });
-            if (error) throw error;
-            return data ?? [];
-        },
-        /**
-         * Admin "Manage Tasks" — paginated instance tasks with project + assignee
-         * hydration. Gated by `public.is_admin(auth.uid())`.
-         */
-        listTasks: async (
-            filter: AdminListTasksFilter,
-            limit?: number,
-            offset?: number,
-        ): Promise<AdminListTaskRow[]> => {
-            const { data, error } = await planter.rpc<AdminListTaskRow[]>('admin_list_tasks', {
                 filter,
                 p_limit: limit ?? 50,
                 p_offset: offset ?? 0,

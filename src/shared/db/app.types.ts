@@ -360,27 +360,6 @@ export interface AdminListProjectsFilter {
     search?: string;
 }
 
-/** Row returned by `public.admin_list_tasks`. */
-export interface AdminListTaskRow {
-    id: string;
-    title: string | null;
-    task_type: string | null;
-    status: string | null;
-    project_id: string | null;
-    project_title: string | null;
-    assignee_email: string | null;
-    due_date: string | null;
-    updated_at: string | null;
-}
-
-/** Filter shape for `admin_list_tasks`. */
-export interface AdminListTasksFilter {
-    status?: string;
-    taskType?: string;
-    projectId?: string;
-    search?: string;
-}
-
 /** Shape returned by `public.admin_analytics_snapshot()` (Wave 34 Task 3). */
 export interface AdminAnalyticsSnapshot {
     totals: {

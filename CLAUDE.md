@@ -154,8 +154,7 @@ RLS is enabled on all tables. Authorization is role-based per project.
 - `root_id` — Points to the project (root task). Auto-set by `set_root_id_from_parent()` trigger.
 - `origin` — `'template'` (library) or `'instance'` (active project).
 - `status` — Text enum: `'todo'`, `'not_started'`, `'in_progress'`, `'completed'`.
-- `is_complete` — Boolean completion flag (used by `check_phase_unlock` trigger).
-- `is_locked` / `prerequisite_phase_id` — Phase locking system.
+- `is_complete` — Boolean completion flag (kept in lockstep with `status` by the `sync_task_completion_flags` trigger).
 - `position` — Sort order among siblings.
 - `settings` — JSONB. Canonical keys: `published`, `recurrence`, `spawnedFromTemplate`/`spawnedOn`, `due_soon_threshold`, `is_coaching_task`, `is_strategy_template`, `project_kind` (`'date' | 'checkpoint'` on roots only, Wave 29), `phase_lead_user_ids` (string[] on phase/milestone rows, Wave 29), `cloned_from_template_version` (int on cloned roots, Wave 36 — stamps the source template's `template_version` at clone time). **Wave 29:** `settings.project_kind` gates the date-engine + nightly-sync urgency passes; `settings.phase_lead_user_ids` widens UPDATE access via the `"Enable update for phase leads"` RLS policy (CTE walks from parent — leads may edit tasks UNDER a phase, not the phase row itself).
 - `template_version` — Wave 36. Monotonic int on template rows, bumped by `trg_bump_template_version` BEFORE UPDATE trigger whenever a template's title / description / days_from_start / duration / settings change.
@@ -207,8 +206,9 @@ Most tables follow the same pattern after the 2026-05-15 collapse:
 - **`set_root_id_from_parent()`** — INSERT/UPDATE: auto-sets `root_id` from parent's root_id
 - **`calc_task_date_rollup()`** — INSERT/UPDATE/DELETE: rolls up `min(start_date)` / `max(due_date)` to parent (recursive with depth guard)
 - **`handle_updated_at()`** — UPDATE: sets `updated_at = now()`
-- **`check_phase_unlock()`** — UPDATE: when `is_complete = true`, checks if all tasks in a phase are done, unlocks dependent phases via `prerequisite_phase_id`
-- **`handle_phase_completion()`** — UPDATE: when `status = 'completed'`, unlocks next sibling by `position`
+- **`sync_task_completion_flags()`** — BEFORE INSERT/UPDATE: keeps `is_complete` in lockstep with `status` (`status` is the source of truth). See Resolved: "Dual completion signals."
+
+> The phase-locking triggers (`check_phase_unlock` / `handle_phase_completion`) and the `is_locked` / `prerequisite_phase_id` columns were removed with the phase-locking feature — they no longer exist in the schema.
 
 ### RPC Functions (called from app)
 
