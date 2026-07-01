@@ -339,10 +339,11 @@ export default function Project() {
                                 <div className="mb-8">
                                     <h2 className="text-lg font-semibold text-slate-900 mb-4">{t('projects.phases_heading')}</h2>
                                     <div className="flex gap-4 overflow-x-auto pb-2">
-                                        {sortedPhases.map((phase) => (
+                                        {sortedPhases.map((phase, index) => (
                                             <div key={phase.id} className="min-w-[200px] flex-1">
                                                 <PhaseCard
                                                     phase={phase as TaskRow}
+                                                    order={index + 1}
                                                     tasks={tasks as TaskRow[]}
                                                     milestones={(milestones || []).filter((m) => (m as TaskRow).parent_task_id === phase.id) as TaskRow[]}
                                                     isActive={activePhase?.id === phase.id}
@@ -359,7 +360,7 @@ export default function Project() {
                                             <div>
                                                 <h2 className="text-xl font-semibold text-slate-900">
                                                     {t('projects.phase_heading_title', {
-                                                        position: (activePhase as { position?: number }).position,
+                                                        position: sortedPhases.findIndex((p) => p.id === activePhase.id) + 1,
                                                         title: (activePhase as { title?: string }).title,
                                                     })}
                                                 </h2>

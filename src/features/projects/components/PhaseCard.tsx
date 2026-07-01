@@ -33,13 +33,15 @@ interface PhaseCardProps {
  milestones?: TaskRow[];
  isActive?: boolean;
  onClick?: () => void;
+ /** 1-based display number for the badge. Sibling ordinal, NOT `position`
+  * (positions are 10000-step, so rendering them shows "Phase 10000"). */
+ order?: number;
  /** Wave 29: the project root; when `settings.project_kind === 'checkpoint'` the progress bar swaps to a donut. */
  rootTask?: TaskRow | null;
 }
 
-export default function PhaseCard({ phase, tasks = [], milestones = [], isActive, onClick, rootTask }: PhaseCardProps) {
+export default function PhaseCard({ phase, tasks = [], milestones = [], isActive, onClick, order = 1, rootTask }: PhaseCardProps) {
  const { t } = useTranslation();
- const order = phase.position || 1;
 
  // Filter tasks that belong to this phase (via milestones), dropping `na`
  // (not applicable) tasks from the progress denominator entirely — they leave
@@ -72,6 +74,7 @@ export default function PhaseCard({ phase, tasks = [], milestones = [], isActive
  <div className="flex items-start justify-between mb-4">
  <div className="flex items-center gap-3">
  <div
+ data-testid={`phase-card-order-${phase.id}`}
  className={cn(
  'w-10 h-10 rounded-xl flex items-center justify-center font-bold text-white shadow-sm',
  colors.bg
