@@ -13,6 +13,7 @@ import AppShellLayout from '@/layouts/AppShellLayout';
 import Project from '@/pages/Project';
 import Settings from '@/pages/Settings';
 import TasksPage from '@/pages/TasksPage';
+import Home from '@/pages/Home';
 import StrategyCompletionListener from '@/features/tasks/components/StrategyCompletionListener';
 import LoginForm from '@/pages/components/LoginForm';
 import ResetPassword from '@/pages/ResetPassword';
@@ -86,8 +87,9 @@ export default function App() {
  <Route path="/login" element={<LoginForm />} />
  <Route path="/reset-password" element={<ResetPassword />} />
  <Route path="/" element={<PrivateRoute><AppShellLayout /></PrivateRoute>}>
- <Route index element={<Navigate to="/tasks" replace />} />
- <Route path="dashboard" element={<Navigate to="/tasks" replace />} />
+ <Route index element={<Navigate to="/home" replace />} />
+ <Route path="home" element={<Home />} />
+ <Route path="dashboard" element={<Navigate to="/home" replace />} />
  <Route
  path="reports"
  element={<Suspense fallback={<div className="p-6 text-sm text-slate-600">Loading reports…</div>}><Reports /></Suspense>}

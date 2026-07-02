@@ -5,7 +5,7 @@ import InstanceList from './InstanceList';
 import JoinedProjectsList from './JoinedProjectsList';
 import SharedTemplatesList from './SharedTemplatesList';
 import TemplateList from './TemplateList';
-import { BarChart, Settings, Calendar, ShieldAlert, Library } from 'lucide-react';
+import { BarChart, Settings, Calendar, ShieldAlert, Library, Home } from 'lucide-react';
 import GlobalNavItem from './GlobalNavItem';
 import { useIsAdmin } from '@/features/admin/hooks/useIsAdmin';
 
@@ -88,7 +88,13 @@ const ProjectSidebar = ({
  <div className="flex flex-col h-full bg-card text-card-foreground border-r border-border shadow-sm">
  <div className="px-4 py-4 space-y-1">
  <GlobalNavItem
- label={t('nav.my_tasks')}
+ label={t('nav.home')}
+ isActive={location.pathname === '/home'}
+ onClick={() => handleGlobalNav('/home')}
+ icon={<Home className="w-5 h-5" />}
+ />
+ <GlobalNavItem
+ label={t('nav.todays_tasks')}
  isActive={location.pathname === '/tasks'}
  onClick={() => handleGlobalNav('/tasks')}
  icon={<Calendar className="w-5 h-5" />}
