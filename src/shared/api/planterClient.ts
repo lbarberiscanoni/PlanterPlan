@@ -47,6 +47,8 @@ import type {
     AdminAnalyticsSnapshot,
     IcsFeedTokenRow,
     CreateIcsFeedTokenInput,
+    ProjectRow,
+    TaskItemRow,
 } from '@/shared/db/app.types';
 import type { User as AuthUser } from '@supabase/supabase-js';
 
@@ -2160,3 +2162,62 @@ export const planter: PlanterClient = {
 };
 
 export default planter;
+
+// ---------------------------------------------------------------------------
+// Logical split read seams (2026-07-01)
+//
+// The `tasks` table holds both projects (roots) and task items (descendants).
+// These typed, read-only accessors are the canonical way to fetch one half or
+// the other, so callers stop hand-writing `.is('parent_task_id', null)` and
+// stop treating a project as a generic task. They mirror the DB views
+// public.projects / public.task_items (which are the equivalent SQL-side seam).
+//
+// Reads only — creates/updates/deletes stay on the existing entity clients and
+// RPCs (which enforce the tree invariants). Additive: nothing here changes
+// existing behavior.
+// ---------------------------------------------------------------------------
+
+/** Root tasks = projects (`parent_task_id IS NULL`). RLS-scoped to the viewer. */
+export const projectsView = {
+    /** All projects the viewer can see. Roots are few, so this is unpaginated. */
+    list: async (opts?: { signal?: AbortSignal }): Promise<ProjectRow[]> =>
+        retry(async () => {
+            let query = supabase.from('tasks').select('*').is('parent_task_id', null);
+            if (opts?.signal) query = query.abortSignal(opts.signal);
+            const { data, error } = await query;
+            if (error) throw new PlanterError(error.message, error.code ?? '500');
+            return (data as ProjectRow[]) ?? [];
+        }),
+    /** A single project root by id, or null if not visible. */
+    get: async (id: string): Promise<ProjectRow | null> =>
+        retry(async () => {
+            const { data, error } = await supabase
+                .from('tasks')
+                .select('*')
+                .is('parent_task_id', null)
+                .eq('id', id)
+                .maybeSingle();
+            if (error) throw new PlanterError(error.message, error.code ?? '500');
+            return (data as ProjectRow) ?? null;
+        }),
+};
+
+/** Non-root task items — phases / milestones / tasks / subtasks. */
+export const taskItemsView = {
+    /**
+     * Task items under one project. Scoped by `root_id` so it never trips the
+     * PostgREST row cap (a whole-table item list would; project-scoped won't).
+     */
+    listByProject: async (projectId: string, opts?: { signal?: AbortSignal }): Promise<TaskItemRow[]> =>
+        retry(async () => {
+            let query = supabase
+                .from('tasks')
+                .select('*')
+                .eq('root_id', projectId)
+                .not('parent_task_id', 'is', null);
+            if (opts?.signal) query = query.abortSignal(opts.signal);
+            const { data, error } = await query;
+            if (error) throw new PlanterError(error.message, error.code ?? '500');
+            return (data as TaskItemRow[]) ?? [];
+        }),
+};

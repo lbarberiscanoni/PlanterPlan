@@ -15,6 +15,16 @@ export type TaskRow = Database['public']['Tables']['tasks']['Row'];
 export type TaskInsert = Database['public']['Tables']['tasks']['Insert'];
 export type TaskUpdate = Database['public']['Tables']['tasks']['Update'];
 
+// Logical split of the shared `tasks` table (mirror of the DB views
+// public.projects / public.task_items). Same row shape, distinct intent — a
+// ProjectRow is a root (parent_task_id IS NULL, uses PROJECT_STATUS); a
+// TaskItemRow is a non-root phase/milestone/task/subtask (uses TASK_STATUS).
+// Prefer these over a bare TaskRow when the depth is known.
+/** A root task = a project. `parent_task_id IS NULL`. */
+export type ProjectRow = TaskRow;
+/** A non-root task item (phase / milestone / task / subtask). `parent_task_id IS NOT NULL`. */
+export type TaskItemRow = TaskRow;
+
 /** Standardized Task type for UI components with legacy field support */
 export type Task = TaskRow & {
     name?: string;
