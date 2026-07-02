@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { planter } from '@/shared/api/planterClient';
+import { planter, projectsView } from '@/shared/api/planterClient';
 import { useAuth } from '@/shared/contexts/auth-context';
 import { PROJECT_STATUS } from '@/shared/constants/domain';
 import { STALE_TIMES } from '@/shared/lib/react-query-config';
@@ -25,7 +25,8 @@ export function useProjectList() {
  error
  } = useQuery<Project[]>({
  queryKey: ['projects'],
- queryFn: () => planter.entities.Project.list(),
+ // Logical-split seam (== the old Project.list(): instance roots, newest first)
+ queryFn: () => projectsView.list({ origin: 'instance' }),
  enabled: !!user,
  staleTime: STALE_TIMES.medium,
  });

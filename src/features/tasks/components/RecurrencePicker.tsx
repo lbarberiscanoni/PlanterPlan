@@ -2,7 +2,7 @@ import { useFormContext, useWatch } from 'react-hook-form';
 import { useQuery } from '@tanstack/react-query';
 import type { TaskFormData, Project } from '@/shared/db/app.types';
 import { Label } from '@/shared/ui/label';
-import { planter } from '@/shared/api/planterClient';
+import { projectsView } from '@/shared/api/planterClient';
 
 const WEEKDAY_OPTIONS: Array<{ value: number; label: string }> = [
     { value: 0, label: 'Sunday' },
@@ -32,7 +32,8 @@ const RecurrencePicker = () => {
 
     const { data: projects = [], isLoading } = useQuery<Project[]>({
         queryKey: ['projects'],
-        queryFn: () => planter.entities.Project.list(),
+        // Logical-split seam (== the old Project.list(): instance roots, newest first)
+        queryFn: () => projectsView.list({ origin: 'instance' }),
     });
 
     return (

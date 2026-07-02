@@ -2179,10 +2179,17 @@ export default planter;
 
 /** Root tasks = projects (`parent_task_id IS NULL`). RLS-scoped to the viewer. */
 export const projectsView = {
-    /** All projects the viewer can see. Roots are few, so this is unpaginated. */
-    list: async (opts?: { signal?: AbortSignal }): Promise<ProjectRow[]> =>
+    /**
+     * Projects the viewer can see, newest first. Roots are few, so unpaginated.
+     * `origin: 'instance'` = real projects; `'template'` = library template roots;
+     * omit for both. Filtering here keeps the root + origin discriminator in one
+     * place instead of scattered `.is('parent_task_id', null).eq('origin', …)`.
+     */
+    list: async (opts?: { origin?: 'instance' | 'template'; signal?: AbortSignal }): Promise<ProjectRow[]> =>
         retry(async () => {
             let query = supabase.from('tasks').select('*').is('parent_task_id', null);
+            if (opts?.origin) query = query.eq('origin', opts.origin);
+            query = query.order('created_at', { ascending: false });
             if (opts?.signal) query = query.abortSignal(opts.signal);
             const { data, error } = await query;
             if (error) throw new PlanterError(error.message, error.code ?? '500');
