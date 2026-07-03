@@ -203,7 +203,11 @@ Deno.serve(async (req) => {
                 Deno.env.get('SUPABASE_ANON_KEY') ?? '',
                 { global: { headers: { Authorization: authHeader } } },
             )
-            const { data: userRes, error: userErr } = await userClient.auth.getUser()
+            // Pass the raw JWT explicitly. Called with no argument, supabase-js
+            // resolves the caller from a stored session, which never exists in
+            // the stateless Edge runtime — so every user-invoked call would 401.
+            const token = authHeader.replace(/^Bearer\s+/i, '')
+            const { data: userRes, error: userErr } = await userClient.auth.getUser(token)
             if (userErr || !userRes?.user) {
                 return new Response(JSON.stringify({ success: false, error: 'Invalid auth token' }), {
                     status: 401,
