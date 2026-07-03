@@ -20,7 +20,12 @@ interface ModerationUser {
 
 interface UserClient {
     auth: {
-        getUser: () => Promise<{
+        // The JWT must be passed explicitly. Called with no argument,
+        // supabase-js resolves the caller from a *stored session*, which
+        // never exists in the stateless Edge runtime — so every call would
+        // return "Auth session missing". Passing the bearer token makes it
+        // verify against GoTrue directly.
+        getUser: (jwt?: string) => Promise<{
             data: { user: ModerationUser | null };
             error: ErrorLike | null;
         }>;
@@ -132,7 +137,11 @@ export async function handleAdminUserModerationRequest(
         const userClient = deps.createClient(supabaseUrl, supabaseAnonKey, {
             global: { headers: { Authorization: authHeader } },
         }) as UserClient;
-        const { data: { user: caller }, error: userErr } = await userClient.auth.getUser();
+        // Pass the raw JWT explicitly — see UserClient.getUser note. Without
+        // it, supabase-js looks for a stored session (absent in the Edge
+        // runtime) and every request 401s with "Invalid session".
+        const token = authHeader.replace(/^Bearer\s+/i, '');
+        const { data: { user: caller }, error: userErr } = await userClient.auth.getUser(token);
         if (userErr || !caller) {
             // Bad bearer - HTTP auth failure, 401.
             return json({ success: false, error: 'Invalid session' }, 401);
