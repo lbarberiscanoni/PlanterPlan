@@ -16,7 +16,7 @@ Mapping (Excel -> public.tasks):
   id                         -> stable uuid5 (see NS)
   parent_task_id (0 => root) -> mapped uuid (roots re-parent to the template root)
   title/purpose/description/actions -> copy
-  days_from_start_until_due  -> days_from_start
+  days_from_start_until_due  -> days_from_start (normalized to 0-based; see below)
   default_duration           -> duration (NOT NULL -> 0)
   admin_notes                -> notes
   position (global 1..432)   -> recomputed rank within sibling group (0-based)
@@ -112,6 +112,27 @@ def depth(rec, guard=0):
 
 for rec in records:
     rec["depth"] = depth(rec)
+
+# Normalize day offsets to 0-based. The source column is 1-based (the earliest
+# actionable task is "day 1"), but the date engine treats days_from_start as a
+# 0-based offset from the project start (leaf start = anchor::date +
+# days_from_start). Left as-is, every cloned project would start one day AFTER
+# the start date the user picks. Subtract the smallest leaf offset so the
+# earliest task anchors exactly to the chosen start date; spacing is preserved.
+def _days_int(rec):
+    v = rec["days"]
+    if v is None or v == "":
+        return 0
+    try:
+        return int(round(float(v)))
+    except (TypeError, ValueError):
+        return 0
+
+_parent_eids = {rec["eparent"] for rec in records if rec["eparent"] not in ("", "0")}
+_leaf_offsets = [_days_int(rec) for rec in records if rec["eid"] not in _parent_eids]
+_min_leaf_offset = min(_leaf_offsets) if _leaf_offsets else 0
+for rec in records:
+    rec["days"] = max(_days_int(rec) - _min_leaf_offset, 0)
 
 # Position: rank within sibling group, ordered by original global position.
 groups = {}

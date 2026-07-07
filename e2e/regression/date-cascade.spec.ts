@@ -57,6 +57,24 @@ test('@regression @dates project start date persists across reload', async ({ pa
 });
 
 /**
+ * REG-10 — the chosen project start date is honored exactly (no +1 day). @regression @dates
+ * Guards migration 20260707000000: the "Standard Church Plant" template was imported with 1-based
+ * day offsets (earliest task = day 1) while the clone engine seeds leaf start = anchor + days_from_start
+ * (0-based). Left unnormalized, a project anchored at 2027-01-15 started 2027-01-16 — the root
+ * start_date rolls up to min(children) = anchor + 1. Fixed by normalizing the template to 0-based.
+ */
+test('@regression @dates cloned project start matches the chosen start date', async ({ page }) => {
+  const anchor = '2027-01-15';
+  await loginAs(page, 'planter');
+  await createProjectFromTemplate(page, tagged(`Anchor ${Date.now()}`), anchor);
+
+  await page.getByRole('button', { name: /^Open settings for / }).click();
+  // Root start_date is a roll-up of the earliest task; with a 0-based template it must equal
+  // the anchor exactly. Pre-fix this read one day later (2027-01-16).
+  await expect(page.locator('#start_date')).toHaveValue(anchor);
+});
+
+/**
  * REG-09 — calendar dates render their true stored day in a behind-UTC timezone. @regression @dates
  * Guards Tim's "task/project date shows one day early" report (2026-06-30 review): due/start dates are
  * stored as UTC-midnight timestamps, so the header + badges must format them as the UTC calendar day,

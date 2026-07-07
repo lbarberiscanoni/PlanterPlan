@@ -4,9 +4,16 @@ import { type Page, expect } from '@playwright/test';
  * Create a project by cloning the first REAL template (not the blank scaffold), give it a
  * run-tagged name, and land on /project/:id. Returns the project URL.
  *
+ * Pass `startDate` (yyyy-mm-dd) to set the anchor explicitly; omit to keep the modal default
+ * (today). Used by the day-offset regression to assert the chosen anchor is honored exactly.
+ *
  * Flow verified in CreateProjectModal.tsx + CreationActionHost.tsx (navigates to /project/:id).
  */
-export async function createProjectFromTemplate(page: Page, name: string): Promise<string> {
+export async function createProjectFromTemplate(
+  page: Page,
+  name: string,
+  startDate?: string,
+): Promise<string> {
   await page.getByTestId('sidebar-new-project-btn').click();
   const modal = page.getByTestId('create-project-modal');
   await expect(modal).toBeVisible();
@@ -19,6 +26,7 @@ export async function createProjectFromTemplate(page: Page, name: string): Promi
 
   await modal.getByRole('button', { name: 'Continue to Details' }).click();
   await modal.locator('#title').fill(name);
+  if (startDate) await modal.locator('#start_date').fill(startDate);
   await modal.getByRole('button', { name: 'Create Project' }).click();
 
   await page.waitForURL('**/project/**', { timeout: 20_000 });
