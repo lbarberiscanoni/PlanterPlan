@@ -201,8 +201,11 @@ root_rec = {"title": TEMPLATE_TITLE, "purpose": None, "description":
             "position": 0, "days": 0, "duration": 0}
 lines.append(f"-- Root (task_type auto-derives to 'project'):")
 lines.append(f"INSERT INTO public.tasks ({COLS}) VALUES")
+# seed_key 'launch_large' lets the first-run + onboarding CTAs resolve this template
+# (getTemplateSeedKey in CreateProjectModal.tsx); also satisfies the required-template
+# check in scripts/supabase-local-bootstrap.cjs.
 lines.append("  " + task_values(ROOT_ID, "NULL", root_rec,
-             "'{\"published\": true, \"project_kind\": \"date\"}'::jsonb") + ";")
+             "'{\"published\": true, \"project_kind\": \"date\", \"seed_key\": \"launch_large\"}'::jsonb") + ";")
 lines.append("")
 
 # Levels 1..4

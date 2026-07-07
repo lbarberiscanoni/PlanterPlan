@@ -216,9 +216,9 @@
     "no_tasks": "No tasks yet",
     "first_run": {
       "title": "Start your first project",
-      "description": "Create a blank project or use the Launch Large template to add your first project workspace.",
+      "description": "Create a blank project or use the Standard Church Plant template to add your first project workspace.",
       "blank_cta": "Start blank project",
-      "template_cta": "Use Launch Large template"
+      "template_cta": "Use Standard Church Plant template"
     },
     "panel": {
       "edit_named_task": "Edit {{title}}",

@@ -4,7 +4,7 @@ BEGIN;
 
 -- Root (task_type auto-derives to 'project'):
 INSERT INTO public.tasks (id, parent_task_id, creator, origin, title, purpose, description, actions, notes, position, status, days_from_start, duration, settings) VALUES
-  ('2dfd71b3-a18e-5f11-b5c4-a5216dc95cc1', NULL, (SELECT id FROM auth.users WHERE email = 'timothy.cheung58@gmail.com'), 'template', 'Standard Church Plant', NULL, 'Canonical church-planting template.', NULL, NULL, 0, 'todo', 0, 0, '{"published": true, "project_kind": "date"}'::jsonb);
+  ('2dfd71b3-a18e-5f11-b5c4-a5216dc95cc1', NULL, (SELECT id FROM auth.users WHERE email = 'timothy.cheung58@gmail.com'), 'template', 'Standard Church Plant', NULL, 'Canonical church-planting template.', NULL, NULL, 0, 'todo', 0, 0, '{"published": true, "project_kind": "date", "seed_key": "launch_large"}'::jsonb);
 
 -- Level 1 — phases (5 rows):
 INSERT INTO public.tasks (id, parent_task_id, creator, origin, title, purpose, description, actions, notes, position, status, days_from_start, duration, settings) VALUES

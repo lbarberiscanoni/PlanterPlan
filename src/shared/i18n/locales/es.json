@@ -222,9 +222,9 @@
     "no_tasks": "Aún no hay tareas",
     "first_run": {
       "title": "Inicia tu primer proyecto",
-      "description": "Crea un proyecto en blanco o usa la plantilla Launch Large para agregar tu primer espacio de trabajo de proyecto.",
+      "description": "Crea un proyecto en blanco o usa la plantilla Standard Church Plant para agregar tu primer espacio de trabajo de proyecto.",
       "blank_cta": "Iniciar proyecto en blanco",
-      "template_cta": "Usar plantilla Launch Large"
+      "template_cta": "Usar plantilla Standard Church Plant"
     },
     "panel": {
       "edit_named_task": "Editar {{title}}",
