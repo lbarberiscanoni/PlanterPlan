@@ -11,6 +11,7 @@ import useMasterLibrarySearch from '@/features/library/hooks/useMasterLibrarySea
 import { useCreateTemplate } from '@/features/library/hooks/useTemplateMutations';
 import { useCreateProject } from '@/features/projects/hooks/useProjectMutations';
 import { useAuth } from '@/shared/contexts/auth-context';
+import { useIsAdmin } from '@/features/admin/hooks/useIsAdmin';
 
 /**
  * Reads a non-empty query parameter.
@@ -51,6 +52,7 @@ export default function CreationActionHost() {
     const { t } = useTranslation();
     const navigate = useNavigate();
     const { user } = useAuth();
+    const isAdmin = useIsAdmin();
     const [searchParams, setSearchParams] = useSearchParams();
     const [showCreateModal, setShowCreateModal] = useState(false);
     const [showTemplateModal, setShowTemplateModal] = useState(false);
@@ -76,14 +78,17 @@ export default function CreationActionHost() {
         if (action === 'new-project') {
             setProjectInitialValues(getProjectInitialValues(searchParams));
             setShowCreateModal(true);
-        } else {
+        } else if (isAdmin) {
+            // Template authoring is admin-only. A non-admin reaching
+            // `?action=new-template` (stale link, hand-typed URL) just gets the
+            // param stripped — no modal. Server RLS blocks creation regardless.
             setShowTemplateModal(true);
         }
 
         const nextParams = new URLSearchParams(searchParams);
         nextParams.delete('action');
         setSearchParams(nextParams, { replace: true });
-    }, [searchParams, setSearchParams]);
+    }, [searchParams, setSearchParams, isAdmin]);
 
     const handleCreateProject = async (projectData: CreateProjectFormData) => {
         try {

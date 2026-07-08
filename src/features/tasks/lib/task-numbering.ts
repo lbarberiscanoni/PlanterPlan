@@ -125,8 +125,13 @@ export const computeProjectTaskNumbers = (tasks: TaskRow[]): Map<string, string>
         result.set(entry.container.id, String(containerNumber));
       }
       const sortedLeaves = [...entry.leaves].sort((a, b) => orderOf(a.id) - orderOf(b.id));
+      // Zero-pad the leaf index so the composed `C.NN` string orders correctly
+      // both lexically and to the eye: unpadded, "57.10" sorts before "57.2"
+      // and numeric parsing collapses 57.1 == 57.10. Two digits covers up to 99
+      // work items per container (widen if a milestone ever exceeds that).
+      const leafWidth = Math.max(2, String(sortedLeaves.length).length);
       sortedLeaves.forEach((leaf, leafIndex) => {
-        result.set(leaf.id, `${containerNumber}.${leafIndex + 1}`);
+        result.set(leaf.id, `${containerNumber}.${String(leafIndex + 1).padStart(leafWidth, '0')}`);
       });
     });
   }

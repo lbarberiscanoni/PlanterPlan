@@ -244,7 +244,7 @@
     "filters": {
       "labels": {
         "my_tasks": "Mis tareas",
-        "priority": "Prioridad",
+        "priority": "Tareas de hoy",
         "overdue": "Atrasadas",
         "due_soon": "Vencen pronto",
         "current": "Actuales",

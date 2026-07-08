@@ -238,7 +238,7 @@
     "filters": {
       "labels": {
         "my_tasks": "My Tasks",
-        "priority": "Priority",
+        "priority": "Today's Tasks",
         "overdue": "Overdue",
         "due_soon": "Due Soon",
         "current": "Current",

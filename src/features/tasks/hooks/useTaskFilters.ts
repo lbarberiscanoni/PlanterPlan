@@ -163,7 +163,7 @@ export const useTaskFilters = (args: UseTaskFiltersArgs): TaskRow[] => {
 
 export const FILTER_LABELS: Record<TaskFilterKey, string> = {
  my_tasks: 'My Tasks',
- priority: 'Priority',
+ priority: "Today's Tasks",
  overdue: 'Overdue',
  due_soon: 'Due Soon',
  current: 'Current',

@@ -69,7 +69,9 @@ export default function TasksPage() {
        const findTask = useCallback((id: string) => tasks.find((t: TaskRow) => t.id === id), [tasks]);
        const invalidateTasks = useCallback(() => queryClient.invalidateQueries({ queryKey: ['tasks'] }), [queryClient]);
 
-       const [filter, setFilter] = useState<TaskFilterKey>('all_tasks');
+       // Default to the "Today's Tasks" view (internal key `priority`) — the
+       // day-to-day landing view planters asked for, not the full backlog.
+       const [filter, setFilter] = useState<TaskFilterKey>('priority');
        const [groupMode, setGroupMode] = useState<'grouped' | 'flat'>('grouped');
        const [sort, setSort] = useState<TaskSortKey>('chronological');
        const [selectedTask, setSelectedTask] = useState<TaskRow | null>(null);
@@ -83,6 +85,10 @@ export default function TasksPage() {
        const [searchQuery, setSearchQuery] = useState<string>('');
        const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
        const effectiveSort: TaskSortKey = filter === 'priority' ? 'chronological' : sort;
+       // The Milestones view is a high-level overview: milestones only, never
+       // grouped under their parent phase as leaf rows. Force the flat layout so
+       // each milestone shows as its own top-level entry.
+       const isMilestonesOverview = filter === 'milestones';
 
        const updateTask = useCallback(
               async (taskId: string, updates: Record<string, unknown>) => {
@@ -354,7 +360,7 @@ export default function TasksPage() {
        // the flat list, so toggling Grouped/Flat never changes which tasks show.
        const groupedSections = useMemo(
               () => {
-                     if (groupMode !== 'grouped') return [];
+                     if (groupMode !== 'grouped' || isMilestonesOverview) return [];
                      const groups = filter === 'priority'
                             ? buildPriorityTaskGroups({ tasks, candidateTasks: visibleTaskRows })
                             : buildMilestoneTaskGroups({ tasks, candidateTasks: visibleTaskRows });
@@ -367,7 +373,7 @@ export default function TasksPage() {
                             return projectTitle === group.projectTitle ? group : { ...group, projectTitle };
                      });
               },
-              [groupMode, filter, tasks, visibleTaskRows, projectTitleByRootId],
+              [groupMode, filter, isMilestonesOverview, tasks, visibleTaskRows, projectTitleByRootId],
        );
 
        const sensors = useSensors(
@@ -518,6 +524,7 @@ export default function TasksPage() {
                                                                </div>
                                                         )}
 
+                                                        {!isMilestonesOverview && (
                                                         <div className="flex flex-col gap-1 self-end">
                                                                <span className="text-xs font-medium text-muted-foreground">{t('tasks.layout_label')}</span>
                                                                <div className="bg-muted p-1 rounded-lg flex items-center space-x-1">
@@ -547,6 +554,7 @@ export default function TasksPage() {
                                                                       </button>
                                                                </div>
                                                         </div>
+                                                        )}
                                                  </div>
                                           </div>
                                    </div>
@@ -586,7 +594,7 @@ export default function TasksPage() {
                                                         </div>
                                                  ) : (
                                                         <div className="space-y-6 overflow-y-auto h-full pb-20">
-                                                                      {groupMode === 'grouped' ? (
+                                                                      {groupMode === 'grouped' && !isMilestonesOverview ? (
                                                                              groupedSections.map((group) => (
                                                                                     <section
                                                                                            key={group.id}

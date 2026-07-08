@@ -141,6 +141,10 @@ const ProjectSidebar = ({
  {t('projects.new_project')}
  </button>
 
+ {/* Template authoring is admin-only (P4P staff). Planters start
+ projects from templates via the create-project picker, but never
+ create or manage templates themselves. */}
+ {isAdmin && (
  <button
  onClick={handleNewTemplate}
  data-testid="sidebar-new-template-btn"
@@ -151,6 +155,7 @@ const ProjectSidebar = ({
  </svg>
  {t('library.new_template')}
  </button>
+ )}
  </div>
 
  <div className="flex-1 overflow-y-auto px-4 py-4 space-y-6 custom-scrollbar" data-testid="project-switcher">
@@ -182,6 +187,10 @@ const ProjectSidebar = ({
  />
  )}
 
+ {/* Template libraries are admin-only — planters manage projects,
+ not the template catalog. */}
+ {isAdmin && (
+ <>
  <div className="h-px bg-border"></div>
 
  {templatesLoading ? <SectionSkeleton /> : (
@@ -200,6 +209,8 @@ const ProjectSidebar = ({
  handleTaskClick={handleTaskClickWrapped}
  selectedTaskId={selectedTaskId}
  />
+ )}
+ </>
  )}
  </div>
 
