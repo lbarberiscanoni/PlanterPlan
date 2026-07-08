@@ -163,17 +163,18 @@ const TaskFormFields = ({
 
  {origin === 'instance' && (
  <div className="my-6 border-t border-slate-200 pt-4">
- <h4 className="mb-1 text-sm font-medium text-slate-700">Start Date</h4>
+ <h4 className="mb-1 text-sm font-medium text-slate-700">Due Date</h4>
  <p className="mb-3 text-xs text-slate-500">
- The due date is derived from the task duration and rolls up to the milestone automatically.
+ Set when this {itemLabel.toLowerCase()} is due. The start date is calculated
+ from its duration, and the due date rolls up to the milestone automatically.
  </p>
  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
  <div className="space-y-2">
- <Label htmlFor="start_date">Start Date</Label>
+ <Label htmlFor="due_date">Due Date</Label>
  <Input
  type="date"
- id="start_date"
- {...register('start_date')}
+ id="due_date"
+ {...register('due_date')}
  />
  </div>
  </div>

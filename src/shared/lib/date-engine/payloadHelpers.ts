@@ -25,6 +25,8 @@ export interface CurrentTask {
  id: string;
  start_date?: string | null;
  due_date?: string | null;
+ /** Stored task length in days — hidden on instances; used to back-solve start from due. */
+ duration?: number | null;
 }
 
 /** Context needed for update operations. */
@@ -84,6 +86,31 @@ const parseDays = (value: string | number | null | undefined): number | null => 
  return Number(value);
 };
 
+/**
+ * Subtract `days` calendar days from a `YYYY-MM-DD` string (UTC-safe).
+ *
+ * This mirrors the DB leaf trigger `compute_leaf_due_date`, which derives
+ * `due = (start::date + duration)` in PLAIN calendar days (no weekend skipping).
+ * Instances are due-authoritative, so we back-solve `start = due - duration`
+ * here with the exact same arithmetic — the trigger then re-derives `due` from
+ * that start and the chosen due survives the round-trip.
+ */
+const subtractCalendarDays = (isoDate: string, days: number): string => {
+ const [y, m, d] = isoDate.split('-').map(Number);
+ const dt = new Date(Date.UTC(y, m - 1, d));
+ dt.setUTCDate(dt.getUTCDate() - Math.max(0, days));
+ return dt.toISOString().slice(0, 10);
+};
+
+/** Calendar days between two `YYYY-MM-DD` strings (`later - earlier`, UTC-safe). */
+const calendarDaysBetween = (laterIso: string, earlierIso: string): number => {
+ const asUtc = (s: string) => {
+  const [y, m, d] = s.split('-').map(Number);
+  return Date.UTC(y, m - 1, d);
+ };
+ return Math.round((asUtc(laterIso) - asUtc(earlierIso)) / 86_400_000);
+};
+
 // ---------------------------------------------------------------------------
 // Payload Constructors
 // ---------------------------------------------------------------------------
@@ -94,14 +121,13 @@ const parseDays = (value: string | number | null | undefined): number | null => 
  */
 export const constructUpdatePayload = (
  formData: TaskFormData,
- _currentTask: CurrentTask,
+ currentTask: CurrentTask,
  context: UpdateContext,
 ): UpdatePayload => {
  const { origin } = context;
 
  const parsedDays = parseDays(formData.days_from_start);    // offset from project start
  const parsedDuration = parseDays(formData.duration);       // task length (days)
- const manualStartDate = toIsoDate(formData.start_date);
 
  const payload: UpdatePayload = {
  title: formData.title,
@@ -120,9 +146,24 @@ export const constructUpdatePayload = (
  if (parsedDuration !== null) {
  payload.duration = parsedDuration;
  }
- // Instances carry absolute dates; start is user-authoritative (manual / drag).
- if (origin === 'instance' && manualStartDate) {
- payload.start_date = manualStartDate;
+ // Instances are DUE-authoritative: the user sets the due date and we keep the
+ // task's length fixed, moving its start. The length is the task's VISIBLE span
+ // (current due - current start), not the stored `duration` column — those can
+ // drift (envelope-migration backfill left some columns stale), and the visible
+ // gap is what the user is preserving. We write start = newDue - length AND a
+ // corrected duration = length, so the DB leaf trigger (due = start + duration)
+ // yields exactly the chosen due and the stale column self-heals.
+ if (origin === 'instance') {
+ const manualDueDate = toIsoDate(formData.due_date);
+ if (manualDueDate) {
+ const curStart = toIsoDate(currentTask.start_date);
+ const curDue = toIsoDate(currentTask.due_date);
+ const length = curStart && curDue
+ ? Math.max(0, calendarDaysBetween(curDue, curStart))
+ : Math.max(0, typeof currentTask.duration === 'number' ? currentTask.duration : 0);
+ payload.start_date = subtractCalendarDays(manualDueDate, length);
+ payload.duration = length;
+ }
  }
 
  return payload;
@@ -139,7 +180,6 @@ export const constructCreatePayload = (
 
  const parsedDays = parseDays(formData.days_from_start);    // offset from project start
  const parsedDuration = parseDays(formData.duration);       // task length (days)
- const manualStartDate = toIsoDate(formData.start_date);
 
  const insertPayload: InsertPayload = {
  title: formData.title,
@@ -159,11 +199,15 @@ export const constructCreatePayload = (
  if (parsedDuration !== null) {
  insertPayload.duration = parsedDuration;
  }
- // Instances anchor on an absolute start; `due` is derived by the DB leaf
- // trigger and containers roll up MIN/MAX. New tasks without a start stay
- // unscheduled until one is set (or seeded by clone).
- if (origin === 'instance' && manualStartDate) {
- insertPayload.start_date = manualStartDate;
+ // New instance tasks are DUE-authoritative too: derive start = due - duration
+ // (duration defaults to 0 for a brand-new custom task, so start = due). The DB
+ // leaf trigger re-derives due; containers roll up MIN/MAX. Tasks created without
+ // a due date stay unscheduled until one is set.
+ if (origin === 'instance') {
+ const manualDueDate = toIsoDate(formData.due_date);
+ if (manualDueDate) {
+ insertPayload.start_date = subtractCalendarDays(manualDueDate, parsedDuration ?? 0);
+ }
  }
 
  return insertPayload;
