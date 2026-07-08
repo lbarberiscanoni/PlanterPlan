@@ -141,6 +141,7 @@ const groupCandidatesByMilestone = (
   candidates: TaskRow[],
   taskById: Map<string, TaskRow>,
   numberByTaskId: Map<string, string>,
+  orderIndex?: Map<string, number>,
 ): PriorityTaskGroup[] => {
   const groups = new Map<string, Omit<PriorityTaskGroup, 'tasks'> & { tasks: TaskRow[] }>();
 
@@ -189,6 +190,16 @@ const groupCandidatesByMilestone = (
     })
     .map((group) => {
       const sortedTasks = [...group.tasks].sort((a, b) => {
+        // Serial mode (All Tasks): order rows by document/serial index so they
+        // render in the same sequence as their displayed numbers (3.01, 3.02…).
+        if (orderIndex) {
+          const oa = orderIndex.get(a.id) ?? Number.MAX_SAFE_INTEGER;
+          const ob = orderIndex.get(b.id) ?? Number.MAX_SAFE_INTEGER;
+          if (oa !== ob) return oa - ob;
+          return compareTitle(a.title, b.title);
+        }
+
+        // Default (priority / urgency views): most-imminent first.
         const dateCompare = compareDateAsc(a.due_date, b.due_date);
         if (dateCompare !== 0) return dateCompare;
 
@@ -224,6 +235,11 @@ export const buildPriorityTaskGroups = ({
 export interface BuildMilestoneTaskGroupsArgs {
   tasks: TaskRow[];
   candidateTasks?: TaskRow[];
+  /**
+   * When provided, within-group tasks are ordered by this document/serial index
+   * (the All Tasks view) instead of the default due-date-first urgency order.
+   */
+  orderIndex?: Map<string, number>;
 }
 
 /**
@@ -238,6 +254,7 @@ export interface BuildMilestoneTaskGroupsArgs {
 export const buildMilestoneTaskGroups = ({
   tasks,
   candidateTasks,
+  orderIndex,
 }: BuildMilestoneTaskGroupsArgs): PriorityTaskGroup[] => {
   const taskById = new Map(tasks.map((task) => [task.id, task]));
   const candidates = candidateTasks ?? tasks;
@@ -254,7 +271,7 @@ export const buildMilestoneTaskGroups = ({
     const isStructural = type === 'project' || type === 'phase' || type === 'milestone';
     return !(isStructural && parentIds.has(task.id));
   });
-  return groupCandidatesByMilestone(leaves, taskById, computeProjectTaskNumbers(tasks));
+  return groupCandidatesByMilestone(leaves, taskById, computeProjectTaskNumbers(tasks), orderIndex);
 };
 
 export const filterPriorityTasks = (tasks: TaskRow[], now: Date = getNow()): TaskRow[] =>

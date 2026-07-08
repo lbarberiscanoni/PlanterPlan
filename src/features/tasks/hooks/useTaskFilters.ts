@@ -7,6 +7,7 @@ import {
  type CheckpointRootLike,
 } from '@/shared/lib/date-engine/index';
 import { filterPriorityTasks } from '@/features/tasks/lib/priority-tasks';
+import { computeProjectTaskOrder } from '@/features/tasks/lib/task-numbering';
 
 export type TaskFilterKey =
  | 'my_tasks'
@@ -146,6 +147,17 @@ export const filterAndSortTasks = ({
  const sorted = [...filtered];
  if (sort === 'alphabetical') {
   sorted.sort((a, b) => (a.title ?? '').localeCompare(b.title ?? ''));
+ } else if (filter === 'all_tasks') {
+  // All Tasks: order by milestone/serial (project → phase → milestone → task),
+  // so the flat list matches the displayed serial numbers instead of a
+  // date-jumbled order. Same ordering the grouped view uses within each group.
+  const order = computeProjectTaskOrder(tasks);
+  sorted.sort((a, b) => {
+   const oa = order.get(a.id) ?? Number.MAX_SAFE_INTEGER;
+   const ob = order.get(b.id) ?? Number.MAX_SAFE_INTEGER;
+   if (oa !== ob) return oa - ob;
+   return (a.title ?? '').localeCompare(b.title ?? '');
+  });
  } else {
   // chronological: ascending by due_date, nulls last
   sorted.sort((a, b) => compareDateAsc(a.due_date, b.due_date));

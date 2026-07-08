@@ -26,6 +26,8 @@ import {
        type TaskSortKey,
 } from '@/features/tasks/hooks/useTaskFilters';
 import { buildMilestoneTaskGroups, buildPriorityTaskGroups } from '@/features/tasks/lib/priority-tasks';
+import { computeProjectTaskOrder } from '@/features/tasks/lib/task-numbering';
+import { useCurrentProject } from '@/features/projects/hooks/useCurrentProject';
 import {
        Select,
        SelectContent,
@@ -83,7 +85,10 @@ export default function TasksPage() {
        >(null);
        const handledDeepLinkRef = useRef<string | null>(null);
        const [searchQuery, setSearchQuery] = useState<string>('');
-       const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+       // `undefined` = the user hasn't touched the project-scope selector yet, so
+       // the page defaults to their current project (see effectiveProjectScopeId).
+       // Once they pick a project the value is its id; "All projects" sets it null.
+       const [selectedProjectId, setSelectedProjectId] = useState<string | null | undefined>(undefined);
        const effectiveSort: TaskSortKey = filter === 'priority' ? 'chronological' : sort;
        // The Milestones view is a high-level overview: milestones only, never
        // grouped under their parent phase as leaf rows. Force the flat layout so
@@ -293,6 +298,13 @@ export default function TasksPage() {
                      .sort((a, b) => a.title.localeCompare(b.title)),
               [projectTitleByRootId],
        );
+       // Default the page to the user's current project (persisted choice, else
+       // their first project) so /tasks opens scoped to what they're working on —
+       // with "All projects" always one click away. Only instance roots are
+       // switchable targets; templates/joined labels also live in projectOptions
+       // but resolving to one of them is harmless (it just scopes to that root).
+       const { currentProjectId } = useCurrentProject(projectOptions);
+       const effectiveProjectScopeId = selectedProjectId === undefined ? currentProjectId : selectedProjectId;
        const actionableTaskCount = useMemo(
               () => tasks.filter((task) => task.origin === 'instance' && task.parent_task_id !== null).length,
               [tasks],
@@ -306,7 +318,7 @@ export default function TasksPage() {
               filter,
               sort: effectiveSort,
               currentUserId,
-              projectScopeId: filter === 'my_tasks' ? null : selectedProjectId,
+              projectScopeId: filter === 'my_tasks' ? null : effectiveProjectScopeId,
        });
        const normalizedSearchQuery = searchQuery.trim().toLowerCase();
        const visibleTasks = useMemo(() => {
@@ -363,7 +375,13 @@ export default function TasksPage() {
                      if (groupMode !== 'grouped' || isMilestonesOverview) return [];
                      const groups = filter === 'priority'
                             ? buildPriorityTaskGroups({ tasks, candidateTasks: visibleTaskRows })
-                            : buildMilestoneTaskGroups({ tasks, candidateTasks: visibleTaskRows });
+                            : buildMilestoneTaskGroups({
+                                   tasks,
+                                   candidateTasks: visibleTaskRows,
+                                   // All Tasks orders rows within each milestone by serial
+                                   // number; other views keep the due-date urgency order.
+                                   orderIndex: filter === 'all_tasks' ? computeProjectTaskOrder(tasks) : undefined,
+                            });
                      // Backfill the project label from the authoritative roots map so
                      // every section is attributed even when its root is outside the
                      // row-capped task list. All tasks in a group share one project.
@@ -493,7 +511,7 @@ export default function TasksPage() {
                                                                <div className="flex flex-col gap-1">
                                                                       <label htmlFor="task-project-scope" className="text-xs font-medium text-muted-foreground">{t('tasks.project_scope_label')}</label>
                                                                       <Select
-                                                                             value={selectedProjectId ?? ALL_PROJECTS}
+                                                                             value={effectiveProjectScopeId ?? ALL_PROJECTS}
                                                                              onValueChange={(v) => setSelectedProjectId(v === ALL_PROJECTS ? null : v)}
                                                                       >
                                                                              <SelectTrigger id="task-project-scope" className="w-[200px] bg-card" aria-label={t('tasks.project_scope_aria')}>

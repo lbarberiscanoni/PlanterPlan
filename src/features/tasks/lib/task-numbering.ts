@@ -138,3 +138,43 @@ export const computeProjectTaskNumbers = (tasks: TaskRow[]): Map<string, string>
 
   return result;
 };
+
+/**
+ * Global document ("serial") order for every task across the given set: the same
+ * project → phase → milestone → task sequence that {@link computeProjectTaskNumbers}
+ * numbers by, flattened into a single monotonic index. Projects (roots) are ordered
+ * by title (then id) so cross-project lists are stable; within each project the tree
+ * is walked in sibling `position` order.
+ *
+ * Use this to sort a flat or grouped task list so rows appear in the same order as
+ * their displayed serial numbers (3.01, 3.02, 3.03…) instead of a date-jumbled order.
+ * Tasks with no resolvable root are omitted (callers should treat a missing key as
+ * "sorts last").
+ */
+export const computeProjectTaskOrder = (tasks: TaskRow[]): Map<string, number> => {
+  const tasksByRoot = new Map<string, TaskRow[]>();
+  const rootTitle = new Map<string, string>();
+  for (const task of tasks) {
+    const rootId = task.root_id ?? (task.parent_task_id === null ? task.id : null);
+    if (!rootId) continue;
+    const list = tasksByRoot.get(rootId) ?? [];
+    list.push(task);
+    tasksByRoot.set(rootId, list);
+    if (task.parent_task_id === null) rootTitle.set(task.id, task.title ?? '');
+  }
+
+  const rootIds = Array.from(tasksByRoot.keys()).sort((a, b) => {
+    const byTitle = (rootTitle.get(a) ?? '').localeCompare(rootTitle.get(b) ?? '');
+    return byTitle !== 0 ? byTitle : a.localeCompare(b);
+  });
+
+  const order = new Map<string, number>();
+  let counter = 0;
+  for (const rootId of rootIds) {
+    const docOrder = buildDocOrder(rootId, tasksByRoot.get(rootId) ?? []);
+    for (const [id] of Array.from(docOrder.entries()).sort((a, b) => a[1] - b[1])) {
+      order.set(id, counter++);
+    }
+  }
+  return order;
+};
