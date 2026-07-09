@@ -4,11 +4,13 @@ import {
   handleInviteByEmailRequest,
   type InviteByEmailCreateClient,
 } from './handler.ts';
+import { captureServerEvent } from '../_shared/posthog.ts';
 
 serve((req) =>
   handleInviteByEmailRequest(req, {
     getEnv: (key) => Deno.env.get(key),
     createClient: createClient as InviteByEmailCreateClient,
     logger: console,
+    captureEvent: captureServerEvent,
   }),
 );
