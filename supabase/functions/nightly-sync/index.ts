@@ -2,6 +2,7 @@ import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-
 import { isRecurrenceRule, shouldFireRecurrenceOn, RecurrenceRule } from '../_shared/recurrence.ts'
 import { isCheckpointProject, toUtcIsoDate } from '../_shared/date.ts'
 import { corsHeaders, requireServiceRole } from '../_shared/auth.ts'
+import { captureServerEvent } from '../_shared/posthog.ts'
 import { dueSoonCutoffMs } from './urgency.ts'
 
 const DEFAULT_DUE_SOON_THRESHOLD_DAYS = 3
@@ -26,6 +27,7 @@ interface SyncResult {
     due_soon: number
     recurrence_spawned: number
     recurrence_skipped: number
+    progress_snapshots: number
     overdue_ids: string[]
     due_soon_ids: string[]
     recurrence_spawned_ids: string[]
@@ -168,6 +170,61 @@ async function runRecurrencePass(
     return { spawnedIds, skipped }
 }
 
+type SnapshotRow = { id: string; root_id: string | null; is_complete: boolean | null; status: string | null }
+
+/**
+ * Emit one `project_progress_snapshot` per active project (pct_complete +
+ * overdue_count) so PostHog can track project health / stalling over time.
+ * Runs AFTER the overdue pass so `status = 'overdue'` counts are current.
+ * Returns the number of snapshots emitted.
+ */
+async function runProgressSnapshotPass(supabase: SupabaseClient): Promise<number> {
+    // Paginate to dodge PostgREST's 1000-row cap — an unbounded select would
+    // silently truncate and skew the per-project aggregates.
+    const pageSize = 1000
+    let from = 0
+    const rows: SnapshotRow[] = []
+    for (;;) {
+        const { data, error } = await supabase
+            .from('tasks')
+            .select('id, root_id, is_complete, status')
+            .eq('origin', 'instance')
+            .range(from, from + pageSize - 1)
+        if (error) throw error
+        const page = (data ?? []) as SnapshotRow[]
+        rows.push(...page)
+        if (page.length < pageSize) break
+        from += pageSize
+    }
+
+    // A row whose id === root_id IS the project root; count only its
+    // descendants toward completion so the root doesn't skew the percentage.
+    const projectRoots = new Set<string>()
+    const agg = new Map<string, { total: number; completed: number; overdue: number }>()
+    for (const r of rows) {
+        if (!r.root_id) continue
+        if (r.id === r.root_id) { projectRoots.add(r.id); continue }
+        const a = agg.get(r.root_id) ?? { total: 0, completed: 0, overdue: 0 }
+        a.total += 1
+        if (r.is_complete) a.completed += 1
+        if (r.status === 'overdue') a.overdue += 1
+        agg.set(r.root_id, a)
+    }
+
+    const events = Array.from(projectRoots).map((projectId) => {
+        const a = agg.get(projectId) ?? { total: 0, completed: 0, overdue: 0 }
+        const pctComplete = a.total > 0 ? Math.round((100 * a.completed) / a.total) : 0
+        return captureServerEvent(projectId, 'project_progress_snapshot', {
+            project_id: projectId,
+            pct_complete: pctComplete,
+            overdue_count: a.overdue,
+            total_tasks: a.total,
+        })
+    })
+    await Promise.allSettled(events)
+    return events.length
+}
+
 Deno.serve(async (req) => {
     if (req.method === 'OPTIONS') {
         return new Response('ok', { headers: corsHeaders })
@@ -258,11 +315,21 @@ Deno.serve(async (req) => {
         //    (template, target, today) we skip the spawn.
         const recurrence = await runRecurrencePass(supabase, new Date(nowIso), nowIso)
 
+        // 4. Analytics: per-project progress snapshot to PostHog. Non-fatal —
+        //    never let an analytics hiccup fail the sync.
+        let progressSnapshots = 0
+        try {
+            progressSnapshots = await runProgressSnapshotPass(supabase)
+        } catch (snapErr) {
+            console.error('[nightly-sync] progress snapshot pass failed', snapErr)
+        }
+
         const result: SyncResult = {
             overdue: overdueIds.length,
             due_soon: dueSoonIds.length,
             recurrence_spawned: recurrence.spawnedIds.length,
             recurrence_skipped: recurrence.skipped,
+            progress_snapshots: progressSnapshots,
             overdue_ids: overdueIds,
             due_soon_ids: dueSoonIds,
             recurrence_spawned_ids: recurrence.spawnedIds,

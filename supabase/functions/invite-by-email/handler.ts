@@ -69,6 +69,13 @@ export interface InviteByEmailHandlerDeps {
   getEnv: (key: string) => string | undefined;
   createClient: InviteByEmailCreateClient;
   logger?: Pick<Console, 'error' | 'log'>;
+  // Analytics sink (injected so the handler stays side-effect-free under test).
+  // Defaults to a no-op when omitted.
+  captureEvent?: (
+    distinctId: string,
+    event: string,
+    properties: Record<string, unknown>,
+  ) => Promise<void>;
 }
 
 const ASSIGNABLE_ROLES = new Set(['planter', 'team']);
@@ -205,6 +212,9 @@ export async function handleInviteByEmailRequest(
 
     const adminClient = deps.createClient(supabaseUrl, serviceRoleKey) as AdminClient;
     let targetUserId: string | null = null;
+    // True only when this invite creates a brand-new PlanterPlan account (vs.
+    // adding an already-registered user to the project). Drives `member_joined`.
+    let createdNewUser = false;
 
     const { data: inviteData, error: inviteError } =
       await adminClient.auth.admin.inviteUserByEmail(email);
@@ -233,6 +243,7 @@ export async function handleInviteByEmailRequest(
       targetUserId = existingUserId;
     } else {
       targetUserId = inviteData?.user?.id ?? null;
+      createdNewUser = true;
     }
 
     if (!targetUserId) throw new InviteError('user_lookup_failed', 'Invite failed');
@@ -246,6 +257,18 @@ export async function handleInviteByEmailRequest(
     if (insertError) {
       logSafeError(logger, 'Member insert error:', insertError);
       throw new InviteError(insertError.code ?? 'member_insert_failed', 'Invite failed');
+    }
+
+    // A new account joining via an invite is the server-authoritative
+    // acquisition signal (the client emits `member_invited` for every invite;
+    // this fires only for first-time accounts, so it isn't a duplicate).
+    if (createdNewUser) {
+      const capture = deps.captureEvent ?? (async () => {});
+      await capture(targetUserId, 'member_joined', {
+        project_id: projectId,
+        role,
+        source: 'invite',
+      });
     }
 
     return jsonSuccess({ id: targetUserId, email });
