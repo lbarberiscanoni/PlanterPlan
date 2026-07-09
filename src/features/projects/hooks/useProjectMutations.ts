@@ -69,13 +69,15 @@ export function useUpdateProject() {
         mutationFn: async ({ projectId, updates }: UpdateProjectPayload) => {
             // Project (root) dates are governed by the bottom-up envelope
             // roll-up, so neither date is a plain column write here:
-            //   * due_date is DERIVED (MAX of child dues) — read-only, never sent.
             //   * start_date moves the whole project via an anchored subtree
             //     shift (reschedule_project_start RPC). A direct column write
             //     would be rejected by enforce_task_date_envelope (children fall
             //     outside the new span) or silently reverted by the roll-up.
-            const { start_date, due_date: _derivedDue, ...rest } = updates;
-            void _derivedDue;
+            //   * due_date, when supplied, is a TARGET finish date: the caller
+            //     only sends it when the user actually changed it, and it reflows
+            //     the incomplete tasks proportionally (rescale_project_incomplete)
+            //     to land exactly on it. It is never a plain column write.
+            const { start_date, due_date, ...rest } = updates;
 
             const dbUpdates: TaskUpdate = {
                 title: rest.title,
@@ -89,12 +91,26 @@ export function useUpdateProject() {
 
             // Reschedule shifts the root + every descendant by (new - old) days.
             // No-ops in the RPC when the delta is zero, so it is safe to call on
-            // every save where a start date is present.
+            // every save where a start date is present. Runs BEFORE any due-date
+            // rescale so the reflow anchors on the updated start.
             const newStartIso = toIsoDate(start_date);
             if (newStartIso) {
                 const { error } = await planter.rpc('reschedule_project_start', {
                     p_root_id: projectId,
                     p_new_start: newStartIso,
+                });
+                if (error) throw error;
+            }
+
+            // Proportional duration rescale: when the user retargets the project
+            // due date, reflow the INCOMPLETE tasks so the last lands exactly on
+            // it (completed tasks frozen). The caller passes due_date only when it
+            // changed, so this never fires on an unrelated settings save.
+            const targetDueIso = toIsoDate(due_date);
+            if (targetDueIso) {
+                const { error } = await planter.rpc('rescale_project_incomplete', {
+                    p_root_id: projectId,
+                    p_target_due: targetDueIso,
                 });
                 if (error) throw error;
             }

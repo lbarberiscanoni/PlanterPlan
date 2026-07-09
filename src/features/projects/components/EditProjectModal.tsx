@@ -57,7 +57,10 @@ export default function EditProjectModal({ project, isOpen, onClose }: EditProje
      .min(1, t('projects.edit_modal.due_soon_threshold_min'))
      .max(30, t('projects.edit_modal.due_soon_threshold_max')),
     supervisor_email: z.string().email(t('projects.edit_modal.supervisor_email_invalid')).optional().or(z.literal('')),
-   }),
+   }).refine(
+    (d) => isTemplate || !d.due_date || !d.start_date || d.due_date > d.start_date,
+    { message: t('projects.edit_modal.due_after_start'), path: ['due_date'] },
+   ),
   [t, isTemplate],
  );
 
@@ -156,9 +159,15 @@ export default function EditProjectModal({ project, isOpen, onClose }: EditProje
     ? applyProjectKind(mergedSettings, projectKind) ?? mergedSettings
     : mergedSettings;
 
+   // due_date is a TARGET finish date, not a column write: only forward it when
+   // the user actually changed it, so the proportional rescale (in useUpdateProject)
+   // fires solely on an intentional retarget — not on an unrelated settings save.
+   const currentDueIso = toIsoDate(project.due_date) || '';
+   const dueChanged = !isTemplate && !!due_date && due_date !== currentDueIso;
+
    const updateData: TaskUpdate = {
     ...rest,
-    due_date: due_date ? due_date : null,
+    due_date: dueChanged ? due_date : undefined,
     supervisor_email: supervisor_email ? supervisor_email : null,
     settings: settingsWithKind as Json,
    };
@@ -321,12 +330,11 @@ export default function EditProjectModal({ project, isOpen, onClose }: EditProje
        <Input
         type="date"
         id="due_date"
-        value={toIsoDate(project.due_date) || ''}
-        readOnly
-        disabled
-        className="bg-amber-100/60 text-amber-900"
+        {...register('due_date')}
+        className={errors.due_date ? 'border-red-500' : ''}
        />
-       <p className="mt-1 text-xs text-amber-700">{t('projects.edit_modal.due_date_derived_note')}</p>
+       {errors.due_date && <p className="text-sm text-red-500">{errors.due_date.message}</p>}
+       <p className="mt-1 text-xs text-amber-700">{t('projects.edit_modal.due_date_rescale_note')}</p>
       </div>
      </div>
      )}

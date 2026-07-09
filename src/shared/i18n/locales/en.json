@@ -581,6 +581,8 @@
       "launch_date_warning": "Changing this will shift ALL incomplete tasks in the timeline.",
       "due_date_label": "Project Due Date",
       "due_date_derived_note": "Derived automatically from the latest task due date. Adjust task durations to change it.",
+      "due_date_rescale_note": "Set when the project should finish. Remaining tasks reflow proportionally to hit this date; completed tasks stay put.",
+      "due_after_start": "The due date must be after the project start date.",
       "saving": "Saving…",
       "unarchive_heading": "Unarchive Project",
       "archive_heading": "Archive Project",

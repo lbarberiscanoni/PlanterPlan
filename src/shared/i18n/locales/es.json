@@ -587,6 +587,8 @@
       "launch_date_warning": "Cambiar esto desplazará TODAS las tareas incompletas del cronograma.",
       "due_date_label": "Fecha de vencimiento del proyecto",
       "due_date_derived_note": "Se calcula automáticamente a partir de la última fecha de vencimiento de las tareas. Ajusta la duración de las tareas para cambiarla.",
+      "due_date_rescale_note": "Indica cuándo debe finalizar el proyecto. Las tareas restantes se reajustan proporcionalmente para cumplir esta fecha; las tareas completadas no se modifican.",
+      "due_after_start": "La fecha de vencimiento debe ser posterior a la fecha de inicio del proyecto.",
       "saving": "Guardando…",
       "unarchive_heading": "Desarchivar proyecto",
       "archive_heading": "Archivar proyecto",
