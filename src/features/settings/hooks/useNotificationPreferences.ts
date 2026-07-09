@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { planter } from '@/shared/api/planterClient';
+import { track } from '@/shared/analytics/posthog';
 import type {
     NotificationPreferencesRow,
     NotificationPreferencesUpdate,
@@ -31,6 +32,15 @@ export function useUpdateNotificationPreferences() {
                 qc.setQueryData<NotificationPreferencesRow>(PREFS_KEY, { ...previous, ...patch } as NotificationPreferencesRow);
             }
             return { previous };
+        },
+        onSuccess: (_data, patch) => {
+            // `channel` = which pref key(s) changed; `cadence` = overdue-digest
+            // setting when that was the change. No values beyond enums/keys.
+            const keys = Object.keys(patch).filter((k) => k !== 'user_id' && k !== 'updated_at');
+            track('notification_pref_changed', {
+                channel: keys.join(',') || 'unknown',
+                cadence: typeof patch.email_overdue_digest === 'string' ? patch.email_overdue_digest : 'n/a',
+            });
         },
         onError: (_err, _patch, ctx) => {
             if (ctx?.previous) qc.setQueryData(PREFS_KEY, ctx.previous);

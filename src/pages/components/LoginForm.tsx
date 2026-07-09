@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 import { Loader2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { planter } from '@/shared/api/planterClient';
+import { track } from '@/shared/analytics/posthog';
 
 type AuthMode = 'signIn' | 'signUp' | 'forgotPassword';
 type LoginFormValues = {
@@ -72,6 +73,11 @@ const LoginForm = () => {
  if (result.error) {
  throw result.error;
  } else {
+ // Self-serve signup (no invite context in this flow); role is assigned
+ // per-project later, so we only record that the account was created directly.
+ if (isSignUp) {
+ track('signup_completed', { role: 'self_serve', has_invite: false });
+ }
  navigate('/tasks');
  }
  } catch (err: unknown) {

@@ -9,6 +9,7 @@ import { formatDisplayDate } from '@/shared/lib/date-engine';
 import type { IcsFeedTokenRow } from '@/shared/db/app.types';
 import { Copy, Trash2, Plus, RotateCw } from 'lucide-react';
 import { useConfirm } from '@/shared/ui/confirm-dialog-context';
+import { track } from '@/shared/analytics/posthog';
 
 /**
  * Wave 35 Task 1 — Settings → Integrations → Calendar feeds.
@@ -37,6 +38,7 @@ export default function IcsFeedsCard() {
         mutationFn: (input: { label: string | null }) =>
             planter.integrations.createIcsFeedToken({ label: input.label, project_filter: null }),
         onSuccess: () => {
+            track('ics_feed_generated', {});
             toast.success(t('ics.created_toast'));
             setLabel('');
             void queryClient.invalidateQueries({ queryKey: ['icsFeedTokens'] });

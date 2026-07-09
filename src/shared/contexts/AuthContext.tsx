@@ -6,6 +6,7 @@ import { authApi } from '@/shared/api/auth';
 import { clearPasswordRecoverySession, markPasswordRecoverySession } from '@/shared/lib/password-recovery';
 import { AuthContext } from '@/shared/contexts/auth-context';
 import { mergeSavedEmailAddress } from '@/shared/contexts/saved-email-addresses';
+import { identifyUser, resetAnalytics } from '@/shared/analytics/posthog';
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
@@ -32,6 +33,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       const supabaseUser = session.user;
+      // Associate analytics with the auth UID (no PII). Role is attached later
+      // once the async admin check resolves (see role hydration effect).
+      identifyUser(supabaseUser.id);
       setUser(prev => ({
         id: supabaseUser.id,
         email: supabaseUser.email || '',
@@ -47,6 +51,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'SIGNED_OUT') {
         clearPasswordRecoverySession();
+        resetAnalytics();
         setUser(null);
         setRoleResolved(true);
         setLoading(false);
@@ -79,7 +84,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       try {
         const isAdmin = await authApi.checkIsAdmin(userId);
         if (alive) {
-          setUser(prev => prev ? { ...prev, role: isAdmin ? 'admin' : 'team' } : null);
+          const role = isAdmin ? 'admin' : 'team';
+          identifyUser(userId, role);
+          setUser(prev => prev ? { ...prev, role } : null);
         }
       } catch {
         if (alive) setUser(prev => prev ? { ...prev, role: 'team' } : null);

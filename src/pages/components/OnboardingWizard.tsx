@@ -17,6 +17,7 @@ import { Calendar } from '@/shared/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/shared/ui/popover';
 import { formatDate } from '@/shared/lib/date-engine';
 import { cn } from '@/shared/lib/utils';
+import { track } from '@/shared/analytics/posthog';
 
 interface OnboardingWizardProps {
  open: boolean;
@@ -48,6 +49,8 @@ export default function OnboardingWizard({ open, onCreateProject, onDismiss }: O
  template: formData.template,
  status: 'planning'
  });
+ // Reached only when the 3-step wizard submits and the project is created.
+ track('onboarding_completed', { steps_completed: 3, created_first_project: true });
  } catch (error) {
  console.error(error);
  } finally {
@@ -122,7 +125,7 @@ export default function OnboardingWizard({ open, onCreateProject, onDismiss }: O
  mode="single"
  selected={formData.launchDate as Date | undefined}
  onSelect={(date) => setFormData({ ...formData, launchDate: (date as Date | undefined) || null })}
- initialFocus
+ autoFocus
  />
  </PopoverContent>
  </Popover>

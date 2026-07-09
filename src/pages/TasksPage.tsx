@@ -8,6 +8,7 @@ import type { DragEndEvent } from '@dnd-kit/core';
 import type { TaskRow, TaskUpdate, TaskFormData } from '@/shared/db/app.types';
 import { constructUpdatePayload } from '@/shared/lib/date-engine/payloadHelpers';
 import { planter } from '@/shared/api/planterClient';
+import { track } from '@/shared/analytics/posthog';
 import { STALE_TIMES } from '@/shared/lib/react-query-config';
 import TaskItem from '@/features/tasks/components/TaskItem';
 import TaskDetailsPanel from '@/features/tasks/components/TaskDetailsPanel';
@@ -154,6 +155,18 @@ export default function TasksPage() {
               handledDeepLinkRef.current = deepLinkTaskId;
               openTaskInEditMode(target);
        }, [deepLinkTaskId, tasks, openTaskInEditMode]);
+       // Fire once per mount, after the task list first loads, capturing the
+       // landing filter and how many tasks are overdue at that moment.
+       const tasksViewTrackedRef = useRef(false);
+       useEffect(() => {
+              if (loading || tasksViewTrackedRef.current) return;
+              tasksViewTrackedRef.current = true;
+              const now = Date.now();
+              const overdueCount = tasks.filter(
+                     (tk: TaskRow) => !!tk.due_date && !tk.is_complete && new Date(tk.due_date).getTime() < now,
+              ).length;
+              track('tasks_view_opened', { range_filter: filter, overdue_count: overdueCount });
+       }, [loading, tasks, filter]);
        const selectedTaskId = selectedTask?.id ?? null;
        const handleTaskSubmit = useCallback(async (formData: TaskFormData) => {
               if (!selectedTask) return;

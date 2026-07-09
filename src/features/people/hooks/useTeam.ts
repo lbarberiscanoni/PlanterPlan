@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { planter } from '@/shared/api/planterClient';
 import { toast } from 'sonner';
 import { useTranslation } from 'react-i18next';
+import { track } from '@/shared/analytics/posthog';
 
 import type { Task as ProjectRow, TeamMemberWithProfile } from '@/shared/db/app.types';
 
@@ -40,7 +41,8 @@ export function useTeam(projectId: string | null) {
             if (!targetProjectId) throw new Error(t('projects.team_page.project_required'));
             return planter.entities.Project.inviteMemberByEmail(targetProjectId, data.email, data.role);
         },
-        onSuccess: () => {
+        onSuccess: (_data, variables) => {
+            track('member_invited', { project_id: variables.project_id ?? projectId ?? '', role: variables.role });
             queryClient.invalidateQueries({ queryKey: ['teamMembers', projectId] });
             toast.success(t('projects.invite_modal.success'));
         },

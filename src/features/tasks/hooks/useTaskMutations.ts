@@ -1,6 +1,13 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { TaskInsert, TaskUpdate, TaskRow } from '@/shared/db/app.types'
 import { planter as planterClient } from '@/shared/api/planterClient'
+import { track } from '@/shared/analytics/posthog'
+
+// task_type is depth-derived (Project→Phase→Milestone→Task). Map it to a
+// numeric nesting depth for analytics; unknown/null → 0.
+const DEPTH_BY_TASK_TYPE: Record<string, number> = { project: 0, phase: 1, milestone: 2, task: 3 };
+const depthOf = (row: { task_type?: string | null } | null | undefined): number =>
+ DEPTH_BY_TASK_TYPE[row?.task_type ?? ''] ?? 0;
 
 // We use TaskInsert/TaskUpdate but sometimes hooks pass custom subsets
 interface TaskMutationPayload extends Partial<TaskUpdate> {
@@ -18,6 +25,14 @@ export function useCreateTask() {
  // Fall back to the returned row's root_id (root-task creation sets
  // root_id = id via the DB trigger, so the input is usually null there).
  const rootId = inputRootId ?? data?.root_id ?? data?.id;
+ const createdRow = Array.isArray(data) ? (data as TaskRow[])[0] : data;
+ if (createdRow && rootId) {
+ track('task_created', {
+ project_id: rootId,
+ depth: depthOf(createdRow),
+ origin: createdRow.origin === 'template' ? 'template' : 'instance',
+ });
+ }
  if (rootId) {
  queryClient.invalidateQueries({ queryKey: ['projectHierarchy', rootId] })
  } else if (import.meta.env.DEV) {
@@ -108,6 +123,19 @@ export function useUpdateTask() {
  }
  if (ctx.previousTaskInfo) {
  queryClient.setQueryData(['task', ctx.updatedTaskId], ctx.previousTaskInfo);
+ }
+ },
+ onSuccess: (_data, variables, context) => {
+ // Only a genuine status change is an engagement signal; this hook also
+ // handles title/date/settings edits, which we don't track here.
+ const prev = context?.previousTaskInfo;
+ if (variables.status != null && prev && prev.status !== variables.status) {
+ track('task_status_changed', {
+ project_id: variables.root_id ?? prev.root_id ?? '',
+ from_status: prev.status ?? 'unknown',
+ to_status: variables.status,
+ depth: depthOf(prev),
+ });
  }
  },
  onSettled: async (_data, _error, variables) => {

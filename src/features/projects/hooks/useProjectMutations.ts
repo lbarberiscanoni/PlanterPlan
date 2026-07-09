@@ -1,7 +1,13 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { planter } from '@/shared/api/planterClient';
 import { toIsoDate, nowUtcIso } from '@/shared/lib/date-engine';
-import { TaskUpdate, TaskInsert } from '@/shared/db/app.types';
+import { TaskUpdate, TaskInsert, TaskRow } from '@/shared/db/app.types';
+import { track } from '@/shared/analytics/posthog';
+
+/** Root-only `settings.project_kind`; defaults to 'date' when unset. */
+function projectKindOf(root: TaskRow | null | undefined): 'date' | 'checkpoint' {
+    return (root?.settings as { project_kind?: 'date' | 'checkpoint' } | null)?.project_kind ?? 'date';
+}
 
 export interface CreateProjectPayload {
     title: string;
@@ -42,6 +48,13 @@ export function useCreateProject() {
                 );
                 if (cloneError) throw cloneError;
                 const rootClone = Array.isArray(newTasks) ? newTasks[0] : newTasks;
+                const taskCount = Array.isArray(newTasks) ? newTasks.length : newTasks ? 1 : 0;
+                track('template_cloned', {
+                    template_id: formData.templateId,
+                    cloned_from_template_version: (rootClone?.settings as { cloned_from_template_version?: number } | null)?.cloned_from_template_version,
+                    task_count: taskCount,
+                });
+                track('project_created', { project_kind: projectKindOf(rootClone), from_template: true });
                 return rootClone;
             } else {
                 const project = await planter.entities.Project.create({
@@ -51,6 +64,7 @@ export function useCreateProject() {
                     creator: user.id
                 });
 
+                track('project_created', { project_kind: projectKindOf(project), from_template: false });
                 return project;
             }
         },
