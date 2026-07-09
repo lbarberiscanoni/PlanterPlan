@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { ViewMode } from 'gantt-task-react';
@@ -16,11 +16,16 @@ import {
     SelectValue,
 } from '@/shared/ui/select';
 import { Label } from '@/shared/ui/label';
+import { track } from '@/shared/analytics/posthog';
 
 export default function Gantt() {
     const { t } = useTranslation();
     const [searchParams, setSearchParams] = useSearchParams();
     const projectId = searchParams.get('projectId');
+
+    useEffect(() => {
+        if (projectId) track('gantt_opened', { project_id: projectId });
+    }, [projectId]);
 
     const { data: projectList } = useProjectList();
     const activeProjects = projectList.activeProjects;

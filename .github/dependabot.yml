@@ -6,6 +6,34 @@ updates:
       interval: 'weekly'
     open-pull-requests-limit: 10
     groups:
-      dependencies:
-        patterns:
-          - '*'
+      # Group ONLY minor + patch bumps into a single low-risk PR. Major bumps
+      # arrive as individual PRs so each can be reviewed and scheduled on its
+      # own. Rationale: a grouped major bump (react-day-picker 10 + React 19
+      # types + TypeScript 7 + Vite 8, all at once) broke the Vercel build and
+      # tried to undo the deliberate React-18 pin documented in CLAUDE.md.
+      minor-and-patch:
+        update-types:
+          - 'minor'
+          - 'patch'
+    ignore:
+      # Deliberately pinned — never auto-bump these majors. React was rolled
+      # back from 19 to 18.3.1 to unblock Vercel preview deploys (CLAUDE.md,
+      # Wave 31); TypeScript, Vite, and the type packages are held in lockstep.
+      # gantt-task-react is pinned exact (Wave 28). Revisit intentionally, not
+      # via an automated PR.
+      - dependency-name: 'react'
+        update-types: ['version-update:semver-major']
+      - dependency-name: 'react-dom'
+        update-types: ['version-update:semver-major']
+      - dependency-name: 'react-is'
+        update-types: ['version-update:semver-major']
+      - dependency-name: '@types/react'
+        update-types: ['version-update:semver-major']
+      - dependency-name: '@types/react-dom'
+        update-types: ['version-update:semver-major']
+      - dependency-name: 'typescript'
+        update-types: ['version-update:semver-major']
+      - dependency-name: 'vite'
+        update-types: ['version-update:semver-major']
+      - dependency-name: 'gantt-task-react'
+        update-types: ['version-update:semver-major']

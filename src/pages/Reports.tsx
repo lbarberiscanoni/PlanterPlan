@@ -1,7 +1,7 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { planter } from '@/shared/api/planterClient';
 import { useQuery } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/shared/ui/button';
 import { Card } from '@/shared/ui/card';
@@ -28,6 +28,7 @@ import {
 } from 'recharts';
 
 import { useProjectReports } from '@/features/projects/hooks/useProjectReports';
+import { track } from '@/shared/analytics/posthog';
 import type { TaskRow } from '@/shared/db/app.types';
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042'];
@@ -38,6 +39,10 @@ export default function Reports() {
     const projectId = urlParams.get('project');
     const navigate = useNavigate();
     const { user } = useAuth();
+
+    useEffect(() => {
+        if (projectId) track('report_viewed', { project_id: projectId });
+    }, [projectId]);
 
     const { data: project } = useQuery({
         queryKey: ['reportProject', projectId],
