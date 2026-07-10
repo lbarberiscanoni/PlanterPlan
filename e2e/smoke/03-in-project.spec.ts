@@ -9,17 +9,17 @@ import { tagged } from '../support/runId';
  * so milestones/tasks render on entry without selecting a phase.
  */
 
-// SMK-03 — project start saves; due is read-only. Guards Tim's "start date doesn't save" bug
-// + the due-read-only rule (commit e6a4a05f). Selectors: EditProjectModal #start_date / #due_date.
-// SMK-03 — due date is read-only, start is editable (the reliable half of commit e6a4a05f).
-// Start-date *persistence* is a separate KNOWN-BUG regression in date-cascade.spec.ts: the root
-// start_date doesn't survive a reload yet (app-layer envelope alignment still incomplete).
-test('@smoke @dates project due date is read-only, start is editable', async ({ page }) => {
+// SMK-03 — both project date fields are editable in settings. The Project Due Date became
+// editable in commit 131cb503 (feedback #1: editing it reflows incomplete tasks to hit the new
+// finish date); it was read-only before (commit e6a4a05f). The reflow / pin-exact / due>start
+// validation are guarded by REG-20 in project-duration-rescale.spec.ts — this smoke just proves
+// both fields render editable. Selectors: EditProjectModal #start_date / #due_date.
+test('@smoke @dates project start and due dates are both editable', async ({ page }) => {
   await loginAs(page, 'planter');
   await createProjectFromTemplate(page, tagged(`Dates ${Date.now()}`));
 
   await page.getByRole('button', { name: /^Open settings for / }).click();
-  await expect(page.locator('#due_date')).toBeDisabled(); // read-only + disabled
+  await expect(page.locator('#due_date')).toBeEditable(); // editable since commit 131cb503 (feedback #1)
   await expect(page.locator('#start_date')).toBeEditable();
 });
 

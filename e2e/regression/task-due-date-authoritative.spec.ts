@@ -38,13 +38,21 @@ test('@regression @tasks instance task form edits the due date and it persists',
   await expect(due).toBeVisible();
   await expect(page.locator('#start_date')).toHaveCount(0);
 
-  // Set a new due date and save. The form (in its dialog) closes on success.
+  // Set a new due date and save. The edit form closes on success, but the panel stays open in
+  // its (modal) details view for the same task — see TasksPage.tsx handleTaskSubmit, which clears
+  // taskFormState but keeps selectedTask.
   const newDue = '2027-06-15';
   await due.fill(newDue);
   await form.getByRole('button', { name: 'Save Changes' }).click();
   await expect(form).toBeHidden();
 
-  // Reopen the same first row — the chosen due date must have persisted.
+  // The details panel is a Radix Dialog (aria-modal) that makes the task list behind it inert, so
+  // reopening a treeitem is impossible until the panel is closed. Close it first.
+  await page.getByRole('button', { name: 'Close panel' }).click();
+  await expect(page.getByTestId('task-details-panel')).toBeHidden();
+
+  // Reopen the same first row (All Tasks orders by serial number, so first row == same task) — the
+  // chosen due date must have persisted through the save + refetch.
   await page.getByRole('treeitem').first().click();
   await expect(page.locator('#due_date')).toHaveValue(newDue);
 });
