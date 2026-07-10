@@ -32,7 +32,15 @@ test('@regression @dates editing the project due date rescales to land on it', a
   const target = addDays(startIso, 140);
   await dueField.fill(target);
   await page.getByRole('button', { name: 'Save Changes' }).click();
-  await expect(page.getByTestId('edit-project-modal')).toBeHidden(); // save fully resolved
+  // The mutation awaits the rescale_project_incomplete RPC before it resolves, so once the modal
+  // closes the SERVER already holds the rescaled (rolled-up) project due.
+  await expect(page.getByTestId('edit-project-modal')).toBeHidden(); // save + rescale fully resolved
+
+  // Reload before reopening. EditProjectModal snapshots its form values on open (react-hook-form
+  // defaultValues), so reopening before the onSuccess invalidation's background refetch lands would
+  // freeze the field on the STALE pre-rescale due for the whole timeout — that was the REG-20 flake.
+  // Reloading forces a fresh read of the server-authoritative due, which is what we mean to assert.
+  await page.reload();
 
   // Reopen: the derived project due must now equal the chosen target exactly (pinned end).
   await page.getByRole('button', { name: /^Open settings for / }).click();
