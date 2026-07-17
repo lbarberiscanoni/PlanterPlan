@@ -34,6 +34,7 @@ const getTaskSchema = (origin: 'instance' | 'template') => z.object({
  }, z.number().min(0, 'Duration must be zero or greater').optional()),
  start_date: z.string().optional().nullable(),
  due_date: z.string().optional().nullable(),
+ assignee_id: z.string().nullable().optional(),
  templateId: z.string().nullable().optional(),
  recurrence_kind: z.enum(['none', 'weekly', 'monthly']).optional(),
  recurrence_weekday: z.preprocess((val) => {
@@ -84,6 +85,7 @@ const createInitialState = (task?: Partial<TaskRow> | null) => {
  : undefined,
  start_date: extractDateInput(task?.start_date),
  due_date: extractDateInput(task?.due_date),
+ assignee_id: task?.assignee_id ?? null,
  templateId: null,
  recurrence_kind: (rec?.kind ?? 'none') as 'none' | 'weekly' | 'monthly',
  recurrence_weekday: rec?.kind === 'weekly' ? rec.weekday : 1,

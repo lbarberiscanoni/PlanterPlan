@@ -63,9 +63,8 @@ export interface UseTaskFiltersArgs {
  currentUserId?: string | null;
  now?: Date;
  /**
-  * When set, scopes every view EXCEPT `my_tasks` to a single project root.
-  * `my_tasks` intentionally stays cross-project (a planter/PM tracking their
-  * own work across all projects). Null/undefined = all projects.
+  * When set, scopes every view — including `my_tasks` — to a single project
+  * root. Null/undefined = all projects.
   */
  projectScopeId?: string | null;
 }
@@ -138,9 +137,9 @@ export const filterAndSortTasks = ({
  }
 
  // Per-project scope: applied after the switch so it composes with every view
- // (including the `priority` builder). `my_tasks` is exempt — it stays
- // cross-project by design.
- if (projectScopeId && filter !== 'my_tasks') {
+ // (including `my_tasks` and the `priority` builder), scoping the list to the
+ // focused project.
+ if (projectScopeId) {
   filtered = filtered.filter((t) => t.root_id === projectScopeId);
  }
 
@@ -186,7 +185,7 @@ export const FILTER_LABELS: Record<TaskFilterKey, string> = {
 };
 
 export const EMPTY_STATE_COPY: Record<TaskFilterKey, string> = {
- my_tasks: 'No tasks found across your projects.',
+ my_tasks: 'No tasks assigned to you in this project.',
  priority: 'No overdue, due-soon, or started tasks right now.',
  overdue: 'Nothing is overdue. Nice work.',
  due_soon: 'No tasks are due in the next few days.',

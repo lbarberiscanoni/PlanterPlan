@@ -18,6 +18,8 @@ export interface TaskFormData {
  duration?: string | number | null;
  start_date?: string | Date | null;
  due_date?: string | Date | null;
+ /** Instance-only: auth user id this task is delegated to, or null when unassigned. */
+ assignee_id?: string | null;
 }
 
 /** Current task being updated (subset needed by the payload builder). */
@@ -55,6 +57,7 @@ export interface UpdatePayload {
  updated_at: string;
  start_date?: string | null;
  due_date?: string | null;
+ assignee_id?: string | null;
 }
 
 /** Shape of a task insert payload sent to the database. */
@@ -74,6 +77,7 @@ export interface InsertPayload {
  root_id?: string | null;
  start_date?: string | null;
  due_date?: string | null;
+ assignee_id?: string | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -136,6 +140,9 @@ export const constructUpdatePayload = (
  purpose: formData.purpose ?? null,
  actions: formData.actions ?? null,
  days_from_start: parsedDays,
+ // Delegation: empty selection ("Unassigned") persists as null. Template edits
+ // round-trip the existing value unchanged (the picker is instance-only).
+ assignee_id: formData.assignee_id ?? null,
  updated_at: nowUtcIso(),
  };
 
@@ -194,6 +201,7 @@ export const constructCreatePayload = (
  position: (maxPosition ?? 0) + POSITION_STEP,
  is_complete: false,
  root_id: rootId,
+ assignee_id: formData.assignee_id ?? null,
  };
 
  if (parsedDuration !== null) {

@@ -1,11 +1,29 @@
-import { useFormContext } from 'react-hook-form';
+import { useFormContext, Controller } from 'react-hook-form';
 import type { ReactNode } from 'react';
 import type { TaskFormData, TeamMemberWithProfile } from '@/shared/db/app.types';
 import { Input } from '@/shared/ui/input';
 import { Label } from '@/shared/ui/label';
 import { Textarea } from '@/shared/ui/textarea';
+import {
+ Select,
+ SelectContent,
+ SelectItem,
+ SelectTrigger,
+ SelectValue,
+} from '@/shared/ui/select';
 import { useAuth } from '@/shared/contexts/auth-context';
 import { canEditTemplates } from '@/features/tasks/lib/task-permissions';
+
+// Radix Select items can't carry an empty-string value, so map "Unassigned"
+// to/from null via a sentinel (mirrors the ALL_PROJECTS pattern in TasksPage).
+const UNASSIGNED = '__unassigned__';
+
+/** Best available human label for a project member option. */
+const memberLabel = (m: TeamMemberWithProfile): string =>
+ m.display_name
+ ?? (m.first_name ? `${m.first_name} ${m.last_name ?? ''}`.trim() : null)
+ ?? m.email
+ ?? m.user_id;
 
 interface TaskFormFieldsProps {
  origin?: 'instance' | 'library' | string;
@@ -26,9 +44,11 @@ const TaskFormFields = ({
  itemLabel = 'Task',
  renderExtraFields,
  membershipRole,
+ teamMembers = [],
 }: TaskFormFieldsProps) => {
  const {
  register,
+ control,
  formState: { errors },
  } = useFormContext<TaskFormData>();
  const { user } = useAuth();
@@ -160,6 +180,33 @@ const TaskFormFields = ({
  )}
 
  {renderExtraFields && renderExtraFields()}
+
+ {origin === 'instance' && (
+ <div className="mt-4 space-y-2">
+ <Label htmlFor="assignee_id">Assigned to</Label>
+ <Controller
+ control={control}
+ name="assignee_id"
+ render={({ field }) => (
+ <Select
+ value={field.value ?? UNASSIGNED}
+ onValueChange={(v) => field.onChange(v === UNASSIGNED ? null : v)}
+ >
+ <SelectTrigger id="assignee_id" className="bg-card">
+ <SelectValue placeholder="Unassigned" />
+ </SelectTrigger>
+ <SelectContent>
+ <SelectItem value={UNASSIGNED}>Unassigned</SelectItem>
+ {teamMembers.map((m) => (
+ <SelectItem key={m.user_id} value={m.user_id}>{memberLabel(m)}</SelectItem>
+ ))}
+ </SelectContent>
+ </Select>
+ )}
+ />
+ <p className="text-xs text-slate-500">Delegate this {itemLabel.toLowerCase()} to a project member.</p>
+ </div>
+ )}
 
  {origin === 'instance' && (
  <div className="my-6 border-t border-slate-200 pt-4">

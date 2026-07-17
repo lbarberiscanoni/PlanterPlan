@@ -25,7 +25,7 @@ import { Textarea } from '@/shared/ui/textarea';
 import { Button } from '@/shared/ui/button';
 import { Label } from '@/shared/ui/label';
 import type { TaskItemData } from '@/features/tasks/components/TaskItem';
-import type { TaskRow } from '@/shared/db/app.types';
+import type { TaskRow, TeamMemberWithProfile } from '@/shared/db/app.types';
 import { extractStrategyTemplateFlag } from '@/features/tasks/lib/strategy-form';
 import { canTaskHaveChildren } from '@/features/tasks/lib/task-hierarchy';
 
@@ -79,6 +79,8 @@ interface TaskDetailsViewProps {
     allProjectTasks?: TaskItemData[];
     /** Retained for call-site compatibility; cloned scaffold delete bypass no longer depends on role. */
     membershipRole?: string;
+    /** Project members, used to resolve `assignee_id` to a human label. */
+    teamMembers?: TeamMemberWithProfile[];
     showComments?: boolean;
     [key: string]: unknown;
 }
@@ -91,6 +93,7 @@ const TaskDetailsView = ({
     onTaskUpdated,
     canEdit = true,
     allProjectTasks = [],
+    teamMembers = [],
     showComments = true,
 }: TaskDetailsViewProps) => {
     const { t } = useTranslation();
@@ -261,6 +264,31 @@ const TaskDetailsView = ({
                             </span>
                         )}
                     </div>
+
+                    {task.origin === 'instance' && (() => {
+                        const assigneeId = (task as TaskRow).assignee_id;
+                        const assignee = assigneeId
+                            ? teamMembers.find((m) => m.user_id === assigneeId)
+                            : undefined;
+                        const label = assignee
+                            ? (assignee.display_name
+                                ?? (assignee.first_name ? `${assignee.first_name} ${assignee.last_name ?? ''}`.trim() : null)
+                                ?? assignee.email
+                                ?? assignee.user_id)
+                            : null;
+                        return (
+                            <div className="flex flex-col gap-1">
+                                <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                                    {t('tasks.detail.assignee_label')}
+                                </span>
+                                <span
+                                    className={`inline-flex items-center px-3 py-1.5 rounded-full text-xs font-bold border ${label ? 'bg-sky-50 text-sky-700 border-sky-100' : 'bg-muted text-muted-foreground border-border'}`}
+                                >
+                                    {label ?? t('tasks.detail.unassigned')}
+                                </span>
+                            </div>
+                        );
+                    })()}
 
                     {task.is_premium && (
                         <div className="flex flex-col gap-1">

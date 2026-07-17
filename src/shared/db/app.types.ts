@@ -177,6 +177,8 @@ export interface TaskFormData {
     duration?: number;
     start_date?: string | null;
     due_date?: string | null;
+    /** Instance-only: auth user id this task is delegated to (`tasks.assignee_id`), or null when unassigned. */
+    assignee_id?: string | null;
     templateId?: string | null;
     /** Template-only: recurrence picker UI state. Normalised to `settings.recurrence` before persist. */
     recurrence_kind?: 'none' | 'weekly' | 'monthly';

@@ -248,7 +248,7 @@
         "milestones": "Milestones"
       },
       "empty": {
-        "my_tasks": "No tasks found across your projects.",
+        "my_tasks": "No tasks assigned to you in this project.",
         "priority": "No overdue, due-soon, or started tasks right now.",
         "overdue": "Nothing is overdue. Nice work.",
         "due_soon": "No tasks are due in the next few days.",
@@ -289,6 +289,8 @@
       "project_task": "Project Task",
       "template": "Template",
       "status_label": "Status",
+      "assignee_label": "Assigned To",
+      "unassigned": "Unassigned",
       "complete": "Complete",
       "incomplete": "Incomplete",
       "access_label": "Access",

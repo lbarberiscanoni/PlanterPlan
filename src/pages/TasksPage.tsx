@@ -331,7 +331,7 @@ export default function TasksPage() {
               filter,
               sort: effectiveSort,
               currentUserId,
-              projectScopeId: filter === 'my_tasks' ? null : effectiveProjectScopeId,
+              projectScopeId: effectiveProjectScopeId,
        });
        const normalizedSearchQuery = searchQuery.trim().toLowerCase();
        const visibleTasks = useMemo(() => {
@@ -520,9 +520,9 @@ export default function TasksPage() {
                                                                </Select>
                                                         </div>
 
-                                                        {filter !== 'my_tasks' && (
-                                                               <div className="flex flex-col gap-1">
-                                                                      <label htmlFor="task-project-scope" className="text-xs font-medium text-muted-foreground">{t('tasks.project_scope_label')}</label>
+                                                        {/* Project scope now applies to every view, including My Tasks. */}
+                                                        <div className="flex flex-col gap-1">
+                                                               <label htmlFor="task-project-scope" className="text-xs font-medium text-muted-foreground">{t('tasks.project_scope_label')}</label>
                                                                       <Select
                                                                              value={effectiveProjectScopeId ?? ALL_PROJECTS}
                                                                              onValueChange={(v) => setSelectedProjectId(v === ALL_PROJECTS ? null : v)}
@@ -537,8 +537,7 @@ export default function TasksPage() {
                                                                                     ))}
                                                                              </SelectContent>
                                                                       </Select>
-                                                               </div>
-                                                        )}
+                                                        </div>
 
                                                         {filter !== 'priority' && (
                                                                <div className="flex flex-col gap-1">

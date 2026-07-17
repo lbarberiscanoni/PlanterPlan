@@ -254,7 +254,7 @@
         "milestones": "Hitos"
       },
       "empty": {
-        "my_tasks": "No se han encontrado tareas en tus proyectos.",
+        "my_tasks": "No tienes tareas asignadas en este proyecto.",
         "priority": "No hay tareas vencidas, próximas a vencer o iniciadas ahora mismo.",
         "overdue": "Nada está atrasado. Buen trabajo.",
         "due_soon": "No hay tareas que venzan en los próximos días.",
@@ -295,6 +295,8 @@
       "project_task": "Tarea del proyecto",
       "template": "Plantilla",
       "status_label": "Estado",
+      "assignee_label": "Asignada a",
+      "unassigned": "Sin asignar",
       "complete": "Completa",
       "incomplete": "Incompleta",
       "access_label": "Acceso",
