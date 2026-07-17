@@ -9,6 +9,7 @@ import TaskDependencies from '@/features/tasks/components/TaskDependencies';
 import TaskComments from '@/features/tasks/components/TaskComments/TaskComments';
 import { useTaskActivity } from '@/shared/hooks/useActivityLog';
 import { ActivityRow } from '@/shared/ui/ActivityRow';
+import { RichText } from '@/shared/ui/RichText';
 import { formatCalendarDate, formatDisplayDate } from '@/shared/lib/date-engine';
 import { useAuth } from '@/shared/contexts/auth-context';
 import {
@@ -32,6 +33,27 @@ const emailDetailsSchema = z.object({
     recipient: z.string().email(),
 });
 type EmailDetailsFormData = z.infer<typeof emailDetailsSchema>;
+
+/**
+ * Action copy arrives as flowing prose whose steps are separated by a period +
+ * double space (`.  `), with a final "This action is complete once…" closing
+ * sentence. The original platform rendered these as an ordered list + a closing
+ * paragraph; the data migration flattened the markup. Rebuild that structure so
+ * it renders as a real <ol>. Single-sentence actions render unchanged; any
+ * embedded <a> links pass through (RichText sanitizes the result).
+ */
+function formatActionSteps(actions: string): string {
+    const segments = actions
+        .split(/(?<=[.?!])\s{2,}/)
+        .map((s) => s.trim())
+        .filter(Boolean);
+    if (segments.length <= 1) return actions;
+    const last = segments[segments.length - 1];
+    const hasCloser = /\b(this action is complete|is complete|complete (once|when))\b/i.test(last);
+    const steps = hasCloser ? segments.slice(0, -1) : segments;
+    const list = `<ol>${steps.map((s) => `<li>${s}</li>`).join('')}</ol>`;
+    return hasCloser ? `${list}<p>${last}</p>` : list;
+}
 
 function buildEmailBody(task: TaskItemData, t: TFunction): string {
     const emptyDate = t('tasks.detail.email_body_empty_date');
@@ -141,7 +163,7 @@ const TaskDetailsView = ({
                             <h3 className="text-base font-semibold text-slate-800 mb-2">
                                 {t('tasks.detail.purpose_heading')}
                             </h3>
-                            <p className="text-slate-700 leading-relaxed text-base whitespace-pre-wrap">{task.purpose}</p>
+                            <RichText html={task.purpose} className="text-slate-700 leading-relaxed text-base whitespace-pre-wrap" />
                         </div>
                     )}
 
@@ -151,7 +173,7 @@ const TaskDetailsView = ({
                             <h3 className="text-sm font-bold text-slate-900 mb-2 uppercase tracking-wide">
                                 {t('tasks.detail.overview_heading')}
                             </h3>
-                            <p className="text-slate-600 leading-relaxed text-sm whitespace-pre-wrap">{task.description}</p>
+                            <RichText html={task.description} className="text-slate-600 leading-relaxed text-sm whitespace-pre-wrap" />
                         </div>
                     )}
 
@@ -161,9 +183,7 @@ const TaskDetailsView = ({
                             <h3 className="text-sm font-bold text-slate-900 mb-2 uppercase tracking-wide">
                                 {t('tasks.detail.actions_heading')}
                             </h3>
-                            <div className="p-4 bg-green-50 border border-green-200 text-slate-700 leading-relaxed text-sm whitespace-pre-wrap">
-                                {task.actions}
-                            </div>
+                            <RichText html={formatActionSteps(task.actions)} className="p-4 bg-green-50 border border-green-200 text-slate-700 leading-relaxed text-sm" />
                         </div>
                     )}
 
