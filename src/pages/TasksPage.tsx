@@ -68,13 +68,18 @@ export default function TasksPage() {
        const updateTaskMutation = useUpdateTask();
        const confirm = useConfirm();
        const [searchParams, setSearchParams] = useSearchParams();
+       const requestedView = searchParams.get('view');
+       const initialFilter = requestedView && FILTER_KEYS.includes(requestedView as TaskFilterKey)
+              ? requestedView as TaskFilterKey
+              : 'priority';
+       const requestedProject = searchParams.get('project');
 
        const findTask = useCallback((id: string) => tasks.find((t: TaskRow) => t.id === id), [tasks]);
        const invalidateTasks = useCallback(() => queryClient.invalidateQueries({ queryKey: ['tasks'] }), [queryClient]);
 
        // Default to the "Today's Tasks" view (internal key `priority`) — the
        // day-to-day landing view planters asked for, not the full backlog.
-       const [filter, setFilter] = useState<TaskFilterKey>('priority');
+       const [filter, setFilter] = useState<TaskFilterKey>(initialFilter);
        const [groupMode, setGroupMode] = useState<'grouped' | 'flat'>('grouped');
        const [sort, setSort] = useState<TaskSortKey>('chronological');
        const [selectedTask, setSelectedTask] = useState<TaskRow | null>(null);
@@ -89,7 +94,9 @@ export default function TasksPage() {
        // `undefined` = the user hasn't touched the project-scope selector yet, so
        // the page defaults to their current project (see effectiveProjectScopeId).
        // Once they pick a project the value is its id; "All projects" sets it null.
-       const [selectedProjectId, setSelectedProjectId] = useState<string | null | undefined>(undefined);
+       const [selectedProjectId, setSelectedProjectId] = useState<string | null | undefined>(
+              requestedProject === 'all' ? null : requestedProject ?? undefined,
+       );
        const effectiveSort: TaskSortKey = filter === 'priority' ? 'chronological' : sort;
        // The Milestones view is a high-level overview: milestones only, never
        // grouped under their parent phase as leaf rows. Force the flat layout so
@@ -126,12 +133,16 @@ export default function TasksPage() {
               setSelectedTask(task);
               setTaskFormState({ mode: 'edit', origin: (task.origin as 'instance' | 'template') ?? 'instance' });
        }, []);
+       const openTaskInViewMode = useCallback((task: TaskRow) => {
+              setSelectedTask(task);
+              setTaskFormState(null);
+       }, []);
        const handleTaskClick = useCallback((task: TaskRow) => {
-              openTaskInEditMode(task);
+              openTaskInViewMode(task);
               const next = new URLSearchParams(searchParams);
               next.set('task', task.id);
               setSearchParams(next, { replace: false });
-       }, [openTaskInEditMode, searchParams, setSearchParams]);
+       }, [openTaskInViewMode, searchParams, setSearchParams]);
        const closeDetailsPanel = useCallback(() => {
               setSelectedTask(null);
               setTaskFormState(null);
@@ -141,7 +152,7 @@ export default function TasksPage() {
                      setSearchParams(next, { replace: true });
               }
        }, [searchParams, setSearchParams]);
-       // Deep-link: when the URL carries `?task=<id>`, open that task in edit
+       // Deep-link: when the URL carries `?task=<id>`, open that task in read
        // mode once its row is present in the loaded list.
        const deepLinkTaskId = searchParams.get('task');
        useEffect(() => {
@@ -153,8 +164,8 @@ export default function TasksPage() {
               const target = tasks.find((tk: TaskRow) => tk.id === deepLinkTaskId);
               if (!target) return;
               handledDeepLinkRef.current = deepLinkTaskId;
-              openTaskInEditMode(target);
-       }, [deepLinkTaskId, tasks, openTaskInEditMode]);
+              openTaskInViewMode(target);
+       }, [deepLinkTaskId, tasks, openTaskInViewMode]);
        // Fire once per mount, after the task list first loads, capturing the
        // landing filter and how many tasks are overdue at that moment.
        const tasksViewTrackedRef = useRef(false);
@@ -380,8 +391,8 @@ export default function TasksPage() {
               [visibleTasks, withImmediateChildrenForStatus],
        );
        // Milestone-grouped layout (default). The priority filter keeps its own
-       // urgency-aware builder; every other filter groups its visible rows by
-       // nearest milestone. Either way the grouped set covers the same tasks as
+       // candidate selection but follows the project's document order; every
+       // other filter groups its visible rows by nearest milestone. Either way the grouped set covers the same tasks as
        // the flat list, so toggling Grouped/Flat never changes which tasks show.
        const groupedSections = useMemo(
               () => {
@@ -391,9 +402,13 @@ export default function TasksPage() {
                             : buildMilestoneTaskGroups({
                                    tasks,
                                    candidateTasks: visibleTaskRows,
-                                   // All Tasks orders rows within each milestone by serial
-                                   // number; other views keep the due-date urgency order.
-                                   orderIndex: filter === 'all_tasks' ? computeProjectTaskOrder(tasks) : undefined,
+                                   sort: effectiveSort,
+                                   // Preserve the explicitly requested serial order for the
+                                   // chronological All Tasks view. Its Alphabetical option,
+                                   // and every My Tasks sort, follow the selected menu value.
+                                   orderIndex: filter === 'all_tasks' && effectiveSort === 'chronological'
+                                          ? computeProjectTaskOrder(tasks)
+                                          : undefined,
                             });
                      // Backfill the project label from the authoritative roots map so
                      // every section is attributed even when its root is outside the
@@ -404,7 +419,7 @@ export default function TasksPage() {
                             return projectTitle === group.projectTitle ? group : { ...group, projectTitle };
                      });
               },
-              [groupMode, filter, isMilestonesOverview, tasks, visibleTaskRows, projectTitleByRootId],
+              [groupMode, filter, effectiveSort, isMilestonesOverview, tasks, visibleTaskRows, projectTitleByRootId],
        );
 
        const sensors = useSensors(
@@ -739,6 +754,7 @@ export default function TasksPage() {
                                                  onClose={closeDetailsPanel}
                                                  canEdit={selectedCanEdit}
                                                  handleEditTask={selectedCanEdit ? ((task) => openTaskInEditMode(task as TaskRow)) : undefined}
+                                                 onStatusChange={selectedCanEdit ? handleStatusChange : undefined}
                                                  onDeleteTaskWrapper={selectedCanDelete ? handleDeleteTaskById : undefined}
                                                  className="w-full border-l-0 shadow-none sm:w-full sm:min-w-0 sm:max-w-none"
                                           />

@@ -51,6 +51,7 @@ export interface TaskDetailsPanelProps {
  setTaskFormState?: (state: TaskFormState) => void;
  handleAddChildTask?: (task: TaskItemData) => void;
  handleEditTask?: (task: TaskItemData) => void;
+ onStatusChange?: (taskId: string, status: string) => void;
  onDeleteTaskWrapper?: (taskId: string) => Promise<void>;
  fetchTasks?: () => void;
  membershipRole?: string;
@@ -74,6 +75,7 @@ export default function TaskDetailsPanel({
  setTaskFormState,
  handleAddChildTask,
  handleEditTask,
+ onStatusChange,
  onDeleteTaskWrapper,
  fetchTasks,
  membershipRole,
@@ -133,6 +135,7 @@ export default function TaskDetailsPanel({
  task={selectedTask as TaskItemData}
  onAddChildTask={handleAddChildTask}
  onEditTask={handleEditTask}
+ onStatusChange={onStatusChange}
  onDeleteTask={onDeleteTaskWrapper ? ((t) => { void onDeleteTaskWrapper(t.id); }) : undefined}
  onTaskUpdated={fetchTasks || (() => { })}
  canEdit={canEdit}

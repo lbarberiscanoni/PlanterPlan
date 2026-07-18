@@ -144,8 +144,8 @@ export default function Home() {
                                 <MetaChip icon={<Calendar className="h-4 w-4" />} label={t('home.target_launch')} value={launchDate} />
                                 <MetaChip
                                     icon={<Users className="h-4 w-4" />}
-                                    label={t('home.core_team')}
-                                    value={t('home.team_people', { count: teamMembers.length })}
+                                    label={t('home.project_team')}
+                                    value={t('home.team_users', { count: teamMembers.length })}
                                 />
                                 {project?.location && (
                                     <MetaChip icon={<MapPin className="h-4 w-4" />} label={t('home.location')} value={project.location} />
@@ -162,8 +162,9 @@ export default function Home() {
                                     <ArrowRight className="h-4 w-4" />
                                 </Link>
                                 <Link
-                                    to="/tasks"
+                                    to="/tasks?view=my_tasks&project=all"
                                     className="inline-flex items-center gap-1 text-sm font-medium text-brand-600 hover:underline"
+                                    data-testid="home-my-tasks-link"
                                 >
                                     {t('home.view_all_tasks')}
                                     <ArrowRight className="h-3.5 w-3.5" />
@@ -216,18 +217,26 @@ export default function Home() {
                             <p className="text-sm text-slate-500">{t('home.loading')}</p>
                         ) : (
                             phaseData.map((phase, idx) => (
-                                <div key={phase.id} className="flex items-center gap-3">
+                                <Link
+                                    key={phase.id}
+                                    to={currentProjectId ? `/project/${currentProjectId}?phase=${phase.id}` : '/home'}
+                                    className="group flex items-center gap-3 rounded-md transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2"
+                                    data-testid={`home-phase-link-${phase.id}`}
+                                >
                                     <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-slate-100 text-xs font-semibold text-slate-600">
                                         {idx + 1}
                                     </span>
-                                    <span className="w-40 shrink-0 truncate text-sm font-medium text-slate-700">
+                                    <span
+                                        className="w-40 shrink-0 truncate text-sm font-medium text-slate-700 group-hover:text-brand-700"
+                                        data-testid="home-phase-name"
+                                    >
                                         {phase.fullName}
                                     </span>
                                     <Progress value={phase.progress} className="h-2 flex-1 bg-slate-100" />
                                     <span className="w-10 shrink-0 text-right text-sm font-medium text-slate-600">
                                         {phase.progress}%
                                     </span>
-                                </div>
+                                </Link>
                             ))
                         )}
                     </div>

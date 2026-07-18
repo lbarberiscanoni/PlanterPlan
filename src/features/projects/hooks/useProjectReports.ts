@@ -1,6 +1,5 @@
 import { useMemo } from 'react';
 import { TASK_STATUS } from '@/shared/constants';
-import { CheckCircle2, Clock, AlertTriangle, Circle } from 'lucide-react';
 import {
  dateStringToMonthKey,
  dateStringToUtcMidnight,
@@ -43,25 +42,6 @@ export function useProjectReports(
  blocked: tasks.filter((t) => t.status === TASK_STATUS.BLOCKED).length,
  };
 
- const statsConfig = [
- {
- label: 'Completed', value: tasksByStatus.completed, icon: CheckCircle2,
- borderClass: 'border-green-200', bgClass: 'bg-green-100', hoverBgClass: 'bg-green-500', textClass: 'text-green-600'
- },
- {
- label: 'In Progress', value: tasksByStatus.in_progress, icon: Clock,
- borderClass: 'border-orange-200', bgClass: 'bg-orange-100', hoverBgClass: 'bg-orange-500', textClass: 'text-orange-600'
- },
- {
- label: 'Not Started', value: tasksByStatus.not_started, icon: Circle,
- borderClass: 'border-indigo-200', bgClass: 'bg-indigo-100', hoverBgClass: 'bg-indigo-500', textClass: 'text-indigo-600'
- },
- {
- label: 'Blocked', value: tasksByStatus.blocked, icon: AlertTriangle,
- borderClass: 'border-red-200', bgClass: 'bg-red-100', hoverBgClass: 'bg-red-500', textClass: 'text-red-600'
- },
- ];
-
  // Drop `na` (not applicable) tasks from the progress denominator entirely —
  // they leave the total so progress reaches 100% once every remaining task is
  // completed.
@@ -100,6 +80,7 @@ export function useProjectReports(
   title: m.title,
   due_date: m.due_date,
   updated_at: m.updated_at,
+  notes: m.notes,
   status: m.status,
   is_complete: m.is_complete,
   completed: completedCount,
@@ -115,9 +96,10 @@ export function useProjectReports(
  });
 
  const taskDistribution = [
- { name: 'To Do', value: tasksByStatus.not_started },
- { name: 'In Progress', value: tasksByStatus.in_progress },
- { name: 'Done', value: tasksByStatus.completed },
+ { key: 'completed' as const, value: tasksByStatus.completed },
+ { key: 'in_progress' as const, value: tasksByStatus.in_progress },
+ { key: 'not_started' as const, value: tasksByStatus.not_started },
+ { key: 'blocked' as const, value: tasksByStatus.blocked },
  ];
 
  // Month-scoped milestone lists (Wave 20)
@@ -151,7 +133,6 @@ export function useProjectReports(
  });
 
  return {
- statsConfig,
  overallProgress,
  completedTasks,
  totalTasks,

@@ -62,19 +62,19 @@ export default function ProjectHeader({
     return (
         <div className="animate-slide-up bg-card border-b border-border transition-all shadow-sm">
             <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-                <div className="flex items-center gap-4 mb-6">
-                    <Link to="/tasks" aria-label={t('common.back')}>
-                        <Button variant="ghost" size="icon" className="rounded-full">
-                            <ArrowLeft className="w-5 h-5" />
-                        </Button>
-                    </Link>
-                    <div className="flex items-center gap-4 flex-1">
-                        <div className="w-14 h-14 bg-orange-500 rounded-xl flex items-center justify-center shadow-md shadow-orange-500/20">
+                <div className="mb-6">
+                    <div className="flex items-start gap-4">
+                        <Link to="/tasks" aria-label={t('common.back')}>
+                            <Button variant="ghost" size="icon" className="rounded-full">
+                                <ArrowLeft className="w-5 h-5" />
+                            </Button>
+                        </Link>
+                        <div className="w-14 h-14 shrink-0 bg-orange-500 rounded-xl flex items-center justify-center shadow-md shadow-orange-500/20">
                             <Icon className="w-7 h-7 text-white" />
                         </div>
-                        <div>
-                            <div className="flex items-center gap-3">
-                                <h1 className="text-2xl font-bold text-card-foreground">{project.title}</h1>
+                        <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-center gap-3">
+                                <h1 className="min-w-0 break-words text-2xl font-bold leading-tight text-card-foreground">{project.title}</h1>
                                 <Badge
                                     data-testid="project-derived-state-badge"
                                     className={DERIVED_PROJECT_STATE_BADGE_CLASSES[derivedState.state]}
@@ -86,7 +86,7 @@ export default function ProjectHeader({
                         </div>
                     </div>
 
-                    <div className="hidden md:flex items-center gap-2 flex-wrap">
+                    <div className="hidden md:flex items-center justify-end gap-2 flex-wrap mt-4">
                         <Button
                             variant="ghost"
                             size="sm"

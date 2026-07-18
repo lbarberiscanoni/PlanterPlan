@@ -9,6 +9,7 @@ import { Progress } from '@/shared/ui/progress';
 import { ArrowLeft, Loader2, BarChart, TrendingUp, CheckCircle2, AlertTriangle, Clock } from 'lucide-react';
 import { STALE_TIMES } from '@/shared/lib/react-query-config';
 import { getNow, toMonthKey } from '@/shared/lib/date-engine';
+import { formatDateLocalized } from '@/shared/i18n/formatters';
 import { useAuth } from '@/shared/contexts/auth-context';
 import {
     Select,
@@ -24,14 +25,19 @@ import {
     PieChart,
     Pie,
     Cell,
-    Legend,
 } from 'recharts';
 
 import { useProjectReports } from '@/features/projects/hooks/useProjectReports';
 import { track } from '@/shared/analytics/posthog';
 import type { TaskRow } from '@/shared/db/app.types';
 
-const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042'];
+const STATUS_COLORS = ['#22c55e', '#f59e0b', '#3b82f6', '#ef4444'];
+const STATUS_TRANSLATION_KEYS = {
+    completed: 'projects.reports.status_completed',
+    in_progress: 'projects.reports.status_in_progress',
+    not_started: 'projects.reports.status_not_started',
+    blocked: 'projects.reports.status_blocked',
+} as const;
 
 export default function Reports() {
     const { t } = useTranslation();
@@ -76,7 +82,6 @@ export default function Reports() {
     const [selectedMonth, setSelectedMonth] = useState<string>(() => toMonthKey(getNow()));
 
     const {
-        statsConfig,
         overallProgress,
         completedTasks,
         totalTasks,
@@ -86,6 +91,10 @@ export default function Reports() {
         overdueMilestones,
         upcomingThisMonth,
     } = useProjectReports(tasks, phases, { selectedMonth });
+    const localizedTaskDistribution = taskDistribution.map((entry) => ({
+        ...entry,
+        name: t(STATUS_TRANSLATION_KEYS[entry.key]),
+    }));
 
     if (isLoading) {
         return (
@@ -167,26 +176,6 @@ export default function Reports() {
                         </div>
                     ) : (
                         <>
-                            <div className="grid grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
-                                {statsConfig.map((stat) => (
-                                    <div key={stat.label} className="animate-slide-up">
-                                        <Card className={`p-6 border border-slate-200 bg-white shadow-sm hover:shadow-lg transition-all duration-300 group hover:${stat.borderClass}`}>
-                                            <div className="flex items-center justify-between">
-                                                <div>
-                                                    <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
-                                                        {stat.label}
-                                                    </p>
-                                                    <p className="text-3xl font-bold text-slate-900">{stat.value}</p>
-                                                </div>
-                                                <div className={`w-12 h-12 rounded-xl flex items-center justify-center transition-colors ${stat.bgClass} group-hover:${stat.hoverBgClass}`}>
-                                                    <stat.icon className={`w-6 h-6 transition-colors ${stat.textClass} group-hover:text-white`} />
-                                                </div>
-                                            </div>
-                                        </Card>
-                                    </div>
-                                ))}
-                            </div>
-
                             <div className="animate-slide-up">
                                 <Card className="p-8 mb-10 border border-slate-200 bg-slate-50/50 shadow-md hover:shadow-xl transition-all duration-300">
                                     <div className="flex items-center justify-between mb-6">
@@ -205,76 +194,49 @@ export default function Reports() {
                                 </Card>
                             </div>
 
-                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                                <div className="bg-card rounded-xl shadow-sm border border-border p-6">
+                            <div className="animate-slide-up">
+                                <div className="bg-card rounded-xl shadow-sm border border-border p-6" data-testid="report-task-status-chart">
                                     <h2 className="text-lg font-semibold text-foreground mb-4">{t('projects.reports.task_distribution_heading')}</h2>
-                                    <div className="h-64">
-                                        <ResponsiveContainer width="100%" height="100%">
-                                            <PieChart>
-                                                <Pie
-                                                    data={taskDistribution}
-                                                    cx="50%"
-                                                    cy="50%"
-                                                    innerRadius={60}
-                                                    outerRadius={80}
-                                                    paddingAngle={5}
-                                                    dataKey="value"
+                                    <div className="grid min-w-0 grid-cols-1 md:grid-cols-[minmax(0,1fr)_16rem] items-center gap-6">
+                                        <div className="h-64 min-w-0">
+                                            <ResponsiveContainer width="100%" height="100%" minWidth={0}>
+                                                <PieChart>
+                                                    <Pie
+                                                        data={localizedTaskDistribution}
+                                                        cx="50%"
+                                                        cy="50%"
+                                                        innerRadius={60}
+                                                        outerRadius={90}
+                                                        paddingAngle={3}
+                                                        dataKey="value"
+                                                    >
+                                                        {localizedTaskDistribution.map((_entry, index) => (
+                                                            <Cell key={`cell-${index}`} fill={STATUS_COLORS[index]} />
+                                                        ))}
+                                                    </Pie>
+                                                    <Tooltip
+                                                        contentStyle={{ backgroundColor: 'hsl(var(--card))', borderColor: 'hsl(var(--border))', borderRadius: '8px' }}
+                                                    />
+                                                </PieChart>
+                                            </ResponsiveContainer>
+                                        </div>
+                                        <ul className="space-y-3" data-testid="report-task-status-legend">
+                                            {localizedTaskDistribution.map((entry, index) => (
+                                                <li
+                                                    key={entry.key}
+                                                    className="flex items-center gap-3"
+                                                    data-testid={`report-task-status-${entry.key}`}
                                                 >
-                                                    {taskDistribution.map((_entry, index) => (
-                                                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                                                    ))}
-                                                </Pie>
-                                                <Tooltip
-                                                    contentStyle={{ backgroundColor: 'hsl(var(--card))', borderColor: 'hsl(var(--border))', borderRadius: '8px' }}
-                                                />
-                                                <Legend />
-                                            </PieChart>
-                                        </ResponsiveContainer>
-                                    </div>
-                                </div>
-
-                                <div className="bg-card rounded-xl shadow-sm border border-border p-6">
-                                    <div className="flex items-center justify-between mb-4">
-                                        <h2 className="text-lg font-semibold text-foreground">{t('projects.reports.monthly_breakdown')}</h2>
-                                        <label className="flex items-center gap-2 text-sm">
-                                            <span className="text-muted-foreground">{t('projects.reports.month_label')}</span>
-                                            <input
-                                                type="month"
-                                                value={selectedMonth}
-                                                onChange={(e) => setSelectedMonth(e.target.value || toMonthKey(getNow()))}
-                                                className="px-2 py-1 rounded-md border border-border bg-card text-sm"
-                                                aria-label={t('projects.reports.month_aria')}
-                                            />
-                                        </label>
-                                    </div>
-                                    <div className="space-y-5 max-h-80 overflow-y-auto pr-1">
-                                        <MilestoneList
-                                            heading={t('projects.reports.completed_this_month')}
-                                            icon={CheckCircle2}
-                                            accent="text-green-600"
-                                            emptyText={t('projects.reports.none_completed')}
-                                            noDueDateLabel={t('projects.reports.no_due_date')}
-                                            items={completedThisMonth}
-                                            onItemClick={() => navigate(`/Project/${projectId}`)}
-                                        />
-                                        <MilestoneList
-                                            heading={t('projects.reports.overdue_heading')}
-                                            icon={AlertTriangle}
-                                            accent="text-red-600"
-                                            emptyText={t('projects.reports.none_overdue')}
-                                            noDueDateLabel={t('projects.reports.no_due_date')}
-                                            items={overdueMilestones}
-                                            onItemClick={() => navigate(`/Project/${projectId}`)}
-                                        />
-                                        <MilestoneList
-                                            heading={t('projects.reports.upcoming_this_month')}
-                                            icon={Clock}
-                                            accent="text-orange-600"
-                                            emptyText={t('projects.reports.none_upcoming')}
-                                            noDueDateLabel={t('projects.reports.no_due_date')}
-                                            items={upcomingThisMonth}
-                                            onItemClick={() => navigate(`/Project/${projectId}`)}
-                                        />
+                                                    <span
+                                                        className="flex h-9 min-w-9 items-center justify-center rounded-full px-2 text-sm font-bold text-white"
+                                                        style={{ backgroundColor: STATUS_COLORS[index] }}
+                                                    >
+                                                        {entry.value}
+                                                    </span>
+                                                    <span className="text-sm font-medium text-foreground">{entry.name}</span>
+                                                </li>
+                                            ))}
+                                        </ul>
                                     </div>
                                 </div>
                             </div>
@@ -309,6 +271,56 @@ export default function Reports() {
                                     </div>
                                 </Card>
                             </div>
+
+                            <div className="animate-slide-up mt-8" data-testid="report-milestone-details">
+                                <Card className="p-8 border border-border bg-card shadow-lg">
+                                    <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-8">
+                                        <h3 className="text-xl font-bold text-foreground">{t('projects.reports.milestone_details_heading')}</h3>
+                                        <label className="flex items-center gap-2 text-sm">
+                                            <span className="text-muted-foreground">{t('projects.reports.month_label')}</span>
+                                            <input
+                                                type="month"
+                                                value={selectedMonth}
+                                                onChange={(e) => setSelectedMonth(e.target.value || toMonthKey(getNow()))}
+                                                className="px-2 py-1 rounded-md border border-border bg-card text-sm"
+                                                aria-label={t('projects.reports.month_aria')}
+                                            />
+                                        </label>
+                                    </div>
+                                    <div className="space-y-8" data-testid="report-milestone-details-sections">
+                                        <MilestoneList
+                                            heading={t('projects.reports.completed_this_month')}
+                                            icon={CheckCircle2}
+                                            accent="text-green-600"
+                                            emptyText={t('projects.reports.none_completed')}
+                                            noDueDateLabel={t('projects.reports.no_due_date')}
+                                            notesLabel={t('projects.reports.notes_label')}
+                                            items={completedThisMonth}
+                                            onItemClick={() => navigate(`/Project/${projectId}`)}
+                                        />
+                                        <MilestoneList
+                                            heading={t('projects.reports.overdue_heading')}
+                                            icon={AlertTriangle}
+                                            accent="text-red-600"
+                                            emptyText={t('projects.reports.none_overdue')}
+                                            noDueDateLabel={t('projects.reports.no_due_date')}
+                                            notesLabel={t('projects.reports.notes_label')}
+                                            items={overdueMilestones}
+                                            onItemClick={() => navigate(`/Project/${projectId}`)}
+                                        />
+                                        <MilestoneList
+                                            heading={t('projects.reports.upcoming_this_month')}
+                                            icon={Clock}
+                                            accent="text-orange-600"
+                                            emptyText={t('projects.reports.none_upcoming')}
+                                            noDueDateLabel={t('projects.reports.no_due_date')}
+                                            notesLabel={t('projects.reports.notes_label')}
+                                            items={upcomingThisMonth}
+                                            onItemClick={() => navigate(`/Project/${projectId}`)}
+                                        />
+                                    </div>
+                                </Card>
+                            </div>
                         </>
                     )}
                 </div>
@@ -321,6 +333,7 @@ interface MilestoneListItem {
     id: string;
     title: string | null;
     due_date: string | null;
+    notes: string | null;
     progress: number;
 }
 
@@ -330,11 +343,12 @@ interface MilestoneListProps {
     accent: string;
     emptyText: string;
     noDueDateLabel: string;
+    notesLabel: string;
     items: MilestoneListItem[];
     onItemClick: () => void;
 }
 
-function MilestoneList({ heading, icon: Icon, accent, emptyText, noDueDateLabel, items, onItemClick }: MilestoneListProps) {
+function MilestoneList({ heading, icon: Icon, accent, emptyText, noDueDateLabel, notesLabel, items, onItemClick }: MilestoneListProps) {
     return (
         <section>
             <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground mb-2">
@@ -350,11 +364,23 @@ function MilestoneList({ heading, icon: Icon, accent, emptyText, noDueDateLabel,
                         <li
                             key={m.id}
                             onClick={onItemClick}
-                            className="flex items-center justify-between p-3 bg-muted rounded-lg border border-border cursor-pointer hover:border-brand-300 hover:shadow-sm transition-all"
+                            data-testid={`report-milestone-${m.id}`}
+                            className="flex flex-col gap-3 p-4 bg-muted rounded-lg border border-border cursor-pointer hover:border-brand-300 hover:shadow-sm transition-all sm:flex-row sm:items-start sm:justify-between"
                         >
                             <div className="min-w-0 flex-1">
-                                <h4 className="font-medium text-foreground truncate text-sm">{m.title}</h4>
-                                <p className="text-xs text-muted-foreground mt-1">{m.due_date || noDueDateLabel}</p>
+                                <h4 className="font-medium text-foreground text-sm">{m.title}</h4>
+                                <p className="text-xs text-muted-foreground mt-1">
+                                    {m.due_date ? formatDateLocalized(m.due_date, 'short') : noDueDateLabel}
+                                </p>
+                                {m.notes?.trim() && (
+                                    <div
+                                        className="mt-3 border-l-2 border-brand-300 pl-3 text-sm text-muted-foreground"
+                                        data-testid={`report-milestone-notes-${m.id}`}
+                                    >
+                                        <span className="font-semibold text-foreground">{notesLabel}</span>{' '}
+                                        <span className="whitespace-pre-wrap">{m.notes.trim()}</span>
+                                    </div>
+                                )}
                             </div>
                             <span className="text-xs px-2 py-1 rounded-full bg-slate-100 text-slate-700 ml-4 flex-shrink-0">
                                 {m.progress}%

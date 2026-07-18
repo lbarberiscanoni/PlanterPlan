@@ -22,6 +22,7 @@ type TaskRow = {
     is_complete: boolean | null
     due_date: string | null
     updated_at: string | null
+    notes: string | null
     supervisor_email: string | null
 }
 
@@ -67,6 +68,7 @@ function buildProjectPayload(
             status: m.status,
             is_complete: m.is_complete,
             updated_at: m.updated_at,
+            notes: m.notes,
         }))
 
     const completedThisMonth = milestones.filter((m) => {
@@ -109,7 +111,7 @@ async function fetchProjectRoots(
 ): Promise<TaskRow[]> {
     let query = supabase
         .from('tasks')
-        .select('id, root_id, parent_task_id, title, status, is_complete, due_date, updated_at, supervisor_email')
+        .select('id, root_id, parent_task_id, title, status, is_complete, due_date, updated_at, notes, supervisor_email')
         .is('parent_task_id', null)
         .not('supervisor_email', 'is', null)
     if (projectId) {
@@ -127,7 +129,7 @@ async function fetchTasksForRoots(
     if (rootIds.length === 0) return []
     const { data, error } = await supabase
         .from('tasks')
-        .select('id, root_id, parent_task_id, title, status, is_complete, due_date, updated_at, supervisor_email')
+        .select('id, root_id, parent_task_id, title, status, is_complete, due_date, updated_at, notes, supervisor_email')
         .in('root_id', rootIds)
     if (error) throw error
     return (data ?? []) as TaskRow[]

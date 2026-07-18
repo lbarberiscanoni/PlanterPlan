@@ -25,10 +25,12 @@ test('@regression @tasks instance task form edits the due date and it persists',
   await page.locator('[aria-label="Filter by project"]').click();
   await page.getByRole('option', { name: projectName }).click();
 
-  // Open the first leaf task row (role=treeitem) in edit mode.
+  // Task rows open in read mode. Explicitly choose Edit before changing dates.
   const firstRow = page.getByRole('treeitem').first();
   await expect(firstRow).toBeVisible();
   await firstRow.click();
+  await expect(page.getByTestId('task-details-schedule')).toBeVisible();
+  await page.getByTestId('edit-task-btn').click();
 
   const form = page.getByTestId('task-form');
   await expect(form).toBeVisible();
@@ -54,5 +56,6 @@ test('@regression @tasks instance task form edits the due date and it persists',
   // Reopen the same first row (All Tasks orders by serial number, so first row == same task) — the
   // chosen due date must have persisted through the save + refetch.
   await page.getByRole('treeitem').first().click();
+  await page.getByTestId('edit-task-btn').click();
   await expect(page.locator('#due_date')).toHaveValue(newDue);
 });

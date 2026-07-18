@@ -12,6 +12,7 @@ export interface MilestoneSummary {
     status: string | null
     is_complete: boolean | null
     updated_at: string | null
+    notes: string | null
 }
 
 export interface ProjectReportPayload {
@@ -115,7 +116,8 @@ function renderTextSection(heading: string, milestones: MilestoneSummary[]): str
     if (milestones.length === 0) return `${heading}: none`
     const lines = milestones.map((m) => {
         const due = m.due_date ? ` (due ${m.due_date})` : ''
-        return `  - ${displayTitle(m)}${due}`
+        const notes = m.notes?.trim() ? `\n    Notes: ${m.notes.trim()}` : ''
+        return `  - ${displayTitle(m)}${due}${notes}`
     })
     return `${heading} (${milestones.length}):\n${lines.join('\n')}`
 }
@@ -127,7 +129,10 @@ function renderHtmlSection(heading: string, milestones: MilestoneSummary[]): str
     const items = milestones
         .map((m) => {
             const due = m.due_date ? ` <span style="color:#64748b">(due ${escapeHtml(m.due_date)})</span>` : ''
-            return `<li>${escapeHtml(displayTitle(m))}${due}</li>`
+            const notes = m.notes?.trim()
+                ? `<div style="margin-top:4px;color:#475569"><strong>Notes:</strong> ${escapeHtml(m.notes.trim())}</div>`
+                : ''
+            return `<li>${escapeHtml(displayTitle(m))}${due}${notes}</li>`
         })
         .join('')
     return `<h3>${escapeHtml(heading)} (${milestones.length})</h3><ul>${items}</ul>`

@@ -6,7 +6,7 @@ import {
   toIsoDate,
 } from '@/shared/lib/date-engine';
 import { compareNullablePosition, findNearestContainer } from '@/features/tasks/lib/task-tree';
-import { computeProjectTaskNumbers } from '@/features/tasks/lib/task-numbering';
+import { computeProjectTaskNumbers, computeProjectTaskOrder } from '@/features/tasks/lib/task-numbering';
 
 export const PRIORITY_DUE_SOON_DAYS = 7;
 
@@ -51,6 +51,8 @@ export interface BuildPriorityTaskGroupsArgs {
   now?: Date;
   candidateTasks?: TaskRow[];
 }
+
+export type TaskGroupSortKey = 'chronological' | 'alphabetical';
 
 const utcIsoDate = (date: Date): string => toIsoDate(date) ?? '';
 
@@ -142,6 +144,7 @@ const groupCandidatesByMilestone = (
   taskById: Map<string, TaskRow>,
   numberByTaskId: Map<string, string>,
   orderIndex?: Map<string, number>,
+  sort: TaskGroupSortKey = 'chronological',
 ): PriorityTaskGroup[] => {
   const groups = new Map<string, Omit<PriorityTaskGroup, 'tasks'> & { tasks: TaskRow[] }>();
 
@@ -175,10 +178,40 @@ const groupCandidatesByMilestone = (
     return 2;
   };
 
+  const earliestDueDate = (group: { tasks: TaskRow[] }): string | null =>
+    group.tasks.reduce<string | null>(
+      (earliest, task) => compareDateAsc(task.due_date, earliest) < 0 ? task.due_date : earliest,
+      null,
+    );
+
   return Array.from(groups.values())
     .sort((a, b) => {
       const projectTitleCompare = compareTitle(a.projectTitle, b.projectTitle);
       if (projectTitleCompare !== 0) return projectTitleCompare;
+
+      // When a full-tree document index is available, use the container's
+      // position in that tree. A raw milestone `position` is only meaningful
+      // among siblings, which previously allowed milestone 10 (in an earlier
+      // phase) to render before milestone 2.
+      if (orderIndex) {
+        const aOrder = a.milestone
+          ? orderIndex.get(a.milestone.id) ?? Number.MAX_SAFE_INTEGER
+          : orderIndex.get(a.tasks[0]?.id ?? '') ?? Number.MAX_SAFE_INTEGER;
+        const bOrder = b.milestone
+          ? orderIndex.get(b.milestone.id) ?? Number.MAX_SAFE_INTEGER
+          : orderIndex.get(b.tasks[0]?.id ?? '') ?? Number.MAX_SAFE_INTEGER;
+        if (aOrder !== bOrder) return aOrder - bOrder;
+      }
+
+      if (!orderIndex && sort === 'alphabetical') {
+        const titleCompare = compareTitle(a.title, b.title);
+        if (titleCompare !== 0) return titleCompare;
+      }
+
+      if (!orderIndex && sort === 'chronological') {
+        const dateCompare = compareDateAsc(earliestDueDate(a), earliestDueDate(b));
+        if (dateCompare !== 0) return dateCompare;
+      }
 
       const rankCompare = containerRank(a) - containerRank(b);
       if (rankCompare !== 0) return rankCompare;
@@ -190,7 +223,7 @@ const groupCandidatesByMilestone = (
     })
     .map((group) => {
       const sortedTasks = [...group.tasks].sort((a, b) => {
-        // Serial mode (All Tasks): order rows by document/serial index so they
+        // Document-order mode: order rows by their full-tree index so they
         // render in the same sequence as their displayed numbers (3.01, 3.02…).
         if (orderIndex) {
           const oa = orderIndex.get(a.id) ?? Number.MAX_SAFE_INTEGER;
@@ -199,7 +232,14 @@ const groupCandidatesByMilestone = (
           return compareTitle(a.title, b.title);
         }
 
-        // Default (priority / urgency views): most-imminent first.
+        if (sort === 'alphabetical') {
+          const titleCompare = compareTitle(a.title, b.title);
+          if (titleCompare !== 0) return titleCompare;
+
+          return compareDateAsc(a.due_date, b.due_date);
+        }
+
+        // Chronological grouped views put the earliest due work first.
         const dateCompare = compareDateAsc(a.due_date, b.due_date);
         if (dateCompare !== 0) return dateCompare;
 
@@ -229,15 +269,22 @@ export const buildPriorityTaskGroups = ({
   const candidates = (candidateTasks ?? tasks).filter(
     (task) => isPriorityTaskCandidate(task) && isPriorityQualifyingTask(task, now),
   );
-  return groupCandidatesByMilestone(candidates, taskById, computeProjectTaskNumbers(tasks));
+  return groupCandidatesByMilestone(
+    candidates,
+    taskById,
+    computeProjectTaskNumbers(tasks),
+    computeProjectTaskOrder(tasks),
+  );
 };
 
 export interface BuildMilestoneTaskGroupsArgs {
   tasks: TaskRow[];
   candidateTasks?: TaskRow[];
+  /** Controls both milestone-section order and row order within each section. */
+  sort?: TaskGroupSortKey;
   /**
-   * When provided, within-group tasks are ordered by this document/serial index
-   * (the All Tasks view) instead of the default due-date-first urgency order.
+   * When provided, groups and their tasks are ordered by this full-tree
+   * document index instead of the default due-date-first urgency order.
    */
   orderIndex?: Map<string, number>;
 }
@@ -254,6 +301,7 @@ export interface BuildMilestoneTaskGroupsArgs {
 export const buildMilestoneTaskGroups = ({
   tasks,
   candidateTasks,
+  sort = 'chronological',
   orderIndex,
 }: BuildMilestoneTaskGroupsArgs): PriorityTaskGroup[] => {
   const taskById = new Map(tasks.map((task) => [task.id, task]));
@@ -271,7 +319,13 @@ export const buildMilestoneTaskGroups = ({
     const isStructural = type === 'project' || type === 'phase' || type === 'milestone';
     return !(isStructural && parentIds.has(task.id));
   });
-  return groupCandidatesByMilestone(leaves, taskById, computeProjectTaskNumbers(tasks), orderIndex);
+  return groupCandidatesByMilestone(
+    leaves,
+    taskById,
+    computeProjectTaskNumbers(tasks),
+    orderIndex,
+    sort,
+  );
 };
 
 export const filterPriorityTasks = (tasks: TaskRow[], now: Date = getNow()): TaskRow[] =>

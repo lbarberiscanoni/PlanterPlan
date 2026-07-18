@@ -21,6 +21,10 @@ test('@smoke @tasks /tasks groups by milestone with no dominant "Other" bucket',
   const grouped = page.getByRole('button', { name: 'Group by milestone' });
   await expect(grouped).toHaveAttribute('aria-pressed', 'true');
 
+  // Avoid depending on whichever project a previous test left selected.
+  await page.getByRole('combobox', { name: 'Filter by project' }).click();
+  await page.getByRole('option', { name: 'All projects', exact: true }).click();
+
   const groups = page.locator('[data-testid^="task-group-"]');
   const rows = page.locator('[data-testid^="task-row-"]');
 
@@ -41,4 +45,35 @@ test('@smoke @tasks /tasks groups by milestone with no dominant "Other" bucket',
   }
 
   expect(await groups.count()).toBeGreaterThan(0);
+
+  // Milestone groups follow their persistent document numbers (1, 2, … 10),
+  // not sibling-local `position` values or whichever task happens to be due first.
+  const numbersByProject = new Map<string, number[][]>();
+  for (let groupIndex = 0; groupIndex < await groups.count(); groupIndex++) {
+    const group = groups.nth(groupIndex);
+    const projectTitle = (await group.locator('p').first().textContent())?.trim() ?? '';
+    const groupNumbers = (await group.locator('span.font-mono').allTextContents())
+      .map((value) => value.trim())
+      .filter((value) => /^\d+\.\d+$/.test(value))
+      .map((value) => value.split('.').map(Number));
+    numbersByProject.set(projectTitle, [...(numbersByProject.get(projectTitle) ?? []), ...groupNumbers]);
+  }
+
+  const visibleNumberCount = Array.from(numbersByProject.values()).reduce(
+    (count, numbers) => count + numbers.length,
+    0,
+  );
+  expect(visibleNumberCount, 'seeded task rows must expose their document numbers').toBeGreaterThan(1);
+
+  for (const [projectTitle, visibleNumbers] of numbersByProject) {
+    for (let i = 1; i < visibleNumbers.length; i++) {
+      const [previousMilestone, previousTask] = visibleNumbers[i - 1];
+      const [currentMilestone, currentTask] = visibleNumbers[i];
+      expect(
+        currentMilestone > previousMilestone
+          || (currentMilestone === previousMilestone && currentTask >= previousTask),
+        `${projectTitle} task numbers must follow milestone order, got ${visibleNumbers.map((number) => number.join('.')).join(', ')}`,
+      ).toBe(true);
+    }
+  }
 });

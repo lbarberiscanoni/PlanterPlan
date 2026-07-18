@@ -6,6 +6,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import TaskResources from '@/features/tasks/components/TaskResources';
 import TaskDependencies from '@/features/tasks/components/TaskDependencies';
+import TaskStatusSelect from '@/features/tasks/components/TaskStatusSelect';
 import TaskComments from '@/features/tasks/components/TaskComments/TaskComments';
 import { useTaskActivity } from '@/shared/hooks/useActivityLog';
 import { ActivityRow } from '@/shared/ui/ActivityRow';
@@ -74,6 +75,7 @@ interface TaskDetailsViewProps {
     onAddChildTask?: (task: TaskItemData) => void;
     onEditTask?: (task: TaskItemData) => void;
     onDeleteTask?: (task: TaskItemData) => void;
+    onStatusChange?: (taskId: string, status: string) => void;
     onTaskUpdated?: () => void;
     canEdit?: boolean;
     allProjectTasks?: TaskItemData[];
@@ -90,6 +92,7 @@ const TaskDetailsView = ({
     onAddChildTask,
     onEditTask,
     onDeleteTask,
+    onStatusChange,
     onTaskUpdated,
     canEdit = true,
     allProjectTasks = [],
@@ -144,6 +147,45 @@ const TaskDetailsView = ({
 
     return (
         <div className="task-details px-4 pb-10">
+            {/* Schedule and progress are the primary task actions in the read view. */}
+            {task.origin !== 'template' && (
+                <div className="detail-section mb-6" data-testid="task-details-schedule">
+                    <h3 className="text-sm font-bold text-slate-900 mb-3 tracking-wide">
+                        {t('tasks.detail.schedule_heading')}
+                    </h3>
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                        <div className="p-4 bg-card border border-border rounded-lg shadow-sm flex flex-col gap-1">
+                            <span className="text-xs text-muted-foreground font-medium uppercase tracking-wide">
+                                {t('tasks.detail.start_date')}
+                            </span>
+                            <span className="text-sm font-bold text-card-foreground tracking-tight">
+                                {formatCalendarDate(task.start_date, 'EEE, MMM d, yyyy') || t('tasks.detail.not_set')}
+                            </span>
+                        </div>
+                        <div className="p-4 bg-card border border-border rounded-lg shadow-sm flex flex-col gap-1">
+                            <span className="text-xs text-muted-foreground font-medium uppercase tracking-wide">
+                                {t('tasks.detail.due_date')}
+                            </span>
+                            <span className="text-sm font-bold text-card-foreground tracking-tight">
+                                {formatCalendarDate(task.due_date, 'EEE, MMM d, yyyy') || t('tasks.detail.not_set')}
+                            </span>
+                        </div>
+                        <div className="p-4 bg-card border border-border rounded-lg shadow-sm flex flex-col gap-2">
+                            <span className="text-xs text-muted-foreground font-medium uppercase tracking-wide">
+                                {t('tasks.detail.status_label')}
+                            </span>
+                            <TaskStatusSelect
+                                status={task.status}
+                                taskId={task.id}
+                                taskTitle={task.title}
+                                onStatusChange={onStatusChange}
+                                disabled={!onStatusChange}
+                            />
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* Premium Lock Screen */}
             {isLocked ? (
                 <div className="p-8 text-center bg-muted/30 border-2 border-dashed border-border rounded-xl my-6">
@@ -160,10 +202,10 @@ const TaskDetailsView = ({
                 </div>
             ) : (
                 <>
-                    {/* Purpose (The Why) — prominent, first */}
+                    {/* Purpose (The Why) */}
                     {task.purpose && (
                         <div className="detail-section mb-6">
-                            <h3 className="text-base font-semibold text-slate-800 mb-2">
+                            <h3 className="text-sm font-bold text-slate-900 mb-2 tracking-wide">
                                 {t('tasks.detail.purpose_heading')}
                             </h3>
                             <RichText html={task.purpose} className="text-slate-700 leading-relaxed text-base whitespace-pre-wrap" />
@@ -173,17 +215,17 @@ const TaskDetailsView = ({
                     {/* Overview / Description — flowing text */}
                     {task.description && (
                         <div className="detail-section mb-6">
-                            <h3 className="text-sm font-bold text-slate-900 mb-2 uppercase tracking-wide">
+                            <h3 className="text-sm font-bold text-slate-900 mb-2 tracking-wide">
                                 {t('tasks.detail.overview_heading')}
                             </h3>
                             <RichText html={task.description} className="text-slate-600 leading-relaxed text-sm whitespace-pre-wrap" />
                         </div>
                     )}
 
-                    {/* Action Steps (The What) — keep green box */}
+                    {/* Action Steps (The How) — keep green box */}
                     {task.actions && (
                         <div className="detail-section mb-6">
-                            <h3 className="text-sm font-bold text-slate-900 mb-2 uppercase tracking-wide">
+                            <h3 className="text-sm font-bold text-slate-900 mb-2 tracking-wide">
                                 {t('tasks.detail.actions_heading')}
                             </h3>
                             <RichText html={formatActionSteps(task.actions)} className="p-4 bg-green-50 border border-green-200 text-slate-700 leading-relaxed text-sm" />
@@ -201,31 +243,6 @@ const TaskDetailsView = ({
                 </>
             )}
 
-            {/* Schedule — hidden for template tasks */}
-            {task.origin !== 'template' && (
-            <div className="detail-section mb-6">
-                <h3 className="text-sm font-bold text-slate-900 mb-3 uppercase tracking-wide">{t('tasks.detail.schedule_heading')}</h3>
-                <div className="grid grid-cols-2 gap-3">
-                    <div className="p-4 bg-card border border-border rounded-lg shadow-sm flex flex-col gap-1">
-                        <span className="text-xs text-muted-foreground font-medium uppercase tracking-wide">
-                            {t('tasks.detail.start_date')}
-                        </span>
-                        <span className="text-sm font-bold text-card-foreground tracking-tight">
-                            {formatCalendarDate(task.start_date, 'EEE, MMM d, yyyy') || 'Not set'}
-                        </span>
-                    </div>
-                    <div className="p-4 bg-card border border-border rounded-lg shadow-sm flex flex-col gap-1">
-                        <span className="text-xs text-muted-foreground font-medium uppercase tracking-wide">
-                            {t('tasks.detail.due_date')}
-                        </span>
-                        <span className="text-sm font-bold text-card-foreground tracking-tight">
-                            {formatCalendarDate(task.due_date, 'EEE, MMM d, yyyy') || 'Not set'}
-                        </span>
-                    </div>
-                </div>
-            </div>
-            )}
-
             {/* Status Badges */}
             <div className="detail-section mb-6">
                 <div className="flex flex-wrap gap-4">
@@ -238,31 +255,6 @@ const TaskDetailsView = ({
                         >
                             {task.origin === 'instance' ? t('tasks.detail.project_task') : t('tasks.detail.template')}
                         </span>
-                    </div>
-
-                    <div className="flex flex-col gap-1">
-                        <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-                            {t('tasks.detail.status_label')}
-                        </span>
-                        {task.is_complete ? (
-                            <span className="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-bold border bg-emerald-50 text-emerald-700 border-emerald-100">
-                                <svg width="12" height="12" fill="currentColor" className="mr-1.5">
-                                    <path
-                                        d="M10 3L4.5 8.5L2 6"
-                                        stroke="currentColor"
-                                        strokeWidth="2"
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                    />
-                                </svg>
-                                {t('tasks.detail.complete')}
-                            </span>
-                        ) : (
-                            <span className="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-bold border bg-amber-50 text-amber-700 border-amber-100">
-                                <span className="w-2 h-2 rounded-full bg-amber-400 mr-2"></span>
-                                {t('tasks.detail.incomplete')}
-                            </span>
-                        )}
                     </div>
 
                     {task.origin === 'instance' && (() => {

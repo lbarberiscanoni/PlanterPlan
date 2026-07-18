@@ -6,7 +6,7 @@ import { tagged } from '../support/runId';
  * SMK-02 — Template → clone → live project (the core loop). @smoke
  *
  * Verified flow (CreateProjectModal.tsx):
- *   open: [data-testid="sidebar-new-project-btn"]
+ *   open: Switch Project → [data-testid="project-switcher-new-project"]
  *   modal: [data-testid="create-project-modal"]
  *   step 1: pick a real template card [data-testid="template-card"][data-template-id != "__default__"]
  *           then "Continue to Details" (continue_to_details)
@@ -19,7 +19,8 @@ test('@smoke clone a template into a new project', async ({ page }) => {
 
   const projectName = tagged(`Clone smoke ${Date.now()}`);
 
-  await page.getByTestId('sidebar-new-project-btn').click();
+  await page.getByTestId('project-switcher-trigger').click();
+  await page.getByTestId('project-switcher-new-project').click();
   const modal = page.getByTestId('create-project-modal');
   await expect(modal).toBeVisible();
 

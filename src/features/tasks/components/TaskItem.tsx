@@ -386,6 +386,7 @@ const TaskItem = ({
  dueBadge ? dueBadgeToneClass(dueBadge.tone) : 'text-slate-500',
  )}
  data-testid={`task-row-due-badge-${task.id}`}
+ data-due-date={task.due_date}
  data-tone={dueBadge?.tone ?? 'none'}
  >
  {dueBadgeText || formatDateLocalized(task.due_date, 'short')}

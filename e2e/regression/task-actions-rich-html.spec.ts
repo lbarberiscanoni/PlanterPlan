@@ -38,7 +38,7 @@ test('@regression @tasks Action Steps renders embedded HTML links, not raw marku
 
   const panel = page.getByTestId('task-details-panel');
   await expect(panel).toBeVisible();
-  const heading = panel.getByRole('heading', { name: 'Action Steps (The What)' });
+  const heading = panel.getByRole('heading', { name: 'ACTIONS STEPS (The How)' });
   await expect(heading).toBeVisible();
 
   // The action steps render as an ordered list (numbered items), not one flat paragraph.

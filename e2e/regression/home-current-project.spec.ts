@@ -63,3 +63,36 @@ test('@regression @projects home renders the current project and persists a swit
   await expect(homeAfter).toBeVisible();
   await expect(homeAfter.locator('h1').first()).toHaveText(secondTitle);
 });
+
+/**
+ * REG — stakeholder dashboard follow-up: Home navigation must preserve the
+ * destination view rather than falling back to Today's Tasks / the first phase.
+ * Read-only: creates no data, so no teardown tag is needed. @regression @projects
+ */
+test('@regression @projects home links open My Tasks and focus the selected phase', async ({ page }) => {
+  await loginAs(page, 'planter');
+  await page.goto('/home');
+
+  const home = page.locator('[data-testid="home-page"]');
+  await expect(home).toBeVisible();
+  await expect(home.getByText('Project Team', { exact: true })).toBeVisible();
+  await expect(home.getByText(/\d+ users?/, { exact: true })).toBeVisible();
+
+  await page.locator('[data-testid="home-my-tasks-link"]').click();
+  await expect(page).toHaveURL(/\/tasks\?view=my_tasks&project=all$/);
+  await expect(page.getByRole('heading', { level: 1, name: 'My Tasks' })).toBeVisible();
+  await expect(page.getByRole('combobox', { name: 'Task view' })).toHaveText('My Tasks');
+  await expect(page.getByRole('combobox', { name: 'Filter by project' })).toHaveText('All projects');
+
+  await page.goto('/home');
+  const phaseLinks = page.locator('[data-testid^="home-phase-link-"]');
+  await expect(phaseLinks.first()).toBeVisible();
+  const firstPhase = phaseLinks.first();
+  const phaseName = ((await firstPhase.locator('[data-testid="home-phase-name"]').textContent()) ?? '').trim();
+  const href = await firstPhase.getAttribute('href');
+  expect(href).toMatch(/^\/project\/[^?]+\?phase=[^&]+$/);
+
+  await firstPhase.click();
+  await expect(page).toHaveURL(/\/project\/[^?]+\?phase=[^&]+$/);
+  await expect(page.locator('[data-testid="active-phase-heading"]')).toContainText(phaseName);
+});

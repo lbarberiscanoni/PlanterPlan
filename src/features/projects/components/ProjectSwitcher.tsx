@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ChevronDown, FolderOpen, Archive, CheckCircle2 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
+import { ChevronDown, FolderOpen, Archive, CheckCircle2, Plus } from 'lucide-react';
 import {
  DropdownMenu,
  DropdownMenuTrigger,
@@ -30,6 +31,7 @@ interface ProjectSwitcherProps {
 }
 
 const ProjectSwitcher = ({ projects = [], projectsLoading = false }: ProjectSwitcherProps) => {
+ const { t } = useTranslation();
  const navigate = useNavigate();
  const { projectId } = useParams<{ projectId: string }>();
  const [showArchived, setShowArchived] = useState(false);
@@ -100,6 +102,15 @@ const ProjectSwitcher = ({ projects = [], projectsLoading = false }: ProjectSwit
  </DropdownMenuItem>
  ))
  )}
+ <DropdownMenuSeparator />
+ <DropdownMenuItem
+ onSelect={() => navigate('/tasks?action=new-project')}
+ data-testid="project-switcher-new-project"
+ className="cursor-pointer font-medium text-brand-700"
+ >
+ <Plus className="w-4 h-4" />
+ {t('projects.new_project')}
+ </DropdownMenuItem>
  <DropdownMenuSeparator />
  <button
  type="button"

@@ -14,7 +14,8 @@ export async function createProjectFromTemplate(
   name: string,
   startDate?: string,
 ): Promise<string> {
-  await page.getByTestId('sidebar-new-project-btn').click();
+  await page.getByTestId('project-switcher-trigger').click();
+  await page.getByTestId('project-switcher-new-project').click();
   const modal = page.getByTestId('create-project-modal');
   await expect(modal).toBeVisible();
 

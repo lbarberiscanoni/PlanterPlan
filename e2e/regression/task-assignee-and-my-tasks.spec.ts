@@ -23,11 +23,13 @@ test('@regression @tasks assign a task to a member and see it in project-scoped 
   await page.locator('[aria-label="Filter by project"]').click();
   await page.getByRole('option', { name: projectName }).click();
 
-  // Open the first leaf task in edit mode.
+  // Task rows open in read mode. Explicitly choose Edit before assigning it.
   const firstRow = page.getByRole('treeitem').first();
   await expect(firstRow).toBeVisible();
   const taskTitle = (await firstRow.textContent())?.trim() ?? '';
   await firstRow.click();
+  await expect(page.getByTestId('task-details-schedule')).toBeVisible();
+  await page.getByTestId('edit-task-btn').click();
 
   const form = page.getByTestId('task-form');
   await expect(form).toBeVisible();

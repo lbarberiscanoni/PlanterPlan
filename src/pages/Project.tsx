@@ -100,7 +100,9 @@ export default function Project() {
     // or refreshing doesn't reopen it. The effect re-runs as the hierarchy loads.
     const [searchParams, setSearchParams] = useSearchParams();
     const deepLinkTaskId = searchParams.get('task');
+    const deepLinkPhaseId = searchParams.get('phase');
     const handledDeepLinkRef = useRef<string | null>(null);
+    const handledPhaseDeepLinkRef = useRef<string | null>(null);
     useEffect(() => {
         if (!deepLinkTaskId || handledDeepLinkRef.current === deepLinkTaskId) return;
         const all = (projectHierarchy as TaskRow[]) || [];
@@ -124,6 +126,22 @@ export default function Project() {
         next.delete('task');
         setSearchParams(next, { replace: true });
     }, [deepLinkTaskId, projectHierarchy, actions, searchParams, setSearchParams]);
+
+    // Deep link from Home: `/project/:id?phase=<id>` opens the board with that
+    // phase selected. Keep the param shareable, but handle it only once so a
+    // subsequent in-page phase selection is not reset on every render.
+    useEffect(() => {
+        if (!deepLinkPhaseId) {
+            handledPhaseDeepLinkRef.current = null;
+            return;
+        }
+        if (handledPhaseDeepLinkRef.current === deepLinkPhaseId) return;
+        const targetPhase = (phases as TaskRow[]).find((phase) => phase.id === deepLinkPhaseId);
+        if (!targetPhase) return;
+        handledPhaseDeepLinkRef.current = deepLinkPhaseId;
+        actions.setActiveTab('board');
+        actions.setSelectedPhase(targetPhase);
+    }, [deepLinkPhaseId, phases, actions]);
 
     const queryClient = useQueryClient();
 
@@ -358,7 +376,7 @@ export default function Project() {
                                     <div className="animate-slide-up">
                                         <div className="flex items-center justify-between mb-6">
                                             <div>
-                                                <h2 className="text-xl font-semibold text-slate-900">
+                                                <h2 className="text-xl font-semibold text-slate-900" data-testid="active-phase-heading">
                                                     {t('projects.phase_heading_title', {
                                                         position: sortedPhases.findIndex((p) => p.id === activePhase.id) + 1,
                                                         title: (activePhase as { title?: string }).title,
@@ -548,6 +566,11 @@ export default function Project() {
                                     actions.setSelectedTask(task as TaskRow);
                                     setTaskFormState({ mode: 'edit', origin: projectOrigin });
                                 }}
+                                onStatusChange={
+                                    state.selectedTask && canUpdateTaskStatusForRow(state.selectedTask)
+                                        ? (taskId, status) => { void handlers.handleTaskUpdate(taskId, { status }); }
+                                        : undefined
+                                }
                                 className="w-full border-l-0 shadow-none sm:w-full sm:min-w-0 sm:max-w-none"
                             />
                         )}
