@@ -698,6 +698,7 @@
       "add_modal_description": "Adjunta un enlace, una nota o una referencia de documento a esta tarea.",
       "source_catalog": "De la biblioteca",
       "source_custom": "Enlace propio",
+      "admin_catalog_hint": "Como administrador, este enlace también se añade a la biblioteca de recursos compartida.",
       "catalog_search_placeholder": "Buscar en la biblioteca de recursos…",
       "no_catalog_matches": "No hay recursos coincidentes. Prueba la pestaña «Enlace propio».",
       "name_label": "Nombre para mostrar",

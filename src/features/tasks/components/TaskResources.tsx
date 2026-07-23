@@ -17,6 +17,8 @@ import { cn } from '@/shared/lib/utils';
 import { safeUrl } from '@/shared/lib/safe-url';
 import { planter } from '@/shared/api/planterClient';
 import { detectResourceKind } from '@/shared/lib/resource-kind';
+import { useIsAdmin } from '@/features/admin/hooks/useIsAdmin';
+import { useAuth } from '@/shared/contexts/auth-context';
 
 const resourceTypeIcons = {
     url: ExternalLink,
@@ -63,12 +65,17 @@ interface CreateResourceInput {
     storage_path?: string | null;
     name?: string | null;
     resource_id?: string | null;
+    /** Admin-only: also promote this URL into the global `resources` library and
+     * link the attachment to it (so it appears on /resources + clones carry it). */
+    addToCatalog?: boolean;
 }
 
 const EMPTY_FORM = { type: 'url' as ResourceType, resource_url: '', resource_text: '', storage_path: '', name: '' };
 
 export default function TaskResources({ taskId, primaryResourceId, onUpdate }: TaskResourcesProps) {
     const { t } = useTranslation();
+    const isAdmin = useIsAdmin();
+    const { user } = useAuth();
     const [showAddModal, setShowAddModal] = useState(false);
     const [mode, setMode] = useState<AddMode>('catalog');
     const [catalogSearch, setCatalogSearch] = useState('');
@@ -105,8 +112,21 @@ export default function TaskResources({ taskId, primaryResourceId, onUpdate }: T
     };
 
     const createResourceMutation = useMutation({
-        mutationFn: (data: CreateResourceInput) =>
-            planter.entities.TaskResource.create({
+        mutationFn: async (data: CreateResourceInput) => {
+            let resourceId = data.resource_id ?? null;
+            // Admin custom URL adds also seed the global library and link back to
+            // it, so the resource shows on /resources going forward (RLS permits
+            // the catalog insert for admins only; the flag is set only for them).
+            if (data.addToCatalog && data.resource_url && user?.id) {
+                const catalog = await planter.entities.Resource.create({
+                    name: (data.name ?? '').trim() || data.resource_url,
+                    url: data.resource_url,
+                    created_by: user.id,
+                    status: 'approved',
+                });
+                resourceId = catalog.id;
+            }
+            return planter.entities.TaskResource.create({
                 task_id: taskId,
                 resource_type: data.resource_type,
                 resource_url: data.resource_url ?? null,
@@ -114,10 +134,13 @@ export default function TaskResources({ taskId, primaryResourceId, onUpdate }: T
                 storage_path: data.storage_path ?? null,
                 storage_bucket: null,
                 name: data.name ?? null,
-                resource_id: data.resource_id ?? null,
-            }),
+                resource_id: resourceId,
+            });
+        },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['taskResources', taskId] });
+            // Refresh the global catalog (Resources page + the catalog tab here).
+            queryClient.invalidateQueries({ queryKey: ['resources'] });
             closeModal();
             if (onUpdate) onUpdate();
         },
@@ -146,6 +169,9 @@ export default function TaskResources({ taskId, primaryResourceId, onUpdate }: T
             resource_text: formData.resource_text || null,
             storage_path: formData.storage_path || null,
             name: formData.name.trim() || null,
+            // Only URLs can live in the (URL-based) catalog, and only admins may
+            // write to it — so a user's custom attachment stays custom.
+            addToCatalog: isAdmin && formData.type === 'url',
         });
     };
 
@@ -354,6 +380,11 @@ export default function TaskResources({ taskId, primaryResourceId, onUpdate }: T
                                         placeholder={t('projects.resources.url_placeholder')}
                                         required
                                     />
+                                    {isAdmin && (
+                                        <p className="mt-1.5 text-xs text-muted-foreground" data-testid="resource-admin-catalog-hint">
+                                            {t('projects.resources.admin_catalog_hint')}
+                                        </p>
+                                    )}
                                 </div>
                             )}
 

@@ -692,6 +692,7 @@
       "add_modal_description": "Attach a link, note, or document reference to this task.",
       "source_catalog": "From library",
       "source_custom": "Custom link",
+      "admin_catalog_hint": "As an admin, this link is also added to the shared resource library.",
       "catalog_search_placeholder": "Search the resource library…",
       "no_catalog_matches": "No matching resources. Try the \"Custom link\" tab.",
       "name_label": "Display name",
