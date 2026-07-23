@@ -101,8 +101,10 @@ export default function Project() {
     const [searchParams, setSearchParams] = useSearchParams();
     const deepLinkTaskId = searchParams.get('task');
     const deepLinkPhaseId = searchParams.get('phase');
+    const deepLinkMilestoneId = searchParams.get('milestone');
     const handledDeepLinkRef = useRef<string | null>(null);
     const handledPhaseDeepLinkRef = useRef<string | null>(null);
+    const handledMilestoneDeepLinkRef = useRef<string | null>(null);
     useEffect(() => {
         if (!deepLinkTaskId || handledDeepLinkRef.current === deepLinkTaskId) return;
         const all = (projectHierarchy as TaskRow[]) || [];
@@ -142,6 +144,60 @@ export default function Project() {
         actions.setActiveTab('board');
         actions.setSelectedPhase(targetPhase);
     }, [deepLinkPhaseId, phases, actions]);
+
+    // Deep link from Home's "Milestones Needing Attention": `/project/:id?milestone=<id>`
+    // focuses the milestone's owning phase, switches to the board, and scrolls the
+    // milestone card into view. Unlike `?task=`, it does NOT open the details dialog.
+    //
+    // The highlight ring is derived straight from the `?milestone=` param (see the
+    // MilestoneSection render below), so it survives this large project's realtime-
+    // driven remounts — which would wipe React state. We strip the param after a
+    // short window so both the ring and the scroll re-assertion self-terminate; a
+    // per-id guard ref keeps it to one scroll-yank per mount.
+    useEffect(() => {
+        if (!deepLinkMilestoneId || handledMilestoneDeepLinkRef.current === deepLinkMilestoneId) return;
+        const all = (projectHierarchy as TaskRow[]) || [];
+        const target = all.find((row) => row.id === deepLinkMilestoneId);
+        if (!target) return; // hierarchy not loaded yet — effect re-runs when it is
+        handledMilestoneDeepLinkRef.current = deepLinkMilestoneId;
+
+        // Walk up to the owning phase so the milestone's section is rendered.
+        const byId = new Map(all.map((row) => [row.id, row]));
+        let cursor: TaskRow | undefined = target;
+        while (cursor && cursor.task_type?.toLowerCase() !== 'phase' && cursor.parent_task_id) {
+            cursor = byId.get(cursor.parent_task_id);
+        }
+        if (cursor && cursor.task_type?.toLowerCase() === 'phase') {
+            actions.setSelectedPhase(cursor);
+        }
+        actions.setActiveTab('board');
+
+        // Switching the phase re-renders the milestone list, which loads/reflows
+        // over several hundred ms and would undo a single scroll (and cancel a
+        // smooth one). So re-assert an instant scroll on a short interval until
+        // the layout settles.
+        let ticks = 0;
+        const settleScroll = () => {
+            const el = document.getElementById(`milestone-${deepLinkMilestoneId}`);
+            if (el) el.scrollIntoView({ block: 'center' });
+            if (ticks++ < 10) window.setTimeout(settleScroll, 120);
+        };
+        window.setTimeout(settleScroll, 120);
+
+        // End the highlight + stop re-arming once the page has settled by dropping
+        // the param (functional updater so it doesn't depend on a stale snapshot).
+        // Deliberately NOT tied to effect cleanup: this effect re-runs on every
+        // realtime `projectHierarchy` change, and a cleanup would cancel the strip
+        // before it ever fires. Scheduled once per handled id (guard ref above);
+        // delete is idempotent if a remount schedules another.
+        window.setTimeout(() => {
+            setSearchParams((prev) => {
+                const next = new URLSearchParams(prev);
+                next.delete('milestone');
+                return next;
+            }, { replace: true });
+        }, 2400);
+    }, [deepLinkMilestoneId, projectHierarchy, actions, setSearchParams]);
 
     const queryClient = useQueryClient();
 
@@ -469,6 +525,7 @@ export default function Project() {
                                                         presentUsers={presentUsers}
                                                         currentUserId={user?.id ?? null}
                                                         numberByTaskId={numberByTaskId}
+                                                        isHighlighted={milestone.id === deepLinkMilestoneId}
                                                     />
                                                 ))
                                             )}

@@ -253,7 +253,7 @@ export default function Home() {
                             attention.map((m) => (
                                 <Link
                                     key={m.id}
-                                    to={currentProjectId ? `/project/${currentProjectId}?task=${m.id}` : '/home'}
+                                    to={currentProjectId ? `/project/${currentProjectId}?milestone=${m.id}` : '/home'}
                                     aria-label={t('tasks.open_milestone_aria', { title: m.title })}
                                     className="group flex items-center justify-between gap-3 py-3 rounded-md transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2"
                                     data-testid={`home-milestone-link-${m.id}`}

@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Button } from '@/shared/ui/button';
 import { Badge } from '@/shared/ui/badge';
 import { Progress } from '@/shared/ui/progress';
-import { ChevronRight, Info, Plus, Trash2 } from 'lucide-react';
+import { ChevronRight, Plus, Trash2 } from 'lucide-react';
 import { useDroppable } from '@dnd-kit/core';
 import { SortableContext } from '@dnd-kit/sortable';
 import { cn } from '@/shared/lib/utils';
@@ -51,6 +51,8 @@ export interface MilestoneSectionProps {
     currentUserId?: string | null;
     /** Stable per-project work-item numbers (task id → "C"/"C.k") from `task-numbering`. */
     numberByTaskId?: Map<string, string>;
+    /** Transient highlight ring, set when deep-linked to from Home's attention list. */
+    isHighlighted?: boolean;
 }
 
 export default function MilestoneSection({
@@ -72,6 +74,7 @@ export default function MilestoneSection({
     presentUsers = [],
     currentUserId = null,
     numberByTaskId,
+    isHighlighted = false,
 }: MilestoneSectionProps) {
     const { t } = useTranslation();
     const confirm = useConfirm();
@@ -150,11 +153,15 @@ export default function MilestoneSection({
 
     return (
         <div
+            id={`milestone-${milestone.id}`}
             data-testid="milestone-section"
+            data-highlighted={isHighlighted ? '1' : '0'}
             ref={setNodeRef}
+            // data-highlighted doubles as an e2e hook for the Home deep-link scroll.
             className={cn(
                 "border rounded-xl overflow-hidden transition-all duration-200",
-                isOver ? "border-brand-400 bg-brand-50/50 ring-2 ring-brand-200 " : "border-slate-200 bg-white shadow-sm hover:shadow-md"
+                isOver ? "border-brand-400 bg-brand-50/50 ring-2 ring-brand-200 " : "border-slate-200 bg-white shadow-sm hover:shadow-md",
+                isHighlighted && "ring-2 ring-brand-400 ring-offset-2"
             )}
         >
             <div className="flex items-stretch">
@@ -174,7 +181,27 @@ export default function MilestoneSection({
                                     {numberByTaskId.get(milestone.id)}
                                 </span>
                             )}
-                            {milestone.title}
+                            {onMilestoneClick ? (
+                                <span
+                                    role="button"
+                                    tabIndex={0}
+                                    onClick={(e) => { e.stopPropagation(); onMilestoneClick(milestone); }}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter' || e.key === ' ') {
+                                            e.preventDefault();
+                                            e.stopPropagation();
+                                            onMilestoneClick(milestone);
+                                        }
+                                    }}
+                                    data-testid={`view-milestone-${milestone.id}`}
+                                    aria-label={t('tasks.view_milestone_details_aria', { title: milestone.title ?? '' })}
+                                    className="cursor-pointer rounded-sm hover:underline hover:text-brand-700 underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+                                >
+                                    {milestone.title}
+                                </span>
+                            ) : (
+                                milestone.title
+                            )}
                         </h4>
                         {milestone.purpose && (
                             <p className="text-sm text-slate-500 mt-0.5 line-clamp-1">{milestone.purpose}</p>
@@ -183,25 +210,6 @@ export default function MilestoneSection({
                 </div>
 
                 <div className="flex items-center gap-4">
-                    {onMilestoneClick && (
-                        <span
-                            role="button"
-                            tabIndex={0}
-                            onClick={(e) => { e.stopPropagation(); onMilestoneClick(milestone); }}
-                            onKeyDown={(e) => {
-                                if (e.key === 'Enter' || e.key === ' ') {
-                                    e.preventDefault();
-                                    e.stopPropagation();
-                                    onMilestoneClick(milestone);
-                                }
-                            }}
-                            data-testid={`view-milestone-${milestone.id}`}
-                            aria-label={t('tasks.view_milestone_details_aria', { title: milestone.title ?? '' })}
-                            className="p-1.5 -m-1.5 rounded-md text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
-                        >
-                            <Info className="w-4 h-4" aria-hidden="true" />
-                        </span>
-                    )}
                     {milestone.origin !== 'template' && milestone.due_date && (() => {
                         const badge = formatTaskDueBadge({ dueDate: milestone.due_date });
                         const label = badge?.kind === 'today'
