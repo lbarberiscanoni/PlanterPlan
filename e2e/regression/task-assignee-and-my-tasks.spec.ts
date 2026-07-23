@@ -26,7 +26,9 @@ test('@regression @tasks assign a task to a member and see it in project-scoped 
   // Task rows open in read mode. Explicitly choose Edit before assigning it.
   const firstRow = page.getByRole('treeitem').first();
   await expect(firstRow).toBeVisible();
-  const taskTitle = (await firstRow.textContent())?.trim() ?? '';
+  // Capture just the title (not the whole row text) so later `hasText` matching is stable even
+  // as the row gains an assignee chip / other badges.
+  const taskTitle = (await firstRow.locator('[data-testid^="task-row-title-"]').textContent())?.trim() ?? '';
   await firstRow.click();
   await expect(page.getByTestId('task-details-schedule')).toBeVisible();
   await page.getByTestId('edit-task-btn').click();
@@ -53,6 +55,11 @@ test('@regression @tasks assign a task to a member and see it in project-scoped 
   // shown for My Tasks — it used to be hidden because the view was cross-project).
   await page.getByRole('button', { name: 'Close panel' }).click();
   await expect(panel).toBeHidden();
+
+  // The delegation is now visible WITHOUT opening the task: an assignee chip renders on the row
+  // itself (2026-07 sync — Patrick/Timothy wanted to see who's assigned while scanning the list).
+  // This freshly cloned project has exactly one assignment, so a single chip must be present.
+  await expect(page.locator('[data-testid^="task-row-assignee-"]').first()).toBeVisible();
 
   await page.locator('[aria-label="Task view"]').click();
   await page.getByRole('option', { name: 'My Tasks' }).click();

@@ -28,9 +28,20 @@ const isActive = (p: ProjectSwitcherProject) => !isArchived(p) && !p.is_complete
 interface ProjectSwitcherProps {
  projects?: ProjectSwitcherProject[];
  projectsLoading?: boolean;
+ /** The persisted focus project — used to label the trigger when the route
+  * isn't a /project/:id page, so the switcher reflects the current project
+  * everywhere (Home, Tasks, Reports), not just on the project detail view. */
+ currentProjectId?: string | null;
+ /** Persist the chosen project as the global focus (localStorage-backed). */
+ onSelectProject?: (id: string) => void;
 }
 
-const ProjectSwitcher = ({ projects = [], projectsLoading = false }: ProjectSwitcherProps) => {
+const ProjectSwitcher = ({
+ projects = [],
+ projectsLoading = false,
+ currentProjectId = null,
+ onSelectProject,
+}: ProjectSwitcherProps) => {
  const { t } = useTranslation();
  const navigate = useNavigate();
  const { projectId } = useParams<{ projectId: string }>();
@@ -61,10 +72,15 @@ const ProjectSwitcher = ({ projects = [], projectsLoading = false }: ProjectSwit
  [instanceProjects]
  );
 
- const selected = projectId ? instanceProjects.find((p) => p.id === projectId) || null : null;
+ // Label from the route's project when on /project/:id, otherwise from the
+ // persisted focus project — so the trigger names the current project on every
+ // page rather than falling back to "Switch Project" off the detail view.
+ const activeId = projectId ?? currentProjectId ?? null;
+ const selected = activeId ? instanceProjects.find((p) => p.id === activeId) || null : null;
  const triggerLabel = selected?.title || (projectsLoading ? 'Loading…' : 'Switch Project');
 
  const handleSelect = (id: string) => {
+ onSelectProject?.(id);
  navigate(`/project/${id}`);
  };
 

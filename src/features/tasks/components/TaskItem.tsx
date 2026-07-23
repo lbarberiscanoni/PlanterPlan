@@ -64,6 +64,19 @@ interface TaskItemProps {
   * number follows a task across the project view and the /tasks surface.
   */
  displayNumber?: string | null;
+ /**
+  * The task's owning milestone title. Rendered as a tag/bubble on the row so
+  * the flat /tasks list keeps milestone context without the grouped section
+  * cards (Patrick's Asana-style ask). Omitted in the grouped view, where the
+  * section header already names the milestone.
+  */
+ milestoneTitle?: string | null;
+ /**
+  * Resolved display name of the task's assignee (delegate). When present, an
+  * initials avatar chip is shown on the row so delegations are visible without
+  * opening the details panel.
+  */
+ assigneeLabel?: string | null;
 }
 
 const MAX_FOCUS_CHIPS = 3;
@@ -71,6 +84,15 @@ const MAX_FOCUS_CHIPS = 3;
 function focusInitials(email: string): string {
  const local = email.split('@')[0] ?? email;
  return local.slice(0, 2).toUpperCase();
+}
+
+// Initials for the assignee chip: first letters of the first two words of a
+// display name, else the first two characters (handles single-word names and
+// bare emails).
+function assigneeInitials(label: string): string {
+ const parts = label.trim().split(/\s+/).filter(Boolean);
+ if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+ return (parts[0] ?? label).slice(0, 2).toUpperCase();
 }
 
 const TaskItem = ({
@@ -97,6 +119,8 @@ const TaskItem = ({
  currentUserId = null,
  parentProjectTitle = null,
  displayNumber = null,
+ milestoneTitle = null,
+ assigneeLabel = null,
 }: TaskItemProps) => {
  const { t } = useTranslation();
  const confirm = useConfirm();
@@ -373,11 +397,37 @@ const TaskItem = ({
  <TooltipContent>From template</TooltipContent>
  </Tooltip>
  )}
+ {milestoneTitle && (
+ <span
+ className="px-2 py-0.5 text-xs font-medium rounded-full bg-violet-50 text-violet-700 border border-violet-100 whitespace-nowrap flex-shrink-0 max-w-[10rem] truncate"
+ title={milestoneTitle}
+ data-testid={`task-row-milestone-tag-${task.id}`}
+ >
+ {milestoneTitle}
+ </span>
+ )}
  </div>
  </div>
 
  <div className="flex items-center gap-3 flex-shrink-0">
  {task.membership_role && <RoleIndicator role={task.membership_role} />}
+
+ {assigneeLabel && (
+ <Tooltip>
+ <TooltipTrigger asChild>
+ <Avatar
+ className="h-6 w-6 flex-shrink-0"
+ aria-label={t('tasks.assigned_to_name', { name: assigneeLabel })}
+ data-testid={`task-row-assignee-${task.id}`}
+ >
+ <AvatarFallback className="bg-sky-100 text-sky-700 text-[10px] font-semibold">
+ {assigneeInitials(assigneeLabel)}
+ </AvatarFallback>
+ </Avatar>
+ </TooltipTrigger>
+ <TooltipContent>{t('tasks.assigned_to_name', { name: assigneeLabel })}</TooltipContent>
+ </Tooltip>
+ )}
 
  {task.origin !== 'template' && task.due_date && (
  <span

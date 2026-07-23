@@ -24,6 +24,11 @@ test('@regression @tasks tasks page defaults to a single project, with an All-pr
   await expect(scope).toBeVisible();
   await expect(scope).not.toContainText('All projects');
 
+  // The header switcher labels the CURRENT project on /tasks (not "Switch Project") — the
+  // single-selector consolidation. Guards the fix where the header and the page scope resolved
+  // their default from differently-ordered lists and could name different projects (2026-07 sync).
+  await expect(page.getByTestId('project-switcher-trigger')).not.toContainText('Switch Project');
+
   // "All projects" is still available and switches the scope.
   await scope.click();
   await page.getByRole('option', { name: 'All projects' }).click();

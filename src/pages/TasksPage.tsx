@@ -80,7 +80,10 @@ export default function TasksPage() {
        // Default to the "Today's Tasks" view (internal key `priority`) — the
        // day-to-day landing view planters asked for, not the full backlog.
        const [filter, setFilter] = useState<TaskFilterKey>(initialFilter);
-       const [groupMode, setGroupMode] = useState<'grouped' | 'flat'>('grouped');
+       // Flat is the default layout: a single list where each row carries its
+       // milestone as a tag (Patrick's Asana-style ask) — more tasks on screen
+       // than the grouped milestone-section cards. Grouped stays one toggle away.
+       const [groupMode, setGroupMode] = useState<'grouped' | 'flat'>('flat');
        const [sort, setSort] = useState<TaskSortKey>('chronological');
        const [selectedTask, setSelectedTask] = useState<TaskRow | null>(null);
        // Wave 37: clicking a row opens the task's edit form directly (not the
@@ -329,6 +332,23 @@ export default function TasksPage() {
        // but resolving to one of them is harmless (it just scopes to that root).
        const { currentProjectId } = useCurrentProject(projectOptions);
        const effectiveProjectScopeId = selectedProjectId === undefined ? currentProjectId : selectedProjectId;
+
+       // Resolve assignee names for the row chips from the scoped project's team.
+       // In the common (single-project) case this covers every row; in the "All
+       // projects" view assignees outside the scope simply render no chip.
+       const { teamMembers: scopeTeamMembers } = useTeam(effectiveProjectScopeId ?? null);
+       const assigneeLabelById = useMemo(() => {
+              const map = new Map<string, string>();
+              for (const m of scopeTeamMembers) {
+                     if (!m.user_id) continue;
+                     const label = m.display_name
+                            ?? (m.first_name ? `${m.first_name} ${m.last_name ?? ''}`.trim() : null)
+                            ?? m.email
+                            ?? m.user_id;
+                     map.set(m.user_id, label);
+              }
+              return map;
+       }, [scopeTeamMembers]);
        const actionableTaskCount = useMemo(
               () => tasks.filter((task) => task.origin === 'instance' && task.parent_task_id !== null).length,
               [tasks],
@@ -390,6 +410,25 @@ export default function TasksPage() {
               () => visibleTasks.map((task) => withImmediateChildrenForStatus(task)),
               [visibleTasks, withImmediateChildrenForStatus],
        );
+       // task-id → owning milestone title, for the flat-list milestone tag. Walks
+       // up parents to the nearest `milestone` row (leaf tasks usually sit
+       // directly under one). Grouped view omits the tag (its header names it).
+       const milestoneTitleByTaskId = useMemo(() => {
+              const byId = new Map(tasks.map((t: TaskRow) => [t.id, t]));
+              const map = new Map<string, string>();
+              for (const row of visibleTaskRows) {
+                     let cursor: TaskRow | undefined = row.parent_task_id ? byId.get(row.parent_task_id) : undefined;
+                     let guard = 0;
+                     while (cursor && guard++ < 10) {
+                            if ((cursor.task_type ?? '').toLowerCase() === 'milestone') {
+                                   if (typeof cursor.title === 'string') map.set(row.id, cursor.title);
+                                   break;
+                            }
+                            cursor = cursor.parent_task_id ? byId.get(cursor.parent_task_id) : undefined;
+                     }
+              }
+              return map;
+       }, [tasks, visibleTaskRows]);
        // Milestone-grouped layout (default). The priority filter keeps its own
        // candidate selection but follows the project's document order; every
        // other filter groups its visible rows by nearest milestone. Either way the grouped set covers the same tasks as
@@ -690,6 +729,7 @@ export default function TasksPage() {
                                                                                                                               onTaskClick={handleTaskClick}
                                                                                                                               selectedTaskId={selectedTaskId}
                                                                                                                               parentProjectTitle={group.projectTitle}
+                                                                                                                              assigneeLabel={task.assignee_id ? assigneeLabelById.get(task.assignee_id) ?? null : null}
                                                                                                                        />
                                                                                                                 </div>
                                                                                                          </div>
@@ -714,6 +754,8 @@ export default function TasksPage() {
                                                                                                          onTaskClick={handleTaskClick}
                                                                                                          selectedTaskId={selectedTaskId}
                                                                                                          parentProjectTitle={projectTitle}
+                                                                                                         milestoneTitle={milestoneTitleByTaskId.get(task.id) ?? null}
+                                                                                                         assigneeLabel={task.assignee_id ? assigneeLabelById.get(task.assignee_id) ?? null : null}
                                                                                                   />
                                                                                            );
                                                                                     })}

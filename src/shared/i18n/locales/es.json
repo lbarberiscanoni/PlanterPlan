@@ -219,6 +219,7 @@
     "layout_label": "Diseño",
     "layout_grouped": "Agrupar por hito",
     "layout_flat": "Lista simple",
+    "assigned_to_name": "Asignado a {{name}}",
     "no_tasks": "Aún no hay tareas",
     "first_run": {
       "title": "Inicia tu primer proyecto",

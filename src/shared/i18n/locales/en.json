@@ -213,6 +213,7 @@
     "layout_label": "Layout",
     "layout_grouped": "Group by milestone",
     "layout_flat": "Flat list",
+    "assigned_to_name": "Assigned to {{name}}",
     "no_tasks": "No tasks yet",
     "first_run": {
       "title": "Start your first project",
