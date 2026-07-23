@@ -251,9 +251,17 @@ export default function Home() {
                             <p className="py-2 text-sm text-slate-500">{t('home.no_milestones')}</p>
                         ) : (
                             attention.map((m) => (
-                                <div key={m.id} className="flex items-center justify-between gap-3 py-3">
+                                <Link
+                                    key={m.id}
+                                    to={currentProjectId ? `/project/${currentProjectId}?task=${m.id}` : '/home'}
+                                    aria-label={t('tasks.open_milestone_aria', { title: m.title })}
+                                    className="group flex items-center justify-between gap-3 py-3 rounded-md transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2"
+                                    data-testid={`home-milestone-link-${m.id}`}
+                                >
                                     <div className="min-w-0">
-                                        <p className="truncate text-sm font-medium text-slate-800">{m.title}</p>
+                                        <p className="truncate text-sm font-medium text-slate-800 group-hover:text-brand-700">
+                                            {m.title}
+                                        </p>
                                         <p className="text-xs text-slate-500">
                                             {m.diffDays < 0
                                                 ? t('home.due_overdue')
@@ -279,9 +287,9 @@ export default function Home() {
                                         >
                                             {t(`home.badge_${m.badgeKey}`)}
                                         </span>
-                                        <ChevronRight className="h-4 w-4 text-slate-300" />
+                                        <ChevronRight className="h-4 w-4 text-slate-300 group-hover:text-slate-400" />
                                     </div>
-                                </div>
+                                </Link>
                             ))
                         )}
                     </div>
