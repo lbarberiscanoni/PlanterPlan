@@ -34,7 +34,7 @@ ORDER BY tr.resource_url, TRIM(tr.name);
 --    clones inherit the catalog link (clone_project_template carries resource_id).
 UPDATE public.task_resources tr
 SET resource_id = sub.rid
-FROM (SELECT url, MIN(id) AS rid FROM public.resources GROUP BY url) sub,
+FROM (SELECT DISTINCT ON (url) url, id AS rid FROM public.resources ORDER BY url, id) sub,
      public.tasks t
 WHERE tr.task_id = t.id
   AND t.origin = 'template'
